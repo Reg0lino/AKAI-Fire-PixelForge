@@ -1,0 +1,21 @@
+{
+    "custom_swatches": [
+        "#ff0000",
+        "#00ff00",
+        "#0000ff",
+        "#e1ff00",
+        "#00ffff",
+        "#ff00ff",
+        "#ffffff",
+        "#808080",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+    ],
+    "prefab_swatches_editable": true
+}
