@@ -17,5 +17,23 @@
         null,
         null
     ],
-    "prefab_swatches_editable": true
+    "prefab_swatches_editable": true,
+    "color_picker_swatches": [
+        "#0d00ff",
+        "#00ffea",
+        "#eaff00",
+        "#0b4200",
+        "#00810f",
+        "#00ff19",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+    ]
 }

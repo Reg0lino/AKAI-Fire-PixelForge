@@ -16,7 +16,7 @@ QPushButton {
     border: 1px solid #606060;
     padding: 5px 10px;
     border-radius: 3px;
-    min-height: 20px; /* Ensure buttons have some height */
+    min-height: 20px; /* Ensure general buttons have some height */
 }
 
 QPushButton:hover {
@@ -49,69 +49,53 @@ QComboBox::drop-down {
 }
 
 QComboBox::down-arrow {
-    image: url(none); /* We can add a custom arrow later if needed */
-    /* For now, let the OS handle or keep it minimal */
+    image: url(none); 
 }
 
-QComboBox QAbstractItemView { /* Style for the dropdown list items */
+QComboBox QAbstractItemView { 
     background-color: #3E3E3E;
     border: 1px solid #606060;
-    selection-background-color: #5A7EA6; /* A muted blue for selection */
+    selection-background-color: #5A7EA6; 
     color: #E0E0E0;
     padding: 2px;
 }
 
 QStatusBar {
-    background-color: #1E1E1E; /* Even darker for status bar */
+    background-color: #1E1E1E; 
     color: #C0C0C0;
     font-size: 9pt;
 }
 
-/* Placeholder for Pad Button styling - we'll get more specific */
-/* Give it a class name like "PadButton" in Python code later */
+/* Pad Button Styling - SIZE IS NOW CONTROLLED BY PYTHON'S setFixedSize */
 QPushButton#PadButton { 
-    background-color: #1C1C1C; /* Very dark for unlit pad */
+    background-color: #1C1C1C; /* Default for unlit pad */
     border: 1px solid #404040;
-    border-radius: 2px; /* Less rounded than regular buttons */
-    min-width: 30px;  /* Adjust as needed for squareness */
-    min-height: 30px; /* Adjust as needed for squareness */
-    max-width: 30px;
-    max-height: 30px;
+    border-radius: 2px; 
     padding: 1px; /* Minimal padding for pads */
-    /* Text color will be overridden by background if pad is lit */
+    /* Text color for lit pads will be set dynamically in Python */
+    color: transparent; /* For unlit pads */
 }
 
 QPushButton#PadButton:hover {
-    border: 1px solid #666666;
+    border: 1px solid #666666; /* Default hover for unlit pad */
 }
+/* Dynamic background-color and lit hover border set in Python */
 
-/* More specific styling will be applied dynamically in Python for lit pads */
 
-QLabel { /* General QLabel styling if needed */
-    /* color: #E0E0E0; */ /* Already covered by QWidget */
+QLabel {
     padding: 2px;
 }
 
-/* Styling for the selected color preview swatch */
-/* If you want a border, uncomment and set the object name in Python:
-QLabel#ColorPreviewSwatch {
-    border: 1px solid #707070;
-}
-*/
-
 QFrame#ColorSelectionGroup {
-    /* border: 1px solid #404040; */ /* Optional: if you want a border around the color group */
-    /* border-radius: 3px; */
-    /* margin-top: 5px; */
-    /* margin-bottom: 5px; */
+    /* Optional styling */
 }
 
 QGroupBox {
     font-weight: bold;
     border: 1px solid #505050;
     border-radius: 4px;
-    margin-top: 10px; /* Space above the group box */
-    padding-top: 15px; /* Space for the title */
+    margin-top: 10px; 
+    padding-top: 15px; 
     padding-left: 5px;
     padding-right: 5px;
     padding-bottom: 5px;
@@ -119,34 +103,53 @@ QGroupBox {
 
 QGroupBox::title {
     subcontrol-origin: margin;
-    subcontrol-position: top left; /* position at the top left */
+    subcontrol-position: top left; 
     padding: 0 5px;
-    left: 10px; /* Adjust to give some space from the border */
+    left: 10px; 
     color: #C0C0C0;
 }
 
 QSlider::groove:horizontal {
     border: 1px solid #5A5A5A;
-    height: 8px; /* Overall groove height */
+    height: 8px; 
     background: #3D3D3D;
     margin: 2px 0;
     border-radius: 4px;
 }
 
 QSlider::handle:horizontal {
-    background: #808080; /* Grey handle */
+    background: #808080; 
     border: 1px solid #5A5A5A;
-    width: 16px; /* Width of the slider handle */
-    margin: -4px 0; /* Adjust to center vertically, (height - groove_height)/2 - border */
-    border-radius: 8px; /* Make it round */
+    width: 16px; 
+    margin: -4px 0; 
+    border-radius: 8px; 
 }
 
 QSlider::handle:horizontal:hover {
     background: #909090;
 }
 
-/* QLabel used for slider values */
-/* We can target them if they get an objectName if more specific styling is needed */
+/* Styles for Vertical Hue Slider (if needed, though HueSlider.py does custom painting) */
+QSlider::groove:vertical {
+    border: 1px solid #5A5A5A;
+    width: 8px;
+    background: #3D3D3D;
+    margin: 0 2px;
+    border-radius: 4px;
+}
+
+QSlider::handle:vertical {
+    background: #808080;
+    border: 1px solid #5A5A5A;
+    height: 16px;
+    margin: 0 -4px;
+    border-radius: 8px;
+}
+
+QSlider::handle:vertical:hover {
+    background: #909090;
+}
+
 
 QLineEdit {
     background-color: #3D3D3D;
@@ -157,36 +160,36 @@ QLineEdit {
     min-height: 20px;
 }
 
-/* Color Preview Swatch Styling */
+/* Main Color Preview Swatch Styling */
 QLabel#MainColorPreview {
     border: 1px solid #707070;
     border-radius: 3px;
     font-weight: bold;
+    /* Background color set by Python QPalette */
 }
 
-/* Custom Swatch Buttons Styling */
+/* Custom Swatch Buttons Styling - SIZE IS NOW CONTROLLED BY PYTHON'S setFixedSize */
 QPushButton#CustomSwatchButton {
     background-color: #333333; /* Default empty swatch color */
     border: 1px dashed #666666; /* Dashed border for empty/unset */
     border-radius: 2px;
-    min-width: 28px; /* Slightly smaller than pads */
-    min-height: 28px;
-    max-width: 28px;
-    max-height: 28px;
-    padding: 0px;
+    padding: 0px; /* No padding to maximize color area */
 }
 
 QPushButton#CustomSwatchButton:hover {
     border: 1px solid #999999;
 }
+/* Filled swatch background-color set dynamically in Python */
 
-/* (background-color for filled swatches will be set dynamically in Python) */
 
 QGroupBox#ColorPickerGroup {
-    /* You can add specific margin/padding if needed */
     margin-bottom: 5px;
 }
 
-QGroupBox#CustomSwatchesGroup { /* If you wrap swatches in a named group box in Python */
-    padding-top: 10px; /* Adjust if title overlaps */
+QGroupBox#CustomSwatchesGroup { 
+    padding-top: 10px; 
+}
+
+QGroupBox#StaticPresetsGroup { 
+    margin-top: 10px;
 }
