@@ -1,0 +1,14 @@
+{
+    "name": "All Magenta",
+    "description": "Sets all pads to bright magenta.",
+    "colors": [
+        "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF",
+        "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF",
+        "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF",
+        "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF",
+        "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF",
+        "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF",
+        "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF",
+        "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF", "#FF00FF"
+    ]
+}

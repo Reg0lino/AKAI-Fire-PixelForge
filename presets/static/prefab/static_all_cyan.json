@@ -1,0 +1,14 @@
+{
+    "name": "All Cyan",
+    "description": "Sets all pads to bright cyan.",
+    "colors": [
+        "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF",
+        "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF",
+        "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF",
+        "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF",
+        "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF",
+        "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF",
+        "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF",
+        "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF", "#00FFFF"
+    ]
+}

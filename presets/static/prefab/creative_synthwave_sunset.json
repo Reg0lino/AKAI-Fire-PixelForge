@@ -1,0 +1,14 @@
+{
+    "name": "Synthwave Sunset (Static bands: Hot Pink, Purple, Orange, Dark Blue/Black bottom)",
+    "description": "Static bands of Hot Pink, Purple, Orange, with a Dark Blue/Black bottom for a synthwave feel.",
+    "colors": [
+        "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4",
+        "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4", "#FF69B4",
+        "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2",
+        "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2", "#8A2BE2",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#191970", "#191970", "#191970", "#191970", "#191970", "#191970", "#191970", "#191970",
+        "#000000", "#000000", "#000000", "#000000", "#000000", "#000000", "#000000", "#000000"
+    ]
+}

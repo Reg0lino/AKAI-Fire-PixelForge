@@ -1,0 +1,14 @@
+{
+    "name": "All Orange",
+    "description": "Sets all pads to bright orange.",
+    "colors": [
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500"
+    ]
+}

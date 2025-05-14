@@ -1,0 +1,14 @@
+{
+    "name": "Checkerboard Green & Yellow (Row-Pair style: Alternating rows start with G/Y or Y/G)",
+    "description": "Two rows of G/Y G/Y..., then two rows of Y/G Y/G..., repeated.",
+    "colors": [
+        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
+        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
+        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00",
+        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00",
+        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
+        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
+        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00",
+        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00"
+    ]
+}
