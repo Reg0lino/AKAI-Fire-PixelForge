@@ -1,41 +1,86 @@
-# Python
+# Python Bytecode and Cache
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-*.egg-info/
+
+# Distribution / Packaging
 dist/
 build/
+*.egg-info/
+*.egg
 *.spec
+*.zip
+*.tar.gz
+*.exe
+*.dmg
+*.pkg
 
-# Virtual environment
+# Virtual environments
 .venv/
 venv/
 ENV/
 env/
 */.env
-*/.venv
-*/env
+*/.venv/
 */env.bak
 */venv.bak
 
-# User-specific settings and logs (local development)
+# User-specific settings, logs, and temporary files (local development)
 user_settings/
 user_settings_fallback/
-_temp_*.png 
+app_errors.log
 *.log
+_temp_*.png
+*.tmp
+*.bat
 
 # IDE / Editor specific
 .vscode/
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 *.sublime-project
 *.sublime-workspace
 
 # OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # Backup files
 *.bak
 *.swp
 *~
+
+# PyInstaller
+#-----------
+# *.manifest
+# *.spec
+
+# Nuitka
+#-----------
+# *.build/
+# *.py.เดี่ยว # Nuitka for single file, Thai characters mean "single"
+# *.dist/
+# *.onefile-build/
+
+# MyPy cache
+.mypy_cache/
+
+# Pytest cache
+.pytest_cache/
+.coverage
+
+# Randos
+presets/sequences/sampler_recordings/test2.json
+presets/sequences/sampler_recordings/test.json
+gui/__pycache__/main_window.cpython-313.pyc
+gui/__pycache__/main_window.cpython-313.pyc
+gui/__pycache__/main_window.cpython-313.pyc
+gui/__pycache__/main_window.cpython-313.pyc

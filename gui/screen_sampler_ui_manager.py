@@ -41,7 +41,7 @@ class ScreenSamplerUIManager(QGroupBox):
         self.enable_sampling_button.setToolTip("Toggle screen color sampling for ambient light.")
         top_controls_layout.addWidget(self.enable_sampling_button)
 
-        self.configure_preview_button = QPushButton("Configure Region & Adjustments...")
+        self.configure_preview_button = QPushButton("Configure Region && Adjustments...")
         self.configure_preview_button.setToolTip("Open visual region selector and color adjustments window.")
         top_controls_layout.addWidget(self.configure_preview_button)
         main_layout.addLayout(top_controls_layout)

@@ -1,27 +1,30 @@
 # AKAI_Fire_RGB_Controller/animator/controls_widget.py
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-                             QSlider, QSpinBox, QFrame, QMenu, QSpacerItem, QSizePolicy) # Added QSpacerItem, QSizePolicy
+                             QSlider, QSpinBox, QFrame, QMenu, QSpacerItem, QSizePolicy)
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QKeySequence # For status tip shortcuts
+from PyQt6.QtGui import QAction, QKeySequence
 
 try:
     from .model import DEFAULT_FRAME_DELAY_MS
 except ImportError:
-    DEFAULT_FRAME_DELAY_MS = 200 
+    DEFAULT_FRAME_DELAY_MS = 200
 
 MIN_SPEED_VALUE = 1
-MAX_SPEED_VALUE = 100 
-DEFAULT_SPEED_VALUE = 50 
+MAX_SPEED_VALUE = 100
+DEFAULT_SPEED_VALUE = 50
 
-MIN_FRAME_DELAY_MS = 5     
-MAX_FRAME_DELAY_MS = 1667  
+MIN_FRAME_DELAY_MS = 5
+MAX_FRAME_DELAY_MS = 1667
 
 # --- Icons (Unicode Emojis) ---
-ICON_ADD_FRAME = "➕" # Main button for adding
+ICON_ADD_FRAME = "➕"
 ICON_ADD_SNAPSHOT = "📷"
 ICON_ADD_BLANK = "⬛"
-ICON_DUPLICATE = "📋"
+ICON_DUPLICATE = "📋" # Also used for Paste
 ICON_DELETE = "🗑️"
+ICON_COPY = "📄"
+ICON_CUT = "✂️"
+# ICON_PASTE = "📋" # Re-using ICON_DUPLICATE for Paste for now
 
 ICON_NAV_FIRST = "|◀"
 ICON_NAV_PREV = "◀"
@@ -36,23 +39,26 @@ class SequenceControlsWidget(QWidget):
     add_frame_requested = pyqtSignal(str) # "snapshot" or "blank"
     delete_selected_frame_requested = pyqtSignal()
     duplicate_selected_frame_requested = pyqtSignal()
-    
+    copy_frames_requested = pyqtSignal()      # <<< NEW
+    cut_frames_requested = pyqtSignal()       # <<< NEW
+    paste_frames_requested = pyqtSignal()     # <<< NEW
+
     navigate_first_requested = pyqtSignal()
     navigate_prev_requested = pyqtSignal()
     navigate_next_requested = pyqtSignal()
     navigate_last_requested = pyqtSignal()
-    
+
     play_requested = pyqtSignal()
     pause_requested = pyqtSignal()
     stop_requested = pyqtSignal()
-    
+
     frame_delay_changed = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self_main_layout = QVBoxLayout(self)
-        self_main_layout.setContentsMargins(5, 5, 5, 5) # Keep some overall margins
-        self_main_layout.setSpacing(8) # Spacing between the two main bars
+        self_main_layout.setContentsMargins(5, 5, 5, 5)
+        self_main_layout.setSpacing(8)
 
         # --- Bar 1: Frame Editing & Navigation ---
         bar1_layout = QHBoxLayout()
@@ -60,26 +66,47 @@ class SequenceControlsWidget(QWidget):
 
         # Frame Editing Section
         self.add_frame_button = QPushButton(f"{ICON_ADD_FRAME} Add")
-        self.add_frame_button.setToolTip("Add new frame (Click for Snapshot, Right-click for Blank)")
-        self.add_frame_button.setStatusTip("Add a new frame to the sequence. Default: Snapshot of current grid. Right-click for options.")
+        # Tooltip and StatusTip will be updated once hotkeys for Add Snapshot/Blank are confirmed
+        self.add_frame_button.setToolTip("Add new frame (Snapshot or Blank via menu)")
+        self.add_frame_button.setStatusTip("Add Snapshot (Ctrl+Shift+A) or Blank Frame (Ctrl+Shift+B). Right-click menu for options.")
         self.add_frame_button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.add_frame_button.customContextMenuRequested.connect(self._show_add_frame_menu)
-        self.add_frame_button.clicked.connect(lambda: self.add_frame_requested.emit("snapshot")) # Default click is snapshot
+        self.add_frame_button.clicked.connect(lambda: self.add_frame_requested.emit("snapshot"))
         bar1_layout.addWidget(self.add_frame_button)
 
-        self.duplicate_frame_button = QPushButton(ICON_DUPLICATE) # Icon only
-        self.duplicate_frame_button.setToolTip("Duplicate Selected Frame")
-        self.duplicate_frame_button.setStatusTip("Create a copy of the currently selected frame after it.")
+        self.duplicate_frame_button = QPushButton(ICON_DUPLICATE)
+        self.duplicate_frame_button.setToolTip("Duplicate Selected Frame(s) (Ctrl+D)")
+        self.duplicate_frame_button.setStatusTip(f"Create copies of the currently selected frame(s) after them (Shortcut: Ctrl+D).")
         self.duplicate_frame_button.clicked.connect(self.duplicate_selected_frame_requested)
         bar1_layout.addWidget(self.duplicate_frame_button)
 
-        self.delete_frame_button = QPushButton(ICON_DELETE) # Icon only
-        self.delete_frame_button.setToolTip("Delete Selected Frame")
-        self.delete_frame_button.setStatusTip("Remove the currently selected frame from the sequence.")
+        self.delete_frame_button = QPushButton(ICON_DELETE)
+        self.delete_frame_button.setToolTip("Delete Selected Frame(s) (Delete)")
+        self.delete_frame_button.setStatusTip(f"Remove the currently selected frame(s) from the sequence (Shortcut: Delete).")
         self.delete_frame_button.clicked.connect(self.delete_selected_frame_requested)
         bar1_layout.addWidget(self.delete_frame_button)
 
-        bar1_layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)) # Spacer
+        # --- Add Copy, Cut, Paste Buttons ---
+        self.copy_frames_button = QPushButton(ICON_COPY)
+        self.copy_frames_button.setToolTip(f"Copy Selected Frame(s) (Ctrl+C)")
+        self.copy_frames_button.setStatusTip(f"Copy the selected frame(s) to the internal clipboard (Shortcut: Ctrl+C).")
+        self.copy_frames_button.clicked.connect(self.copy_frames_requested)
+        bar1_layout.addWidget(self.copy_frames_button)
+
+        self.cut_frames_button = QPushButton(ICON_CUT)
+        self.cut_frames_button.setToolTip(f"Cut Selected Frame(s) (Ctrl+X)")
+        self.cut_frames_button.setStatusTip(f"Cut the selected frame(s) to the internal clipboard (Shortcut: Ctrl+X).")
+        self.cut_frames_button.clicked.connect(self.cut_frames_requested)
+        bar1_layout.addWidget(self.cut_frames_button)
+
+        self.paste_frames_button = QPushButton(ICON_DUPLICATE) # Using ICON_DUPLICATE (clipboard icon) for paste
+        self.paste_frames_button.setToolTip(f"Paste Frame(s) from Clipboard (Ctrl+V)")
+        self.paste_frames_button.setStatusTip(f"Paste frame(s) from the internal clipboard after the current selection (Shortcut: Ctrl+V).")
+        self.paste_frames_button.clicked.connect(self.paste_frames_requested)
+        bar1_layout.addWidget(self.paste_frames_button)
+        # --- End Add Copy, Cut, Paste Buttons ---
+
+        bar1_layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
 
         # Frame Navigation Section
         self.first_frame_button = QPushButton(ICON_NAV_FIRST)
@@ -105,7 +132,7 @@ class SequenceControlsWidget(QWidget):
         self.last_frame_button.setStatusTip("Jump to the last frame of the animation.")
         self.last_frame_button.clicked.connect(self.navigate_last_requested)
         bar1_layout.addWidget(self.last_frame_button)
-        
+
         self_main_layout.addLayout(bar1_layout)
 
         # --- Bar 2: Playback & Speed ---
@@ -113,10 +140,10 @@ class SequenceControlsWidget(QWidget):
         bar2_layout.setSpacing(6)
 
         # Playback Section
-        self.play_pause_button = QPushButton(ICON_PLAY + " Play") # Text for clarity, icon helps
+        self.play_pause_button = QPushButton(ICON_PLAY + " Play")
         self.play_pause_button.setCheckable(True)
-        self.play_pause_button.setToolTip("Play/Pause Sequence")
-        self.play_pause_button.setStatusTip(f"Play or Pause the animation sequence (Shortcut: {QKeySequence(Qt.Key.Key_Space).toString(QKeySequence.SequenceFormat.NativeText)} - *Not yet implemented*)") # Placeholder for shortcut
+        self.play_pause_button.setToolTip("Play/Pause Sequence (Spacebar)")
+        self.play_pause_button.setStatusTip(f"Play or Pause the animation sequence (Shortcut: Spacebar).")
         self.play_pause_button.toggled.connect(self._on_play_pause_toggled)
         bar2_layout.addWidget(self.play_pause_button)
 
@@ -137,23 +164,22 @@ class SequenceControlsWidget(QWidget):
         self.speed_slider.setValue(initial_slider_val)
         self.speed_slider.setSingleStep(1); self.speed_slider.setPageStep(10)
         self.speed_slider.setTickInterval((MAX_SPEED_VALUE - MIN_SPEED_VALUE) // 10 if MAX_SPEED_VALUE > MIN_SPEED_VALUE else 1)
-        self.speed_slider.setTickPosition(QSlider.TickPosition.NoTicks) # Cleaner look
+        self.speed_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.speed_slider.valueChanged.connect(self._on_speed_slider_changed)
         self.speed_slider.setStatusTip("Adjust animation playback speed (frames per second).")
-        bar2_layout.addWidget(self.speed_slider, 1) # Give slider some stretch factor
+        bar2_layout.addWidget(self.speed_slider, 1)
 
         self.current_speed_display_label = QLabel()
-        self.current_speed_display_label.setMinimumWidth(80) # Adjusted width
+        self.current_speed_display_label.setMinimumWidth(80)
         self.current_speed_display_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.current_speed_display_label.setStatusTip("Current animation speed in Frames Per Second (FPS) and milliseconds per frame (ms).")
         self._update_speed_display_label(initial_slider_val)
         bar2_layout.addWidget(self.current_speed_display_label)
-        
+
         self_main_layout.addLayout(bar2_layout)
-        
-        # Hidden spinbox for precise delay value (not directly shown but used by slider logic)
-        self.delay_ms_spinbox = QSpinBox() 
-        self.delay_ms_spinbox.setRange(MIN_FRAME_DELAY_MS, MAX_FRAME_DELAY_MS * 2) # Allow larger max if needed
+
+        self.delay_ms_spinbox = QSpinBox()
+        self.delay_ms_spinbox.setRange(MIN_FRAME_DELAY_MS, MAX_FRAME_DELAY_MS * 2)
         self.delay_ms_spinbox.setValue(DEFAULT_FRAME_DELAY_MS)
         self.delay_ms_spinbox.valueChanged.connect(self._on_delay_spinbox_changed)
         self.delay_ms_spinbox.setVisible(False)
@@ -161,13 +187,15 @@ class SequenceControlsWidget(QWidget):
 
     def _show_add_frame_menu(self, position):
         menu = QMenu(self)
-        snapshot_action = QAction(ICON_ADD_SNAPSHOT + " Snapshot Current Grid", self)
-        snapshot_action.setStatusTip("Add a new frame by capturing the current colors on the main pad grid.")
+        # Assuming ICON_ADD_SNAPSHOT and ICON_ADD_BLANK are available
+        # And assuming Ctrl+Shift+A and Ctrl+Shift+B are the chosen shortcuts
+        snapshot_action = QAction(ICON_ADD_SNAPSHOT + " Snapshot Current Grid (Ctrl+Shift+A)", self)
+        snapshot_action.setStatusTip("Add a new frame by capturing the current colors on the main pad grid (Shortcut: Ctrl+Shift+A).")
         snapshot_action.triggered.connect(lambda: self.add_frame_requested.emit("snapshot"))
         menu.addAction(snapshot_action)
 
-        blank_action = QAction(ICON_ADD_BLANK + " Blank Frame (All Off)", self)
-        blank_action.setStatusTip("Add a new frame with all pads set to black (off).")
+        blank_action = QAction(ICON_ADD_BLANK + " Blank Frame (Ctrl+Shift+B)", self)
+        blank_action.setStatusTip("Add a new frame with all pads set to black (off) (Shortcut: Ctrl+Shift+B).")
         blank_action.triggered.connect(lambda: self.add_frame_requested.emit("blank"))
         menu.addAction(blank_action)
         menu.exec(self.add_frame_button.mapToGlobal(position))
@@ -175,12 +203,11 @@ class SequenceControlsWidget(QWidget):
     def _on_play_pause_toggled(self, checked):
         if checked:
             self.play_pause_button.setText(ICON_PAUSE + " Pause")
-            self.play_pause_button.setToolTip("Pause Sequence")
-            # Status tip already set, could update it here if shortcut changed or state info added
+            self.play_pause_button.setToolTip("Pause Sequence (Spacebar)")
             self.play_requested.emit()
         else:
             self.play_pause_button.setText(ICON_PLAY + " Play")
-            self.play_pause_button.setToolTip("Play Sequence")
+            self.play_pause_button.setToolTip("Play Sequence (Spacebar)")
             self.pause_requested.emit()
 
     def update_playback_button_state(self, is_playing: bool):
@@ -188,30 +215,41 @@ class SequenceControlsWidget(QWidget):
         self.play_pause_button.setChecked(is_playing)
         if is_playing:
             self.play_pause_button.setText(ICON_PAUSE + " Pause")
-            self.play_pause_button.setToolTip("Pause Sequence")
+            self.play_pause_button.setToolTip("Pause Sequence (Spacebar)")
         else:
             self.play_pause_button.setText(ICON_PLAY + " Play")
-            self.play_pause_button.setToolTip("Play Sequence")
+            self.play_pause_button.setToolTip("Play Sequence (Spacebar)")
         self.play_pause_button.blockSignals(False)
 
-    def set_controls_enabled_state(self, enabled: bool, frame_selected: bool = False, has_frames: bool = False):
-        self.add_frame_button.setEnabled(enabled)
-        self.duplicate_frame_button.setEnabled(enabled and frame_selected and has_frames)
-        self.delete_frame_button.setEnabled(enabled and frame_selected and has_frames)
+    def set_controls_enabled_state(self, enabled: bool, frame_selected: bool = False, has_frames: bool = False, clipboard_has_content: bool = False):
+        self.add_frame_button.setEnabled(enabled) 
         
+        # --- THIS LINE WAS MISSING IN THE PREVIOUS RESPONSE FOR THIS FILE ---
+        can_operate_on_selection = enabled and frame_selected and has_frames
+        # --------------------------------------------------------------------
+        
+        self.duplicate_frame_button.setEnabled(can_operate_on_selection)
+        self.delete_frame_button.setEnabled(can_operate_on_selection)
+        self.copy_frames_button.setEnabled(can_operate_on_selection)
+        self.cut_frames_button.setEnabled(can_operate_on_selection)
+        
+        self.paste_frames_button.setEnabled(enabled and clipboard_has_content) # Paste depends on clipboard
+
         self.first_frame_button.setEnabled(enabled and has_frames)
-        self.prev_frame_button.setEnabled(enabled and has_frames and frame_selected) # Can only go prev if a frame is selected
-        self.next_frame_button.setEnabled(enabled and has_frames and frame_selected) # Can only go next if a frame is selected
+        self.prev_frame_button.setEnabled(enabled and has_frames) # Prev/Next enabled if any frames exist
+        self.next_frame_button.setEnabled(enabled and has_frames) # Actual navigation logic is in MainWindow/Model
         self.last_frame_button.setEnabled(enabled and has_frames)
-        
+
+        # Play/Pause and Stop should be enabled if general interaction is allowed and there are frames,
+        # or if playback is active (handled by model state changes updating the button text/state).
+        # For simplicity here, linking to has_frames for initial state.
         self.play_pause_button.setEnabled(enabled and has_frames)
-        self.stop_button.setEnabled(enabled and has_frames) # Enable stop if playing OR if not on first frame
-        
+        self.stop_button.setEnabled(enabled and has_frames) 
+
         self.speed_slider.setEnabled(enabled and has_frames)
         self.current_speed_display_label.setEnabled(enabled and has_frames)
-        # self.delay_ms_spinbox.setEnabled(enabled and has_frames) # It's hidden
+### END OF METHOD SequenceControlsWidget.set_controls_enabled_state ###
 
-    # --- Speed Slider/Spinbox Logic (Unchanged) ---
     def _slider_value_to_delay(self, slider_value: int) -> int:
         s_val = max(MIN_SPEED_VALUE, min(slider_value, MAX_SPEED_VALUE))
         if MAX_SPEED_VALUE == MIN_SPEED_VALUE: return MIN_FRAME_DELAY_MS
@@ -248,7 +286,7 @@ class SequenceControlsWidget(QWidget):
         self.speed_slider.blockSignals(True)
         self.speed_slider.setValue(slider_val_to_set)
         self.speed_slider.blockSignals(False)
-        self._update_speed_display_label(slider_val_to_set) 
+        self._update_speed_display_label(slider_val_to_set)
         self.frame_delay_changed.emit(delay_ms_from_spinbox)
 
     def set_frame_delay_ui(self, delay_ms: int):
