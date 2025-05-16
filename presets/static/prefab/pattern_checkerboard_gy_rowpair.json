@@ -1,14 +1,10 @@
 {
-    "name": "Checkerboard Green & Yellow (Row-Pair style: Alternating rows start with G/Y or Y/G)",
-    "description": "Two rows of G/Y G/Y..., then two rows of Y/G Y/G..., repeated.",
+    "name": "Pattern - Checkerboard Green & Yellow Row-Pair",
+    "description": "Alternating G/Y G/Y... for one row, Y/G Y/G... for next, repeated. (4x16)",
     "colors": [
-        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
-        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
-        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00",
-        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00",
-        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
-        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
-        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00",
-        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00"
+        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
+        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00",
+        "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00",
+        "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00", "#FFFF00", "#00FF00"
     ]
 }

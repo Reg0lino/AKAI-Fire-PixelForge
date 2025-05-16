@@ -1,7 +1,7 @@
 {
     "name": "red and white snake",
     "description": "A cool sequence of pad layouts.",
-    "frame_delay_ms": 200,
+    "frame_delay_ms": 39,
     "loop": true,
     "frames": [
         [

@@ -1,0 +1,10 @@
+{
+    "name": "Static - All Pink",
+    "description": "Sets all pads to pink. (4x16)",
+    "colors": [
+        "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB",
+        "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB",
+        "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB",
+        "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB"
+    ]
+}
