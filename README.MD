@@ -71,7 +71,7 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
     ```
 
 ## 📂 Project Structure (Key Files)
-
+```
 AKAI_Fire_RGB_Controller/
 ├── animator/ # Animator-specific logic & UI
 ├── features/ # Screen sampler core & thread
@@ -92,6 +92,7 @@ AKAI_Fire_RGB_Controller/
 ├── LICENSE
 ├── requirements.txt
 └── .gitignore
+```
 *(User configuration files like `sampler_user_prefs.json` and `fire_controller_config.json` will be saved in a platform-specific user application data directory when running the packaged application, or in `user_settings/` during development.)*
 
 ## 🎮 Usage
