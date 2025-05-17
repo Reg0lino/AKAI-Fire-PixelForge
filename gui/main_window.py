@@ -5,6 +5,7 @@ import os
 import mss 
 import glob  # <<< ADD THIS IMPORT
 import re    # <<< ADD THIS IMPORT
+import time
 from appdirs import user_config_dir
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -32,7 +33,7 @@ from features.screen_sampler_core import ScreenSamplerCore
 from features.screen_sampler_thread import ScreenSamplerThread
 from gui.screen_sampler_ui_manager import ScreenSamplerUIManager
 from animator.controls_widget import ICON_COPY, ICON_CUT, ICON_DUPLICATE
-
+from .set_max_frames_dialog import SetMaxFramesDialog 
 
 # --- Constants ---
 INITIAL_WINDOW_WIDTH = 1050 # User can resize later
@@ -46,6 +47,7 @@ APP_AUTHOR = "YourProjectAuthorName" # Replace with your actual author/project n
 SAMPLER_PREFS_FILENAME = "sampler_user_prefs.json"
 # If you decide to move the main config too:
 MAIN_CONFIG_FILENAME = "fire_controller_config.json"
+DEFAULT_SAMPLING_FPS = 10 # Matches the one in screen_sampler_ui_manager.py
 
 
 class PadButton(QPushButton):
@@ -132,6 +134,14 @@ class MainWindow(QMainWindow):
         self.capture_preview_dialog: CapturePreviewDialog | None = None
         self._last_processed_sampler_image: Image.Image | None = None
 
+         # --- NEW SAMPLER RECORDING STATE VARIABLES ---
+        self.is_recording_sampler: bool = False
+        self.recorded_sampler_frames: list[list[str]] = [] 
+        self.current_recording_frame_count: int = 0
+        self.captured_sampler_frequency_ms: int = 200 # Default, will be updated when recording starts
+        self.MAX_RECORDING_FRAMES: int = 200 # Default, user can change this via dialog
+        # --- END OF NEW SAMPLER RECORDING STATE VARIABLES ---
+
         # UI Managers
         self.color_picker_manager: ColorPickerManager = None
         self.static_layouts_manager: StaticLayoutsManager = None
@@ -191,6 +201,13 @@ class MainWindow(QMainWindow):
         # A final call here can be redundant but ensures states if other calls didn't cover everything.
         self._update_animator_controls_enabled_state()
 ### END OF MainWindow.__init__ ###
+
+    # Add this method to the MainWindow class, for example, near other utility methods
+    def _fps_to_ms(self, fps: int) -> int:
+        """Converts Frames Per Second to milliseconds per frame."""
+        if fps <= 0: 
+            return 1000 # Default to 1 second if FPS is invalid
+        return int(1000.0 / fps)    
 
     def _generate_monitor_key(self, monitor_id: int) -> str | None:
         """Generates a stable key string for a given monitor_id using its geometry."""
@@ -344,37 +361,94 @@ class MainWindow(QMainWindow):
             # If sampler is already active, start recording immediately
             self._start_sampler_recording()
 
+### START OF METHOD MainWindow._start_sampler_recording (IMPLEMENTED) ###
     def _start_sampler_recording(self):
-        print(f"DEBUG: _start_sampler_recording called. Current self.is_screen_sampling_active: {self.is_screen_sampling_active}")
-        if not self.is_screen_sampling_active: # Double check if auto-start failed or was too slow
+        """
+        Initializes and starts the sampler recording process.
+        Assumes pre-checks have been mostly handled by _on_sampler_record_button_clicked.
+        """
+        print(f"DEBUG MAINWINDOW: _start_sampler_recording attempting. Sampler active: {self.is_screen_sampling_active}")
+
+        # Final crucial check: Is the screen sampler actually active now?
+        if not self.is_screen_sampling_active:
             self.status_bar.showMessage("Cannot start recording: Screen Sampler is not active.", 3000)
-            if self.record_sampler_button: self.record_sampler_button.setText("🎬 Record Sample")
-            if self.recording_status_label: self.recording_status_label.setText("Error: Sampler off")
+            # Ensure UI manager reflects that recording couldn't start
+            if self.screen_sampler_ui_manager:
+                self.screen_sampler_ui_manager.update_record_button_ui(is_recording=False, can_record=False) # can_record is false because sampler is off
+                self.screen_sampler_ui_manager.set_recording_status_text("Error: Sampler OFF")
+            self.is_recording_sampler = False # Ensure this is false if we bail out
             return
 
         self.is_recording_sampler = True
         self.recorded_sampler_frames.clear()
         self.current_recording_frame_count = 0
-        self.captured_sampler_frequency_ms = self.current_sampler_params.get('frequency_ms', 200) # Get current live frequency
-
-        if self.record_sampler_button: self.record_sampler_button.setText("🔴 Stop Recording")
-        if self.recording_status_label: self.recording_status_label.setText(f"REC 0/{self.MAX_RECORDING_FRAMES}")
+        
+        # Capture the current live frequency from the sampler parameters
+        self.captured_sampler_frequency_ms = self.current_sampler_params.get(
+            'frequency_ms', 
+            self._fps_to_ms(DEFAULT_SAMPLING_FPS) # Fallback to default if not in params for some reason
+        ) 
+        
+        print(f"DEBUG MAINWINDOW: Sampler recording started. Max frames: {self.MAX_RECORDING_FRAMES}, Freq: {self.captured_sampler_frequency_ms}ms")
         self.status_bar.showMessage("Sampler recording started...", 0) # Persistent message
 
+        if self.screen_sampler_ui_manager:
+            # The record button text/state is updated by _on_sampler_record_button_clicked or _update_animator_controls_enabled_state
+            # Here, we primarily update the status label.
+            self.screen_sampler_ui_manager.set_recording_status_text(
+                f"REC 🔴 {self.current_recording_frame_count}/{self.MAX_RECORDING_FRAMES}"
+            )
+        
+        # Disable other animator/UI controls while recording
+        self._update_animator_controls_enabled_state() 
+### END OF METHOD MainWindow._start_sampler_recording (IMPLEMENTED) ###
+### START OF METHOD MainWindow._stop_sampler_recording (IMPLEMENTED) ###
     def _stop_sampler_recording(self):
-        self.is_recording_sampler = False
-        if self.record_sampler_button: self.record_sampler_button.setText("🎬 Record Sample")
+        """
+        Stops the sampler recording process and triggers frame processing if frames were captured.
+        """
+        print("DEBUG MAINWINDOW: _stop_sampler_recording called.")
+        
+        was_recording = self.is_recording_sampler # Check if we were actually recording
+        self.is_recording_sampler = False # Set state to not recording
         
         final_frame_count = self.current_recording_frame_count
-        if self.recording_status_label: self.recording_status_label.setText(f"Idle. {final_frame_count} frames recorded.")
+        
+        if not was_recording and final_frame_count == 0:
+            # This case might happen if stop is called multiple times or if it was never started.
+            print("DEBUG MAINWINDOW: Stop recording called, but was not actively recording or no frames.")
+            if self.screen_sampler_ui_manager:
+                self.screen_sampler_ui_manager.set_recording_status_text("Idle.")
+                # Ensure button is in "Record" state
+                can_record_now = self.akai_controller.is_connected() and self.is_screen_sampling_active
+                self.screen_sampler_ui_manager.update_record_button_ui(is_recording=False, can_record=can_record_now)
+            self._update_animator_controls_enabled_state()
+            return
+
+        print(f"DEBUG MAINWINDOW: Sampler recording stopped. {final_frame_count} frames captured.")
         self.status_bar.showMessage(f"Recording stopped. {final_frame_count} frames captured.", 5000)
 
-        if not self.recorded_sampler_frames:
-            self.status_bar.showMessage("No frames were recorded.", 2000)
-            return
-        
-        self._process_and_load_recorded_frames()
+        if self.screen_sampler_ui_manager:
+            self.screen_sampler_ui_manager.set_recording_status_text(f"Idle. {final_frame_count} frames recorded.")
+            # The record button text/state is updated by _on_sampler_record_button_clicked or _update_animator_controls_enabled_state
+            # which should be called after this method by the click handler.
+            # For robustness, ensure it's correct here too.
+            can_record_now = self.akai_controller.is_connected() and self.is_screen_sampling_active
+            self.screen_sampler_ui_manager.update_record_button_ui(is_recording=False, can_record=can_record_now)
 
+
+        if self.recorded_sampler_frames:
+            print("DEBUG MAINWINDOW: Processing recorded frames...")
+            self._process_and_load_recorded_frames() # This will handle naming, model creation, etc.
+        else:
+            print("DEBUG MAINWINDOW: No frames were recorded to process.")
+            self.status_bar.showMessage("No frames were recorded.", 2000)
+            # self.recorded_sampler_frames is already clear or was never populated
+            self.current_recording_frame_count = 0 # Ensure count is reset
+
+        # Re-enable animator/UI controls now that recording is stopped
+        self._update_animator_controls_enabled_state()
+### END OF METHOD MainWindow._stop_sampler_recording (IMPLEMENTED) ###
     # --- DEBUG: Check record_sampler_button connection in _connect_signals ---
     def _debug_check_record_sampler_button_connection(self):
         if self.record_sampler_button:  # Ensure self.record_sampler_button is not None
@@ -383,46 +457,122 @@ class MainWindow(QMainWindow):
         else:
             print("DEBUG MAINWINDOW ERROR: self.record_sampler_button is None during _connect_signals!")
 
+### START OF METHOD MainWindow._process_and_load_recorded_frames (FULLY IMPLEMENTED) ###
     def _process_and_load_recorded_frames(self):
-        num_frames = len(self.recorded_sampler_frames)
-        if num_frames == 0: return
-
-        default_name = f"Sampled Sequence ({num_frames}f)"
-        name, ok = QInputDialog.getText(self, "Name Recorded Sequence", 
-                                        "Enter name for the new sequence:", text=default_name)
+        """
+        Prompts for a sequence name, creates a SequenceModel from recorded frames,
+        auto-saves it to the 'sampler_recordings' directory, and loads it into the animator.
+        """
+        print(f"DEBUG MAINWINDOW: _process_and_load_recorded_frames. Frames to process: {len(self.recorded_sampler_frames)}")
         
-        if not ok or not name.strip():
-            reply = QMessageBox.question(self, "Discard Recording?", 
-                                         "Recording not named. Discard recorded frames?",
-                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                         QMessageBox.StandardButton.Yes) # Default to Yes to discard if unnamed
+        if not self.recorded_sampler_frames:
+            print("DEBUG MAINWINDOW: No recorded frames available to process.")
+            self.status_bar.showMessage("No frames were recorded.", 2000)
+            if self.screen_sampler_ui_manager:
+                self.screen_sampler_ui_manager.set_recording_status_text("Idle. No frames.")
+            return
+
+        num_frames = len(self.recorded_sampler_frames)
+        
+        # Generate a somewhat unique default name using timestamp
+        # Ensure 'import time' is at the top of main_window.py
+        timestamp_str = time.strftime("%Y%m%d-%H%M") # Shortened for cleaner default name
+        default_name = f"Sampled {timestamp_str} ({num_frames}f)"
+        
+        user_provided_name, ok = QInputDialog.getText(
+            self, 
+            "Name Recorded Sequence", 
+            "Enter a name for the new sampled sequence:", 
+            text=default_name
+        )
+        
+        if not ok or not user_provided_name.strip():
+            reply = QMessageBox.question(
+                self, 
+                "Discard Recording?", 
+                "The recording was not named. Do you want to discard the recorded frames?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes 
+            )
             if reply == QMessageBox.StandardButton.Yes:
                 self.recorded_sampler_frames.clear()
                 self.current_recording_frame_count = 0
-                if self.recording_status_label: self.recording_status_label.setText("Idle. Recording discarded.")
+                if self.screen_sampler_ui_manager:
+                    self.screen_sampler_ui_manager.set_recording_status_text("Recording discarded.")
                 self.status_bar.showMessage("Recorded frames discarded.", 3000)
-            # If No, user can try interacting with record button again if they wish, data is still there.
+            else: 
+                if self.screen_sampler_ui_manager:
+                    self.screen_sampler_ui_manager.set_recording_status_text(f"Idle. {num_frames}f (unprocessed).")
+                self.status_bar.showMessage("Recording kept, but not processed.", 3000)
             return
 
-        new_sequence = SequenceModel(name=name.strip())
-        # recorded_sampler_frames already stores hex strings
-        new_sequence.frames = [AnimationFrame(colors=frame_hex_data) for frame_hex_data in self.recorded_sampler_frames]
+        # Proceed with creating and saving the sequence
+        final_sequence_name_base = user_provided_name.strip() # Base name from user
+        
+        # Auto-save to sampler_recordings directory
+        # Ensure 'import os' is at the top of main_window.py
+        sanitized_filename_base = self._animator_sanitize_filename(final_sequence_name_base)
+        sampler_dir = self._animator_get_sequence_dir_path("sampler")
+        os.makedirs(sampler_dir, exist_ok=True)
+        
+        # Filename collision handling
+        save_filepath_candidate = os.path.join(sampler_dir, f"{sanitized_filename_base}.json")
+        actual_save_filepath = save_filepath_candidate
+        actual_sequence_name_for_model = final_sequence_name_base
+        collision_counter = 0
+        
+        while os.path.exists(actual_save_filepath):
+            collision_counter += 1
+            actual_sequence_name_for_model = f"{final_sequence_name_base}_{collision_counter}"
+            actual_save_filepath = os.path.join(sampler_dir, f"{self._animator_sanitize_filename(actual_sequence_name_for_model)}.json")
+            if collision_counter > 100: # Safety break
+                QMessageBox.critical(self, "Save Error", "Too many filename collisions. Could not save.")
+                self.recorded_sampler_frames.clear() # Discard data
+                self.current_recording_frame_count = 0
+                return
+
+        # Create the SequenceModel with the potentially modified name
+        new_sequence = SequenceModel(name=actual_sequence_name_for_model)
+        
+        for frame_hex_data in self.recorded_sampler_frames:
+            new_sequence.frames.append(AnimationFrame(colors=frame_hex_data))
         
         new_sequence.frame_delay_ms = self.captured_sampler_frequency_ms 
-        new_sequence.loop = True # Default to loop for recorded sequences
-        new_sequence.is_modified = True # It's new and unsaved
+        new_sequence.loop = True 
+        new_sequence.is_modified = False # Mark as not modified since it's freshly auto-saved
+        new_sequence.loaded_filepath = actual_save_filepath # Store path in model
 
-        self.stop_current_animation() # Stop any existing animation playback
-        self.active_sequence_model = new_sequence
-        self._connect_signals_for_active_sequence_model()
-        self._update_animator_ui_for_current_sequence() # This loads the first frame to grid
-        self._update_animator_controls_enabled_state()
-        
-        self.status_bar.showMessage(f"Recorded sequence '{name}' loaded. Use 'Save Seq As...' to save.", 7000)
-        
-        # Clear the recording buffer
+        if new_sequence.save_to_file(actual_save_filepath):
+            print(f"DEBUG MAINWINDOW: Recorded sequence auto-saved to: {actual_save_filepath}")
+            self.status_bar.showMessage(f"Sequence '{new_sequence.name}' auto-saved and loaded.", 5000)
+            
+            self.stop_current_animation()
+            self.active_sequence_model = new_sequence
+            self._connect_signals_for_active_sequence_model()
+            self._update_animator_ui_for_current_sequence() 
+            
+            self.animator_refresh_sequences_list_and_select(
+                active_sequence_raw_name=new_sequence.name, 
+                active_sequence_type_id="sampler"
+            )
+            if self.screen_sampler_ui_manager:
+                self.screen_sampler_ui_manager.set_recording_status_text(f"Loaded: {new_sequence.name}")
+        else:
+            QMessageBox.warning(self, "Auto-Save Error", f"Could not auto-save recorded sequence to '{actual_save_filepath}'.\nThe sequence is loaded in the animator but NOT saved to disk.")
+            self.stop_current_animation()
+            self.active_sequence_model = new_sequence
+            self._connect_signals_for_active_sequence_model()
+            self._update_animator_ui_for_current_sequence()
+            if self.screen_sampler_ui_manager: # Still update status even if save failed
+                self.screen_sampler_ui_manager.set_recording_status_text(f"Loaded (unsaved): {new_sequence.name}")
+            # Do NOT refresh the sequence list if save failed, as it won't be on disk.
+            # User would need to use "Save As..." manually.
+
         self.recorded_sampler_frames.clear()
         self.current_recording_frame_count = 0
+        
+        self._update_animator_controls_enabled_state()
+### END OF METHOD MainWindow._process_and_load_recorded_frames (FULLY IMPLEMENTED) ###
 
     def _init_ui_layout(self):
         # ... (content as before) ...
@@ -604,7 +754,287 @@ class MainWindow(QMainWindow):
         # ... (sampler recording UI setup) ...
 
         self.left_panel_layout.addStretch(1)
-    ### END OF METHOD MainWindow._init_animator_and_sampler_ui_left_panel (MODIFIED - Unconditional Creation) ###
+
+# RECORD SAMPLER BUTTON
+    
+### START OF METHOD MainWindow._on_sampler_record_button_clicked (IMPLEMENTED) ###
+    def _on_sampler_record_button_clicked(self):
+        print(f"DEBUG MAINWINDOW: _on_sampler_record_button_clicked. Current state: is_recording_sampler={self.is_recording_sampler}, is_screen_sampling_active={self.is_screen_sampling_active}")
+
+        if self.is_recording_sampler:
+            # If already recording, the only action is to stop.
+            self._stop_sampler_recording()
+        else:
+            # --- Pre-recording checks ---
+
+            # 1. Check for unsaved animator changes
+            if self.active_sequence_model and self.active_sequence_model.is_modified:
+                reply = QMessageBox.question(
+                    self, 
+                    "Unsaved Animator Sequence",
+                    "The current animation has unsaved changes.\n"
+                    "Starting a new recording will discard these changes.\n\n"
+                    "Discard unsaved animation and start recording?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Cancel
+                )
+                if reply == QMessageBox.StandardButton.Cancel:
+                    self.status_bar.showMessage("Recording cancelled by user (unsaved changes).", 3000)
+                    # Ensure UI elements are in a consistent state if user cancels
+                    if self.screen_sampler_ui_manager:
+                        self.screen_sampler_ui_manager.update_record_button_ui(
+                            is_recording=False, 
+                            can_record=(self.akai_controller.is_connected() and self.is_screen_sampling_active)
+                        )
+                    return
+                else: # User chose to discard
+                    # Create a new blank sequence (without prompting again) to clear animator state
+                    self.new_sequence(prompt_save=False) 
+                    print("DEBUG MAINWINDOW: Unsaved animator changes discarded by user.")
+
+            # 2. Check if screen sampler is active
+            if not self.is_screen_sampling_active:
+                reply = QMessageBox.question(
+                    self, 
+                    "Sampler Inactive",
+                    "Screen sampler is not currently active.\n"
+                    "Start screen sampling to begin recording?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No # Default to No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    if self.screen_sampler_ui_manager:
+                        # Programmatically toggle the main sampler button ON
+                        self.screen_sampler_ui_manager.enable_sampling_button.setChecked(True)
+                        # _handle_sampler_basic_params_changed will be called, setting is_screen_sampling_active=True
+                        # and starting the thread. We need to ensure _start_sampler_recording is called *after*
+                        # the sampler is confirmed active. A short delay might be needed, or a signal.
+                        # For now, let's assume _handle_sampler_basic_params_changed sets is_screen_sampling_active quickly.
+                        # A more robust way might involve a signal from the sampler thread confirming it's running.
+                        print("DEBUG MAINWINDOW: User chose to start sampler. Will attempt to start recording shortly.")
+                        # We'll call _start_sampler_recording directly, and it has a check.
+                        # The _on_enable_button_toggled in UIManager will set self.is_screen_sampling_active.
+                        # Then we proceed to call _start_sampler_recording which re-checks.
+                        # This path is a bit tricky due to the async nature of starting the sampler.
+                        # Let _start_sampler_recording handle the final check.
+                        self._start_sampler_recording()
+                    else:
+                        self.status_bar.showMessage("Sampler UI not available to start.", 3000)
+                else: # User chose not to start sampler
+                    self.status_bar.showMessage("Recording cancelled; sampler not started.", 3000)
+                    if self.screen_sampler_ui_manager:
+                         self.screen_sampler_ui_manager.update_record_button_ui(is_recording=False, can_record=False)
+                return # Exit whether sampler was started or not; _start_sampler_recording handles the rest if started.
+            
+            # If sampler is already active and other checks passed, start recording.
+            self._start_sampler_recording()
+
+        # This final update ensures the button text and enabled state are always correct after any action.
+        # It's also called within _start_sampler_recording and _stop_sampler_recording via _update_animator_controls_enabled_state
+        # but an explicit call here ensures immediate reflection of the toggle.
+        if self.screen_sampler_ui_manager:
+            can_record_now = self.akai_controller.is_connected() and self.is_screen_sampling_active and not self.is_recording_sampler
+            self.screen_sampler_ui_manager.update_record_button_ui(
+                is_recording=self.is_recording_sampler,
+                can_record=can_record_now
+            )
+        self._update_animator_controls_enabled_state() # Also ensures other dependent controls are updated.
+### END OF METHOD MainWindow._on_sampler_record_button_clicked (IMPLEMENTED) ###
+    def _start_sampler_recording(self):
+        """
+        Initializes and starts the sampler recording process.
+        """
+        print("DEBUG MAINWINDOW: _start_sampler_recording called.")
+        if not self.is_screen_sampling_active: # Final check
+            print("DEBUG MAINWINDOW: Sampler is not active. Cannot start recording.")
+            self.status_bar.showMessage("Cannot start recording: Screen Sampler is not active.", 3000)
+            if self.screen_sampler_ui_manager:
+                self.screen_sampler_ui_manager.update_record_button_ui(is_recording=False, can_record=False) # Ensure button is in correct state
+                self.screen_sampler_ui_manager.set_recording_status_text("Error: Sampler OFF")
+            return
+
+        self.is_recording_sampler = True
+        self.recorded_sampler_frames.clear()
+        self.current_recording_frame_count = 0
+        self.captured_sampler_frequency_ms = self.current_sampler_params.get('frequency_ms', 200)
+        
+        print(f"DEBUG MAINWINDOW: Sampler recording started. Max frames: {self.MAX_RECORDING_FRAMES}, Freq: {self.captured_sampler_frequency_ms}ms")
+        self.status_bar.showMessage("Sampler recording started...", 0)
+        if self.screen_sampler_ui_manager:
+            self.screen_sampler_ui_manager.set_recording_status_text(f"REC 🔴 0/{self.MAX_RECORDING_FRAMES}")
+            # update_record_button_ui is called by the calling method _on_sampler_record_button_clicked
+
+        self._update_animator_controls_enabled_state() # Disable other animator controls
+
+    def _stop_sampler_recording(self):
+        """
+        Stops the sampler recording process and triggers frame processing.
+        """
+        print("DEBUG MAINWINDOW: _stop_sampler_recording called.")
+        self.is_recording_sampler = False
+        
+        final_frame_count = self.current_recording_frame_count
+        print(f"DEBUG MAINWINDOW: Sampler recording stopped. {final_frame_count} frames captured.")
+        self.status_bar.showMessage(f"Recording stopped. {final_frame_count} frames captured.", 5000)
+
+        if self.screen_sampler_ui_manager:
+            self.screen_sampler_ui_manager.set_recording_status_text(f"Idle. {final_frame_count} frames recorded.")
+            # update_record_button_ui is called by the calling method _on_sampler_record_button_clicked
+
+        if self.recorded_sampler_frames:
+            self._process_and_load_recorded_frames()
+        else:
+            print("DEBUG MAINWINDOW: No frames were recorded.")
+            self.status_bar.showMessage("No frames were recorded.", 2000)
+        
+        self._update_animator_controls_enabled_state() # Re-enable animator controls
+
+### START OF METHOD MainWindow._process_and_load_recorded_frames (FULLY IMPLEMENTED) ###
+    def _process_and_load_recorded_frames(self):
+        """
+        Prompts for a sequence name, creates a SequenceModel from recorded frames,
+        auto-saves it to the 'sampler_recordings' directory, and loads it into the animator.
+        """
+        print(f"DEBUG MAINWINDOW: _process_and_load_recorded_frames. Frames to process: {len(self.recorded_sampler_frames)}")
+        
+        if not self.recorded_sampler_frames:
+            print("DEBUG MAINWINDOW: No recorded frames available to process.")
+            self.status_bar.showMessage("No frames were recorded.", 2000)
+            if self.screen_sampler_ui_manager:
+                self.screen_sampler_ui_manager.set_recording_status_text("Idle. No frames.")
+            return
+
+        num_frames = len(self.recorded_sampler_frames)
+        
+        # Generate a somewhat unique default name using timestamp
+        # Ensure 'import time' is at the top of main_window.py
+        timestamp_str = time.strftime("%Y%m%d-%H%M") # Shortened for cleaner default name
+        default_name = f"Sampled {timestamp_str} ({num_frames}f)"
+        
+        user_provided_name, ok = QInputDialog.getText(
+            self, 
+            "Name Recorded Sequence", 
+            "Enter a name for the new sampled sequence:", 
+            text=default_name
+        )
+        
+        if not ok or not user_provided_name.strip():
+            reply = QMessageBox.question(
+                self, 
+                "Discard Recording?", 
+                "The recording was not named. Do you want to discard the recorded frames?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes 
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self.recorded_sampler_frames.clear()
+                self.current_recording_frame_count = 0
+                if self.screen_sampler_ui_manager:
+                    self.screen_sampler_ui_manager.set_recording_status_text("Recording discarded.")
+                self.status_bar.showMessage("Recorded frames discarded.", 3000)
+            else: 
+                if self.screen_sampler_ui_manager:
+                    self.screen_sampler_ui_manager.set_recording_status_text(f"Idle. {num_frames}f (unprocessed).")
+                self.status_bar.showMessage("Recording kept, but not processed.", 3000)
+            return
+
+        # Proceed with creating and saving the sequence
+        final_sequence_name_base = user_provided_name.strip() # Base name from user
+        
+        # Auto-save to sampler_recordings directory
+        # Ensure 'import os' is at the top of main_window.py
+        sanitized_filename_base = self._animator_sanitize_filename(final_sequence_name_base)
+        sampler_dir = self._animator_get_sequence_dir_path("sampler")
+        os.makedirs(sampler_dir, exist_ok=True)
+        
+        # Filename collision handling
+        save_filepath_candidate = os.path.join(sampler_dir, f"{sanitized_filename_base}.json")
+        actual_save_filepath = save_filepath_candidate
+        actual_sequence_name_for_model = final_sequence_name_base
+        collision_counter = 0
+        
+        while os.path.exists(actual_save_filepath):
+            collision_counter += 1
+            actual_sequence_name_for_model = f"{final_sequence_name_base}_{collision_counter}"
+            actual_save_filepath = os.path.join(sampler_dir, f"{self._animator_sanitize_filename(actual_sequence_name_for_model)}.json")
+            if collision_counter > 100: # Safety break
+                QMessageBox.critical(self, "Save Error", "Too many filename collisions. Could not save.")
+                self.recorded_sampler_frames.clear() # Discard data
+                self.current_recording_frame_count = 0
+                return
+
+        # Create the SequenceModel with the potentially modified name
+        new_sequence = SequenceModel(name=actual_sequence_name_for_model)
+        
+        for frame_hex_data in self.recorded_sampler_frames:
+            new_sequence.frames.append(AnimationFrame(colors=frame_hex_data))
+        
+        new_sequence.frame_delay_ms = self.captured_sampler_frequency_ms 
+        new_sequence.loop = True 
+        new_sequence.is_modified = False # Mark as not modified since it's freshly auto-saved
+        new_sequence.loaded_filepath = actual_save_filepath # Store path in model
+
+        if new_sequence.save_to_file(actual_save_filepath):
+            print(f"DEBUG MAINWINDOW: Recorded sequence auto-saved to: {actual_save_filepath}")
+            self.status_bar.showMessage(f"Sequence '{new_sequence.name}' auto-saved and loaded.", 5000)
+            
+            self.stop_current_animation()
+            self.active_sequence_model = new_sequence
+            self._connect_signals_for_active_sequence_model()
+            self._update_animator_ui_for_current_sequence() 
+            
+            self.animator_refresh_sequences_list_and_select(
+                active_sequence_raw_name=new_sequence.name, 
+                active_sequence_type_id="sampler"
+            )
+            if self.screen_sampler_ui_manager:
+                self.screen_sampler_ui_manager.set_recording_status_text(f"Loaded: {new_sequence.name}")
+        else:
+            QMessageBox.warning(self, "Auto-Save Error", f"Could not auto-save recorded sequence to '{actual_save_filepath}'.\nThe sequence is loaded in the animator but NOT saved to disk.")
+            self.stop_current_animation()
+            self.active_sequence_model = new_sequence
+            self._connect_signals_for_active_sequence_model()
+            self._update_animator_ui_for_current_sequence()
+            if self.screen_sampler_ui_manager: # Still update status even if save failed
+                self.screen_sampler_ui_manager.set_recording_status_text(f"Loaded (unsaved): {new_sequence.name}")
+            # Do NOT refresh the sequence list if save failed, as it won't be on disk.
+            # User would need to use "Save As..." manually.
+
+        self.recorded_sampler_frames.clear()
+        self.current_recording_frame_count = 0
+        
+        self._update_animator_controls_enabled_state()
+### END OF METHOD MainWindow._process_and_load_recorded_frames (FULLY IMPLEMENTED) ###
+
+
+    def _on_set_max_frames_button_clicked(self):
+        """
+        Handles the click event for the 'Set Max Frames' button.
+        Opens a dialog to get the new max frames value.
+        """
+        print("DEBUG MAINWINDOW: _on_set_max_frames_button_clicked called.")
+        
+        new_max_val, ok = SetMaxFramesDialog.get_max_frames(
+            parent_widget=self, 
+            current_value=self.MAX_RECORDING_FRAMES
+        )
+        
+        if ok and new_max_val is not None:
+            self.MAX_RECORDING_FRAMES = new_max_val
+            print(f"DEBUG MAINWINDOW: Max recording frames set to: {self.MAX_RECORDING_FRAMES}")
+            self.status_bar.showMessage(f"Max recording frames set to {self.MAX_RECORDING_FRAMES}.", 3000)
+            # If currently recording, update the status label if it shows max frames
+            if self.is_recording_sampler and self.screen_sampler_ui_manager:
+                self.screen_sampler_ui_manager.set_recording_status_text(
+                    f"REC 🔴 {self.current_recording_frame_count}/{self.MAX_RECORDING_FRAMES}"
+                )
+        else:
+            print("DEBUG MAINWINDOW: Set max frames dialog cancelled or no value returned.")
+
+    # --- END OF NEW Sampler Recording Handler Methods (Shells) ---
+
+
+
 
     # --- Animator Sequence File Management Logic (Ported from SequenceFileManager) ---
     def _animator_get_sequence_dir_path(self, dir_type: str = "user") -> str:
@@ -918,97 +1348,218 @@ class MainWindow(QMainWindow):
     # For now, _on_animator_save_sequence_as_button_clicked is the new primary save UI trigger.
 
 ### END OF NEW/PORTED METHODS in MainWindow ###
-### START OF METHOD MainWindow._connect_signals (MODIFIED - Debug Connection) ###
+### START OF METHOD MainWindow._connect_signals (MODIFIED) ###
     def _connect_signals(self):
         # Color Picker
         if self.color_picker_manager:
+            # Ensure signals are not connected multiple times if _connect_signals is ever called again
+            try: self.color_picker_manager.final_color_selected.disconnect(self._handle_final_color_selection_from_manager)
+            except TypeError: pass # Raised if not connected
             self.color_picker_manager.final_color_selected.connect(self._handle_final_color_selection_from_manager)
+            
+            try: self.color_picker_manager.status_message_requested.disconnect(self.status_bar.showMessage)
+            except TypeError: pass
             self.color_picker_manager.status_message_requested.connect(self.status_bar.showMessage)
         
         # Static Layouts
         if self.static_layouts_manager:
+            try: self.static_layouts_manager.apply_layout_data_requested.disconnect(self._handle_apply_static_layout_data)
+            except TypeError: pass
             self.static_layouts_manager.apply_layout_data_requested.connect(self._handle_apply_static_layout_data)
+            
+            try: self.static_layouts_manager.request_current_grid_colors.disconnect(self._provide_grid_colors_for_static_save)
+            except TypeError: pass
             self.static_layouts_manager.request_current_grid_colors.connect(self._provide_grid_colors_for_static_save)
+
+            try: self.static_layouts_manager.status_message_requested.disconnect(self.status_bar.showMessage)
+            except TypeError: pass
             self.static_layouts_manager.status_message_requested.connect(self.status_bar.showMessage)
         
-
-        # Sampler Recording Button
-        if self.record_sampler_button:
-            try: self.record_sampler_button.clicked.disconnect(self._on_record_sampler_button_clicked)
-            except TypeError: pass
-            self.record_sampler_button.clicked.connect(self._on_record_sampler_button_clicked)
 
         # Screen Sampler UIManager and Thread
         if self.screen_sampler_ui_manager:
             try: self.screen_sampler_ui_manager.sampling_control_changed.disconnect(self._handle_sampler_basic_params_changed)
             except TypeError: pass
             self.screen_sampler_ui_manager.sampling_control_changed.connect(self._handle_sampler_basic_params_changed)
+
+            try: self.screen_sampler_ui_manager.status_message_requested.disconnect(self.status_bar.showMessage)
+            except TypeError: pass
             self.screen_sampler_ui_manager.status_message_requested.connect(self.status_bar.showMessage)
+
+            try: self.screen_sampler_ui_manager.request_monitor_list_population.disconnect(self._populate_sampler_monitor_list_ui)
+            except TypeError: pass
             self.screen_sampler_ui_manager.request_monitor_list_population.connect(self._populate_sampler_monitor_list_ui)
+
+            try: self.screen_sampler_ui_manager.show_capture_preview_requested.disconnect(self._show_capture_preview_dialog)
+            except TypeError: pass
             self.screen_sampler_ui_manager.show_capture_preview_requested.connect(self._show_capture_preview_dialog)
+
+            # --- NEW CONNECTIONS for Sampler Recording UI in ScreenSamplerUIManager ---
+            try: self.screen_sampler_ui_manager.record_button_clicked.disconnect(self._on_sampler_record_button_clicked)
+            except TypeError: pass
+            self.screen_sampler_ui_manager.record_button_clicked.connect(self._on_sampler_record_button_clicked)
+            print("DEBUG CONNECT: Connected screen_sampler_ui_manager.record_button_clicked")
+
+
+            try: self.screen_sampler_ui_manager.set_max_frames_button_clicked.disconnect(self._on_set_max_frames_button_clicked)
+            except TypeError: pass
+            self.screen_sampler_ui_manager.set_max_frames_button_clicked.connect(self._on_set_max_frames_button_clicked)
+            print("DEBUG CONNECT: Connected screen_sampler_ui_manager.set_max_frames_button_clicked")
+            # --- END NEW CONNECTIONS ---
 
         if self.screen_sampler_thread:
             try: self.screen_sampler_thread.pad_colors_sampled.disconnect(self._handle_screen_sampled_colors_list)
             except TypeError: pass
             self.screen_sampler_thread.pad_colors_sampled.connect(self._handle_screen_sampled_colors_list)
+
             try: self.screen_sampler_thread.processed_image_ready.disconnect(self._handle_sampler_processed_image)
             except TypeError: pass
             self.screen_sampler_thread.processed_image_ready.connect(self._handle_sampler_processed_image)
+
             try: self.screen_sampler_thread.error_occurred.disconnect(self._handle_screen_sampler_error)
             except TypeError: pass
             self.screen_sampler_thread.error_occurred.connect(self._handle_screen_sampler_error)
 
         # Animator Components (Timeline and Controls Widgets)
         if self.sequence_timeline_widget:
+            # Disconnect existing first (example for one, apply to all if needed)
+            try: self.sequence_timeline_widget.frame_selected.disconnect(self.on_animator_frame_selected_in_timeline)
+            except TypeError: pass
             self.sequence_timeline_widget.frame_selected.connect(self.on_animator_frame_selected_in_timeline)
+            
+            try: self.sequence_timeline_widget.add_frame_action_triggered.disconnect(self.on_animator_add_frame_action_from_timeline_menu)
+            except TypeError: pass
             self.sequence_timeline_widget.add_frame_action_triggered.connect(self.on_animator_add_frame_action_from_timeline_menu)
+
+            try: self.sequence_timeline_widget.copy_frames_action_triggered.disconnect(self.on_animator_copy_frames)
+            except TypeError: pass
             self.sequence_timeline_widget.copy_frames_action_triggered.connect(self.on_animator_copy_frames)
+
+            try: self.sequence_timeline_widget.cut_frames_action_triggered.disconnect(self.on_animator_cut_frames)
+            except TypeError: pass
             self.sequence_timeline_widget.cut_frames_action_triggered.connect(self.on_animator_cut_frames)
+
+            try: self.sequence_timeline_widget.paste_frames_action_triggered.disconnect(self.on_animator_paste_frames)
+            except TypeError: pass
             self.sequence_timeline_widget.paste_frames_action_triggered.connect(self.on_animator_paste_frames)
+
+            try: self.sequence_timeline_widget.duplicate_selected_action_triggered.disconnect(self.on_animator_duplicate_selected_frames_generic)
+            except TypeError: pass
             self.sequence_timeline_widget.duplicate_selected_action_triggered.connect(self.on_animator_duplicate_selected_frames_generic)
+
+            try: self.sequence_timeline_widget.delete_selected_action_triggered.disconnect(self.on_animator_delete_selected_frames_generic)
+            except TypeError: pass
             self.sequence_timeline_widget.delete_selected_action_triggered.connect(self.on_animator_delete_selected_frames_generic)
+            
+            try: self.sequence_timeline_widget.select_all_action_triggered.disconnect(self.on_animator_select_all_frames)
+            except TypeError: pass
             self.sequence_timeline_widget.select_all_action_triggered.connect(self.on_animator_select_all_frames)
+            
+            # For insert_blank_frame_before/after, ensure lambda syntax is correct and connections are unique if re-connecting
+            # The lambda functions create new callables each time, so disconnect might not work as expected without storing them.
+            # For simplicity, we'll assume _connect_signals is called once, or the lambdas don't cause issues.
+            # If they do, these would need more robust connection management.
+            try: self.sequence_timeline_widget.insert_blank_frame_before_action_triggered.disconnect() # General disconnect for this signal
+            except TypeError: pass
             self.sequence_timeline_widget.insert_blank_frame_before_action_triggered.connect(
                 lambda index: self.on_animator_add_frame_action_from_controls("blank", at_index=index))
+
+            try: self.sequence_timeline_widget.insert_blank_frame_after_action_triggered.disconnect()
+            except TypeError: pass
             self.sequence_timeline_widget.insert_blank_frame_after_action_triggered.connect(
                 lambda index: self.on_animator_add_frame_action_from_controls("blank", at_index=index + 1))
 
+
         if self.sequence_controls_widget:
+            # Example for one controls widget signal, apply try-except for all
+            try: self.sequence_controls_widget.add_frame_requested.disconnect(self.on_animator_add_frame_action_from_controls)
+            except TypeError: pass
             self.sequence_controls_widget.add_frame_requested.connect(self.on_animator_add_frame_action_from_controls)
+            
+            try: self.sequence_controls_widget.delete_selected_frame_requested.disconnect(self.on_animator_delete_selected_frames_generic)
+            except TypeError: pass
             self.sequence_controls_widget.delete_selected_frame_requested.connect(self.on_animator_delete_selected_frames_generic)
+
+            try: self.sequence_controls_widget.duplicate_selected_frame_requested.disconnect(self.on_animator_duplicate_selected_frames_generic)
+            except TypeError: pass
             self.sequence_controls_widget.duplicate_selected_frame_requested.connect(self.on_animator_duplicate_selected_frames_generic)
+            
+            try: self.sequence_controls_widget.copy_frames_requested.disconnect(self.on_animator_copy_frames)
+            except TypeError: pass
             self.sequence_controls_widget.copy_frames_requested.connect(self.on_animator_copy_frames)
+
+            try: self.sequence_controls_widget.cut_frames_requested.disconnect(self.on_animator_cut_frames)
+            except TypeError: pass
             self.sequence_controls_widget.cut_frames_requested.connect(self.on_animator_cut_frames)
+
+            try: self.sequence_controls_widget.paste_frames_requested.disconnect(self.on_animator_paste_frames)
+            except TypeError: pass
             self.sequence_controls_widget.paste_frames_requested.connect(self.on_animator_paste_frames)
+
+            try: self.sequence_controls_widget.navigate_first_requested.disconnect(self.on_animator_navigate_first)
+            except TypeError: pass
             self.sequence_controls_widget.navigate_first_requested.connect(self.on_animator_navigate_first)
+
+            try: self.sequence_controls_widget.navigate_prev_requested.disconnect(self.on_animator_navigate_prev)
+            except TypeError: pass
             self.sequence_controls_widget.navigate_prev_requested.connect(self.on_animator_navigate_prev)
+
+            try: self.sequence_controls_widget.navigate_next_requested.disconnect(self.on_animator_navigate_next)
+            except TypeError: pass
             self.sequence_controls_widget.navigate_next_requested.connect(self.on_animator_navigate_next)
+
+            try: self.sequence_controls_widget.navigate_last_requested.disconnect(self.on_animator_navigate_last)
+            except TypeError: pass
             self.sequence_controls_widget.navigate_last_requested.connect(self.on_animator_navigate_last)
+
+            try: self.sequence_controls_widget.play_requested.disconnect(self.on_animator_play)
+            except TypeError: pass
             self.sequence_controls_widget.play_requested.connect(self.on_animator_play)
+
+            try: self.sequence_controls_widget.pause_requested.disconnect(self.on_animator_pause)
+            except TypeError: pass
             self.sequence_controls_widget.pause_requested.connect(self.on_animator_pause)
+
+            try: self.sequence_controls_widget.stop_requested.disconnect(self.on_animator_stop)
+            except TypeError: pass
             self.sequence_controls_widget.stop_requested.connect(self.on_animator_stop)
+
+            try: self.sequence_controls_widget.frame_delay_changed.disconnect(self.on_animator_frame_delay_changed)
+            except TypeError: pass
             self.sequence_controls_widget.frame_delay_changed.connect(self.on_animator_frame_delay_changed)
 
         # --- Connect Signals for Integrated Animator File Management UI ---
-        if self.animator_sequence_selection_combo is not None: # Check it's not Python None
-            print(f"DEBUG CONNECT: Connecting currentIndexChanged for {self.animator_sequence_selection_combo}") # <<< ADD
+        if self.animator_sequence_selection_combo is not None:
+            try: self.animator_sequence_selection_combo.currentIndexChanged.disconnect(self._on_animator_sequence_combo_changed)
+            except TypeError: pass
             self.animator_sequence_selection_combo.currentIndexChanged.connect(self._on_animator_sequence_combo_changed)
         else:
-            print("DEBUG CONNECT: animator_sequence_selection_combo IS NONE at connection time!") # <<< ADD
+            print("DEBUG CONNECT (AGAIN): animator_sequence_selection_combo IS NONE at connection time!")
 
         if self.animator_load_sequence_button:
+            try: self.animator_load_sequence_button.clicked.disconnect(self._on_animator_load_selected_sequence_button_clicked)
+            except TypeError: pass
             self.animator_load_sequence_button.clicked.connect(self._on_animator_load_selected_sequence_button_clicked)
+        
         if self.animator_new_sequence_button:
+            try: self.animator_new_sequence_button.clicked.disconnect() # Disconnect all slots for this signal
+            except TypeError: pass
             self.animator_new_sequence_button.clicked.connect(lambda: self.new_sequence(prompt_save=True))
+        
         if self.animator_save_as_button:
+            try: self.animator_save_as_button.clicked.disconnect(self._on_animator_save_sequence_as_button_clicked)
+            except TypeError: pass
             self.animator_save_as_button.clicked.connect(self._on_animator_save_sequence_as_button_clicked)
+        
         if self.animator_delete_sequence_button:
+            try: self.animator_delete_sequence_button.clicked.disconnect(self._on_animator_delete_selected_sequence_button_clicked)
+            except TypeError: pass
             self.animator_delete_sequence_button.clicked.connect(self._on_animator_delete_selected_sequence_button_clicked)
         # ---
 
-        self._connect_signals_for_active_sequence_model()
-        self._create_edit_actions() 
-### END OF METHOD MainWindow._connect_signals (MODIFIED - Debug Connection) ###
+        self._connect_signals_for_active_sequence_model() # This handles active_sequence_model signals
+        self._create_edit_actions() # Ensure QActions are created (idempotent if called multiple times by design)
+### END OF METHOD MainWindow._connect_signals (MODIFIED) ###
     def _create_edit_actions(self):
         # ... (content as before) ...
         self.undo_action = QAction("Undo Sequence Edit", self); self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
@@ -1515,56 +2066,66 @@ class MainWindow(QMainWindow):
         
         self._update_animator_controls_enabled_state()
 
+### START OF METHOD MainWindow._handle_screen_sampled_colors_list (MODIFIED - Frame Capture Logic) ###
     def _handle_screen_sampled_colors_list(self, colors_list: list):
-        # print(f"DEBUG: _handle_screen_sampled_colors_list called. self.is_recording_sampler: {self.is_recording_sampler}, Frame Count: {self.current_recording_frame_count}") # Can be very noisy
-        if self.is_recording_sampler:  # Check if recording is active
+        # This method receives a list of (r,g,b) tuples from the ScreenSamplerThread.
+        
+        # --- SAMPLER RECORDING LOGIC ---
+        if self.is_recording_sampler:
             if self.current_recording_frame_count < self.MAX_RECORDING_FRAMES:
                 # Convert RGB tuples to hex strings for storage
-                # The incoming colors_list from thread is list of (r,g,b) tuples
-                if colors_list and all(isinstance(c, tuple) and len(c) == 3 for c in colors_list):
+                if colors_list and all(isinstance(c, tuple) and len(c) == 3 for c in colors_list) and len(colors_list) == 64:
                     hex_frame = [QColor(r, g, b).name() for r, g, b in colors_list]
                     self.recorded_sampler_frames.append(hex_frame)
                     self.current_recording_frame_count += 1
-                    if self.recording_status_label:
-                        self.recording_status_label.setText(f"REC🔴 {self.current_recording_frame_count}/{self.MAX_RECORDING_FRAMES}")
+                    
+                    if self.screen_sampler_ui_manager: # Update status label during recording
+                        self.screen_sampler_ui_manager.set_recording_status_text(
+                            f"REC 🔴 {self.current_recording_frame_count}/{self.MAX_RECORDING_FRAMES}"
+                        )
                 else:
-                    print("MainWindow Warning: Invalid data in colors_list during recording, frame skipped.")
+                    print(f"MainWindow Warning: Invalid data in colors_list (len: {len(colors_list) if colors_list else 'None'}) during recording, frame skipped.")
 
-            else:  # Max frames reached
-                if self.is_recording_sampler:  # Ensure stop is only called once
-                    self._stop_sampler_recording()
-                    # self.status_bar.showMessage(f"Max recording frames ({self.MAX_RECORDING_FRAMES}) reached. Recording stopped.", 3000)
-                    # Status bar message is now handled in _stop_sampler_recording
-        # <<< END BLOCK FOR _handle_screen_sampled_colors_list MODIFICATION >>>
+                if self.current_recording_frame_count >= self.MAX_RECORDING_FRAMES:
+                    # Automatically stop recording if max frames are reached
+                    print(f"DEBUG MAINWINDOW: Max recording frames ({self.MAX_RECORDING_FRAMES}) reached. Auto-stopping.")
+                    self._stop_sampler_recording() 
+                    # No need to update status bar here, _stop_sampler_recording handles it.
+                    # The record button UI update is also handled by _stop_sampler_recording.
+            # If max frames already reached and stop hasn't fully processed, this `if` prevents further processing.
+            # The `is_recording_sampler` flag will be set to False by _stop_sampler_recording.
+        # --- END OF SAMPLER RECORDING LOGIC ---
+
+        # --- Existing logic to send colors to hardware if sampler is active (but not necessarily recording) ---
+        # This part should only execute if we are NOT recording, OR if we are recording BUT we still want to see live output.
+        # Current design: Recording takes precedence for data storage, but live output to pads continues if sampler is active.
+        # If you want to *only* record and not show on pads during recording, add 'and not self.is_recording_sampler' here.
+        # For now, let's assume live output is desired even during recording.
+
         if not self.is_screen_sampling_active or not self.akai_controller.is_connected():
+            # If sampler is globally off or device disconnected, do nothing further.
+            # This also means if recording just stopped and set is_screen_sampling_active to False, this won't run.
             return
         
         if not colors_list or len(colors_list) != (ScreenSamplerCore.NUM_GRID_ROWS * ScreenSamplerCore.NUM_GRID_COLS):
             # print(f"MainWindow: Received invalid colors_list (len {len(colors_list) if colors_list else 0}). Skipping update.")
-            # Optionally, clear pads or do nothing
             return
 
         hardware_batch_update = []
-        gui_updates = []
-
+        # GUI updates directly for now, as it was before.
         for i, color_tuple in enumerate(colors_list):
             if not (isinstance(color_tuple, tuple) and len(color_tuple) == 3):
-                # print(f"MainWindow: Invalid color_tuple at index {i}: {color_tuple}")
-                r, g, b = 0, 0, 0 # Default to black if data is malformed
+                r, g, b = 0, 0, 0 # Default to black
             else:
                 r, g, b = color_tuple
             
-            row, col = divmod(i, ScreenSamplerCore.NUM_GRID_COLS) # Akai Fire is 4 rows, 16 cols per row for main pads
-            
-            # Prepare for hardware update
+            row, col = divmod(i, ScreenSamplerCore.NUM_GRID_COLS)
             hardware_batch_update.append((row, col, r, g, b))
-            
-            # Prepare for GUI update (can be done directly or batched if GUI update is slow)
-            # For now, let's update GUI directly. If it causes lag, we can batch QSS updates.
-            self.update_gui_pad_color(row, col, r, g, b) # update_gui_pad_color should be efficient enough
+            self.update_gui_pad_color(row, col, r, g, b) # Update GUI pad immediately
 
         if hardware_batch_update:
             self.akai_controller.set_multiple_pads_color(hardware_batch_update)
+### END OF METHOD MainWindow._handle_screen_sampled_colors_list (MODIFIED - Frame Capture Logic) ###
 
     def _handle_sampler_processed_image(self, pil_image: Image.Image):
         self._last_processed_sampler_image = pil_image 
@@ -1945,15 +2506,17 @@ class MainWindow(QMainWindow):
 ### END OF METHOD MainWindow._update_animator_ui_for_current_sequence_properties ###
 
 
-### START OF METHOD MainWindow._update_animator_controls_enabled_state (FIX UnboundLocalError) ###
+### START OF METHOD MainWindow._update_animator_controls_enabled_state (MODIFIED) ###
     def _update_animator_controls_enabled_state(self):
         is_connected = self.akai_controller.is_connected()
-        can_interact_directly_with_animator = is_connected and not self.is_screen_sampling_active
+        # This is a key condition: can we interact with animator/direct pad painting?
+        # True if MIDI connected AND screen sampler is OFF.
+        can_interact_directly_with_animator_or_pads = is_connected and not self.is_screen_sampling_active
 
         has_frames = False
         num_selected_frames = 0
         can_undo, can_redo = False, False
-        can_operate_on_selection = False # <<< INITIALIZE TO A DEFAULT VALUE
+        can_operate_on_selection = False 
 
         if self.active_sequence_model:
             has_frames = self.active_sequence_model.get_frame_count() > 0
@@ -1961,8 +2524,7 @@ class MainWindow(QMainWindow):
                 num_selected_frames = len(self.sequence_timeline_widget.get_selected_item_indices())
             can_undo = bool(self.active_sequence_model._undo_stack)
             can_redo = bool(self.active_sequence_model._redo_stack)
-            # Now define/update it based on current state if model exists
-            can_operate_on_selection = can_interact_directly_with_animator and num_selected_frames > 0 and has_frames
+            can_operate_on_selection = can_interact_directly_with_animator_or_pads and num_selected_frames > 0 and has_frames
 
         clipboard_has_content = bool(self.frame_clipboard)
         
@@ -1971,12 +2533,14 @@ class MainWindow(QMainWindow):
         can_delete_selected_combo_item = False
 
         if self.animator_sequence_selection_combo: 
+            # Combo itself is enabled if direct interaction is allowed and it has items (beyond placeholder)
             self.animator_sequence_selection_combo.setEnabled(
-                can_interact_directly_with_animator and self.animator_sequence_selection_combo.count() > 1
+                can_interact_directly_with_animator_or_pads and self.animator_sequence_selection_combo.count() > 1 
             )
             current_combo_idx = self.animator_sequence_selection_combo.currentIndex()
             current_combo_text = self.animator_sequence_selection_combo.itemText(current_combo_idx)
             item_data = self.animator_sequence_selection_combo.itemData(current_combo_idx)
+
             if current_combo_idx > 0 and \
                current_combo_text != "No sequences found" and \
                item_data and isinstance(item_data, dict) and "path" in item_data:
@@ -1986,60 +2550,82 @@ class MainWindow(QMainWindow):
         
         if self.animator_load_sequence_button:
             self.animator_load_sequence_button.setEnabled(
-                can_interact_directly_with_animator and is_valid_combo_item_selected_for_load
+                can_interact_directly_with_animator_or_pads and is_valid_combo_item_selected_for_load
             )
         if self.animator_delete_sequence_button:
             self.animator_delete_sequence_button.setEnabled(
-                can_interact_directly_with_animator and can_delete_selected_combo_item
+                can_interact_directly_with_animator_or_pads and can_delete_selected_combo_item
             )
         if self.animator_new_sequence_button: 
-            self.animator_new_sequence_button.setEnabled(can_interact_directly_with_animator)
+            self.animator_new_sequence_button.setEnabled(can_interact_directly_with_animator_or_pads)
         if self.new_sequence_action: 
-            self.new_sequence_action.setEnabled(can_interact_directly_with_animator)
+            self.new_sequence_action.setEnabled(can_interact_directly_with_animator_or_pads)
         if self.animator_save_as_button: 
-            self.animator_save_as_button.setEnabled(can_interact_directly_with_animator and has_frames)
+            self.animator_save_as_button.setEnabled(can_interact_directly_with_animator_or_pads and has_frames)
         if self.save_sequence_as_action: 
-            self.save_sequence_as_action.setEnabled(can_interact_directly_with_animator and has_frames)
+            self.save_sequence_as_action.setEnabled(can_interact_directly_with_animator_or_pads and has_frames)
         # ---
 
         if self.sequence_controls_widget:
             self.sequence_controls_widget.set_controls_enabled_state(
-                enabled=can_interact_directly_with_animator, 
+                enabled=can_interact_directly_with_animator_or_pads, 
                 frame_selected=(num_selected_frames > 0),
                 has_frames=has_frames,
                 clipboard_has_content=clipboard_has_content
             )
         
         if self.sequence_timeline_widget:
-            self.sequence_timeline_widget.setEnabled(can_interact_directly_with_animator)
+            self.sequence_timeline_widget.setEnabled(can_interact_directly_with_animator_or_pads)
         
-        if self.undo_action: self.undo_action.setEnabled(can_interact_directly_with_animator and can_undo)
-        if self.redo_action: self.redo_action.setEnabled(can_interact_directly_with_animator and can_redo)
+        if self.undo_action: self.undo_action.setEnabled(can_interact_directly_with_animator_or_pads and can_undo)
+        if self.redo_action: self.redo_action.setEnabled(can_interact_directly_with_animator_or_pads and can_redo)
         
-        # can_operate_on_selection is now guaranteed to be defined
         if self.copy_action: self.copy_action.setEnabled(can_operate_on_selection)
         if self.cut_action: self.cut_action.setEnabled(can_operate_on_selection)
-        if self.delete_action: self.delete_action.setEnabled(can_operate_on_selection) # For the QAction
+        if self.delete_action: self.delete_action.setEnabled(can_operate_on_selection)
+        if self.paste_action: self.paste_action.setEnabled(can_interact_directly_with_animator_or_pads and clipboard_has_content)
+        if self.duplicate_action: self.duplicate_action.setEnabled(can_operate_on_selection)
         
-        if self.paste_action: self.paste_action.setEnabled(can_interact_directly_with_animator and clipboard_has_content)
-        if self.duplicate_action: self.duplicate_action.setEnabled(can_operate_on_selection) # For the QAction
-        
-        if self.play_pause_action:
+        if self.play_pause_action: # Global play/pause action
+            # Enabled if connected, has frames, AND sampler is NOT active (animator has priority)
             self.play_pause_action.setEnabled(is_connected and has_frames and not self.is_screen_sampling_active)
 
-        self.pad_grid_frame.setEnabled(can_interact_directly_with_animator)
-        if self.clear_all_button: self.clear_all_button.setEnabled(can_interact_directly_with_animator)
-        if self.color_button_off: self.color_button_off.setEnabled(can_interact_directly_with_animator)
+        # Pad grid and direct pad tools (Paint Black, Clear Device)
+        if self.pad_grid_frame: self.pad_grid_frame.setEnabled(can_interact_directly_with_animator_or_pads)
+        if self.clear_all_button: self.clear_all_button.setEnabled(can_interact_directly_with_animator_or_pads)
+        if self.color_button_off: self.color_button_off.setEnabled(can_interact_directly_with_animator_or_pads)
         
-        if self.color_picker_manager: self.color_picker_manager.set_enabled(can_interact_directly_with_animator)
-        if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(can_interact_directly_with_animator)
+        if self.color_picker_manager: self.color_picker_manager.set_enabled(can_interact_directly_with_animator_or_pads)
+        if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(can_interact_directly_with_animator_or_pads)
         
+        # Screen Sampler UI Manager (overall group box)
         if self.screen_sampler_ui_manager:
             self.screen_sampler_ui_manager.set_overall_enabled_state(is_connected)
+            # If sampler is now active, it should have enabled its own sub-controls via its set_controls_interaction_enabled.
+            # Now, manage the state of the Sampler *Recording* specific UI elements within it.
+            
+            can_start_new_recording = is_connected and self.is_screen_sampling_active and not self.is_recording_sampler
+            self.screen_sampler_ui_manager.update_record_button_ui(
+                is_recording=self.is_recording_sampler,
+                can_record=can_start_new_recording
+            )
+            
+            # Update recording status label based on MainWindow's state
+            if self.is_recording_sampler:
+                self.screen_sampler_ui_manager.set_recording_status_text(
+                    f"REC 🔴 {self.current_recording_frame_count}/{self.MAX_RECORDING_FRAMES}"
+                )
+            elif not self.is_screen_sampling_active and is_connected: # Sampler is off, but we are connected
+                 self.screen_sampler_ui_manager.set_recording_status_text("Sampler OFF")
+            elif not is_connected: # Not connected
+                 self.screen_sampler_ui_manager.set_recording_status_text("Device Disconnected")
+            else: # Connected, sampler active, but not recording
+                 self.screen_sampler_ui_manager.set_recording_status_text("Idle. Ready to record.")
 
-        if hasattr(self, 'sampler_recording_group_box_ref') and self.sampler_recording_group_box_ref:
-            self.sampler_recording_group_box_ref.setEnabled(is_connected)
-### END OF METHOD MainWindow._update_animator_controls_enabled_state (FIX UnboundLocalError) ###
+        # This was an old reference, sampler_recording_group_box_ref is removed.
+        # if hasattr(self, 'sampler_recording_group_box_ref') and self.sampler_recording_group_box_ref:
+        #     self.sampler_recording_group_box_ref.setEnabled(is_connected)
+### END OF METHOD MainWindow._update_animator_controls_enabled_state (MODIFIED) ###
 
     def on_animator_frame_selected_in_timeline(self, frame_index: int):
         if self.is_screen_sampling_active: return 
