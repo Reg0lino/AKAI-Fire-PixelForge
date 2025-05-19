@@ -30,8 +30,6 @@
 *   The "Sampler Recording" feature in the README was previously marked as "CURRENTLY BUGGED". It should now be functional but may require further testing for edge cases. (Updating README to reflect this).
 
 ---
-*(Previous changelog entries for "Version X.Y.Z (Based on our recent interactions - October 26, 2023 simulated)" and older versions would follow here, reflecting the history from the user's original `CHANGELOG - Copy.md.txt`)*
----
 
 ## [Version 0.7.0]
 
