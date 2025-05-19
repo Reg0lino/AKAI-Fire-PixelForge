@@ -4,6 +4,9 @@ from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QPointF, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QMouseEvent, QCursor
 from enum import Enum
 
+print("--- EXECUTING monitor_view_widget.py (VERSION: MVW_JULY_22_B) ---")
+print(f"--- MVW __file__: {__file__} ---")
+
 MONITOR_AREA_PADDING = 10
 DEFAULT_MONITOR_BG_COLOR = QColor(55, 55, 60)
 ACTIVE_MONITOR_BORDER_COLOR = QColor(100, 150, 255)
@@ -125,34 +128,35 @@ class MonitorViewWidget(QWidget):
         self._clamp_selection_rect_to_current_monitor_view()
 
     def set_current_selection_from_params(self, target_mss_id: int, region_rect_percentage: dict):
-        """ Called by MainWindow/Dialog to set selection based on loaded/defined parameters (percentages). """
-        target_mon_info = next((m for m in self.all_monitors_original_info if m['id'] == target_mss_id), None)
-        if not target_mon_info:
-            print(f"MonitorViewWidget Error: Cannot set selection, unknown target_mss_id: {target_mss_id}"); return
+       print(f"--- MVW.set_current_selection_from_params CALLED (VERSION: MVW_JULY_22_B) --- target_id={target_mss_id}, region%={region_rect_percentage}")
+       """ Called by MainWindow/Dialog to set selection based on loaded/defined parameters (percentages). """
+       target_mon_info = next((m for m in self.all_monitors_original_info if m['id'] == target_mss_id), None)
+       if not target_mon_info:
+           print(f"MonitorViewWidget Error: Cannot set selection, unknown target_mss_id: {target_mss_id}"); return
 
-        self.target_monitor_mss_id = target_mss_id # Ensure current target is this one
-        mon_orig_w = float(target_mon_info.get('width', 1)); mon_orig_w = 1.0 if mon_orig_w == 0 else mon_orig_w
-        mon_orig_h = float(target_mon_info.get('height', 1)); mon_orig_h = 1.0 if mon_orig_h == 0 else mon_orig_h
+       self.target_monitor_mss_id = target_mss_id # Ensure current target is this one
+       mon_orig_w = float(target_mon_info.get('width', 1)); mon_orig_w = 1.0 if mon_orig_w == 0 else mon_orig_w
+       mon_orig_h = float(target_mon_info.get('height', 1)); mon_orig_h = 1.0 if mon_orig_h == 0 else mon_orig_h
 
-        # 1. Directly update logical dimensions from incoming percentages
-        perc_x = region_rect_percentage.get('x', 0.4)
-        perc_y = region_rect_percentage.get('y', 0.4)
-        perc_w = max(MIN_SELECTION_PERCENTAGE_DIM, region_rect_percentage.get('width', 0.2))
-        perc_h = max(MIN_SELECTION_PERCENTAGE_DIM, region_rect_percentage.get('height', 0.2))
+       # 1. Directly update logical dimensions from incoming percentages
+       perc_x = region_rect_percentage.get('x', 0.4)
+       perc_y = region_rect_percentage.get('y', 0.4)
+       perc_w = max(MIN_SELECTION_PERCENTAGE_DIM, region_rect_percentage.get('width', 0.2))
+       perc_h = max(MIN_SELECTION_PERCENTAGE_DIM, region_rect_percentage.get('height', 0.2))
 
-        self._current_sample_box_logical_x = perc_x * mon_orig_w
-        self._current_sample_box_logical_y = perc_y * mon_orig_h
-        self._current_sample_box_logical_width = perc_w * mon_orig_w
-        self._current_sample_box_logical_height = perc_h * mon_orig_h
+       self._current_sample_box_logical_x = perc_x * mon_orig_w
+       self._current_sample_box_logical_y = perc_y * mon_orig_h
+       self._current_sample_box_logical_width = perc_w * mon_orig_w
+       self._current_sample_box_logical_height = perc_h * mon_orig_h
         
         # Ensure logical dimensions are not ridiculously small before scaling
-        self._current_sample_box_logical_width = max(MIN_SELECTION_LOGICAL_SIZE, self._current_sample_box_logical_width)
-        self._current_sample_box_logical_height = max(MIN_SELECTION_LOGICAL_SIZE, self._current_sample_box_logical_height)
+       self._current_sample_box_logical_width = max(MIN_SELECTION_LOGICAL_SIZE, self._current_sample_box_logical_width)
+       self._current_sample_box_logical_height = max(MIN_SELECTION_LOGICAL_SIZE, self._current_sample_box_logical_height)
 
         # 2. Recalculate all scaled representations based on new logical values and current widget size
-        self._recalculate_scales_and_selection_rect() 
+       self._recalculate_scales_and_selection_rect() 
         
-        self.update()
+       self.update()
         # Do NOT emit here. Let subsequent resizeEvent or interaction trigger an emit based on this clean state.
 
     def _update_logical_state_from_scaled_rect(self):
@@ -201,11 +205,6 @@ class MonitorViewWidget(QWidget):
 
         region_data = {'x': perc_x, 'y': perc_y, 'width': perc_w, 'height': perc_h}
         self.region_selection_changed.emit(self.target_monitor_mss_id, region_data)
-
-    # ... (paintEvent, _get_handle_rects, _get_handle_at_pos - largely unchanged from last version) ...
-    # ... (mousePressEvent, mouseMoveEvent, mouseReleaseEvent - largely unchanged, but they call _update_logical_state_from_scaled_rect()) ...
-    # ... (_clamp_selection_rect_to_current_monitor_view, _get_snap_points_scaled, _try_snap_selection_drag, _try_snap_selection_resize - unchanged) ...
-    # ... (get_current_selection_parameters - should now also use logical state to derive percentages) ...
 
     # --- Paint Methods ---
     def paintEvent(self, event):

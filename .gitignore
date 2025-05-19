@@ -76,14 +76,3 @@ Thumbs.db
 # Pytest cache
 .pytest_cache/
 .coverage
-
-# Randos
-presets/sequences/sampler_recordings/test2.json
-presets/sequences/sampler_recordings/test.json
-gui/__pycache__/main_window.cpython-313.pyc
-gui/__pycache__/main_window.cpython-313.pyc
-gui/__pycache__/main_window.cpython-313.pyc
-gui/__pycache__/main_window.cpython-313.pyc
-presets/sequences/sampler_recordings/test1.json
-presets/sequences/sampler_recordings/test4.json
-gui/__pycache__/main_window.cpython-313.pyc

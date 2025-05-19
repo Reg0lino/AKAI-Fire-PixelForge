@@ -1,4 +1,3 @@
-### START OF FILE gui/set_max_frames_dialog.py ###
 # AKAI_Fire_RGB_Controller/gui/set_max_frames_dialog.py
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QPushButton,
@@ -11,14 +10,14 @@ class SetMaxFramesDialog(QDialog):
     max_frames_value_changed = pyqtSignal(int)
 
     MIN_FRAMES = 1
-    MAX_FRAMES = 500 # As per your requirement
-    DEFAULT_FRAMES = 200 # As per previous handover
+    MAX_FRAMES = 999
+    DEFAULT_FRAMES = 200
 
     def __init__(self, current_max_frames: int = DEFAULT_FRAMES, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Set Max Recording Frames")
         self.setMinimumWidth(300)
-        self.setModal(True) # Make it a modal dialog
+        self.setModal(True)
 
         self._initial_value = max(self.MIN_FRAMES, min(current_max_frames, self.MAX_FRAMES))
 
@@ -130,4 +129,3 @@ if __name__ == '__main__':
     test_main_window.show()
 
     sys.exit(app.exec())
-### END OF FILE gui/set_max_frames_dialog.py ###
