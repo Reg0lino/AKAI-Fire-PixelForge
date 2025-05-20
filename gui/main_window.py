@@ -24,6 +24,7 @@ from .interactive_pad_grid import InteractivePadGridFrame
 from .screen_sampler_manager import ScreenSamplerManager
 from .animator_manager_widget import AnimatorManagerWidget 
 from hardware.akai_fire_controller import AkaiFireController
+from utils import get_resource_path # <<< ADD THIS IMPORT
 # --- Constants ---
 INITIAL_WINDOW_WIDTH = 1050
 INITIAL_WINDOW_HEIGHT = 900
@@ -33,6 +34,20 @@ APP_AUTHOR = "YourProjectAuthorName"
 SAMPLER_PREFS_FILENAME = "sampler_user_prefs.json"
 MAIN_CONFIG_FILENAME = "fire_controller_config.json"
 DEFAULT_SAMPLING_FPS = 10
+# --- Global Functions ---
+def get_resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        # Not bundled, running from source
+        # Assume this function is in a file within 'gui' or similar, 
+        # and 'resources' is at the project root.
+        # Adjust if your get_resource_path is elsewhere.
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) # Goes up one level from current file's dir
+
+    return os.path.join(base_path, relative_path)
 # user config_dir
 def get_user_config_file_path(filename: str) -> str:
     """
@@ -285,15 +300,9 @@ class MainWindow(QMainWindow):
                 self.status_bar.showMessage("Eyedropper: Could not determine pad color.", 2000)
         else:
             self.status_bar.showMessage("Eyedropper: Invalid pad index.", 2000)
-    # icon 
+    # icon png path
     def _set_window_icon(self):
-        """Sets the application's main window icon."""
-        try:
-            gui_dir_path = os.path.dirname(os.path.abspath(__file__))
-            project_root_path = os.path.dirname(gui_dir_path)
-        except NameError:
-            project_root_path = os.path.dirname(os.path.abspath(sys.argv[0]))
-        icon_path = os.path.join(project_root_path, "resources", "icons", "app_icon.png") # .png for window icon itself
+        icon_path = get_resource_path(os.path.join("resources", "icons", "app_icon.png"))
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         else:
