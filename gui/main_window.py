@@ -123,7 +123,7 @@ class MainWindow(QMainWindow):
         # print(f"DEBUG MW __init__: AFTER _create_edit_actions, port_combo is {self.port_combo_direct_ref}") 
         self.populate_midi_ports()
         self.update_connection_status() # This will call _update_animator_controls_enabled_state
-        QTimer.singleShot(0, self._update_animator_controls_enabled_state) # Ensure initial state after all setup
+        QTimer.singleShot(0, self._update_global_ui_interaction_states) # Ensure initial state after all setup
         ### END OF MainWindow.__init__ ###
         # --- MIDI Connection Management ---    
     def populate_midi_ports(self):
@@ -194,17 +194,22 @@ class MainWindow(QMainWindow):
         if self.undo_action: self.undo_action.setEnabled(can_undo)
         if self.redo_action: self.redo_action.setEnabled(can_redo)
         # This also implicitly calls for an update of general controls state
-        self._update_animator_controls_enabled_state()
+        self._update_global_ui_interaction_states()
     # --- Animator Manager Methods ---
     def _on_animator_clipboard_state_changed(self, has_content: bool):
         """Updates the enabled state of the global Paste QAction."""
         if self.paste_action: self.paste_action.setEnabled(has_content)
-        self._update_animator_controls_enabled_state()
+        self._update_global_ui_interaction_states()
     # disable sampler
     def _handle_request_sampler_disable(self):
         """Called when animator manager wants to ensure sampler is off."""
-        if self.is_eyedropper_mode_active and self.screen_sampler_manager:
-            self.screen_sampler_manager.force_disable_sampling_ui()
+        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            # Use a method that fully stops sampling and updates UI.
+            # Let's assume you have/will have a `deactivate_sampling` method in ScreenSamplerManager
+            # that handles stopping threads, UI updates, and emitting sampling_activity_changed(False).
+            # If not, `force_disable_sampling_ui()` might be the closest if it also stops the thread.
+            self.screen_sampler_manager.deactivate_sampling() # Or appropriate method
+            self.status_bar.showMessage("Screen sampler deactivated due to animator activity.", 2000)
     # --- Delegating Methods for QActions to call AnimatorManagerWidget ---
     def action_animator_undo(self):
         if self.animator_manager: self.animator_manager.action_undo()
@@ -433,6 +438,40 @@ class MainWindow(QMainWindow):
         # Add its UI widget to the layout
         self.left_panel_layout.addWidget(self.screen_sampler_manager.get_ui_widget())
         self.left_panel_layout.addStretch(1)
+
+    def _handle_animator_request_load_prompt(self, filepath_to_load: str):
+        if not self.animator_manager:
+            return
+
+        proceed_with_load = True # Assume we can proceed unless user cancels or save fails
+
+        if self.animator_manager.active_sequence_model.is_modified:
+            reply = QMessageBox.question(self, "Unsaved Animator Changes",
+                                         f"Animation '{self.animator_manager.active_sequence_model.name}' has unsaved changes.\nSave before loading new sequence?",
+                                         QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                         QMessageBox.StandardButton.Cancel) # Default to Cancel
+
+            if reply == QMessageBox.StandardButton.Save:
+                # Tell AnimatorManagerWidget to handle its "Save As" logic
+                # action_save_sequence_as() in AMW currently shows QInputDialog.
+                # It returns True on successful save, False on cancel/error.
+                save_successful = self.animator_manager.action_save_sequence_as()
+                if not save_successful: # If save was cancelled or failed
+                    proceed_with_load = False
+                    self.status_bar.showMessage("Load cancelled due to unsaved changes or save operation failed.", 3000)
+            elif reply == QMessageBox.StandardButton.Discard:
+                proceed_with_load = True # User chose to discard changes
+                self.status_bar.showMessage("Unsaved changes discarded.", 2000)
+            elif reply == QMessageBox.StandardButton.Cancel:
+                proceed_with_load = False # User cancelled
+                self.status_bar.showMessage("Load sequence cancelled.", 2000)
+            else: # Should not happen with these buttons
+                proceed_with_load = False
+                self.status_bar.showMessage("Load sequence cancelled (unexpected dialog choice).", 2000)
+        
+        if proceed_with_load:
+            # It's safe to tell AnimatorManagerWidget to load the file
+            self.animator_manager._handle_load_sequence_request(filepath_to_load)
     # --- UI Interaction Methods ---
     def _handle_load_sequence_request(self, filepath: str):
         """
@@ -491,10 +530,29 @@ class MainWindow(QMainWindow):
             self.animator_manager.undo_redo_state_changed.connect(self._on_animator_undo_redo_state_changed)
             self.animator_manager.clipboard_state_changed.connect(self._on_animator_clipboard_state_changed)
             self.animator_manager.request_sampler_disable.connect(self._handle_request_sampler_disable)
+            self.animator_manager.request_load_sequence_with_prompt.connect(self._handle_animator_request_load_prompt)
+            self.animator_manager.animator_playback_active_status_changed.connect(self._on_animator_playback_activity_changed)
+
+    
         # AkaiFireController signals
     def _on_sampler_activity_changed(self, is_active: bool):
-        self._update_animator_controls_enabled_state()
-        # This will be called when the screen sampler starts/stops sampling
+        """Called when the screen sampler starts/stops sampling."""
+        if is_active:
+            # Screen sampler is now active, stop animator
+            if self.animator_manager:
+                self.animator_manager.action_stop() # Stops playback
+        self._update_global_ui_interaction_states()
+
+    def _on_animator_playback_activity_changed(self, is_animator_playing: bool):
+        """Called when the animator starts or stops/pauses playback."""
+        self._update_global_ui_interaction_states()
+        
+        if is_animator_playing:
+            # If animator starts playing, ensure sampler is off
+            if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+                self.screen_sampler_manager.stop_sampling_thread()
+                self.status_bar.showMessage("Screen sampler stopped due to animation playback.", 2000)
+
     def _create_edit_actions(self):
         """Creates global QActions for editing, menus, and shortcuts."""
         # Undo Action
@@ -602,7 +660,7 @@ class MainWindow(QMainWindow):
             self.eyedropper_button.setChecked(self.is_eyedropper_mode_active)
         if self.eyedropper_action and self.eyedropper_action.isChecked() != self.is_eyedropper_mode_active:
             self.eyedropper_action.setChecked(self.is_eyedropper_mode_active)        
-        self._update_animator_controls_enabled_state() # Update general UI enabled states
+        self._update_global_ui_interaction_states() # Update general UI enabled states
     # --- Eyedropper Logic End ---
     def _pick_color_from_pad(self, row: int, col: int):
         """Picks color from the specified pad and sets it in ColorPickerManager."""
@@ -702,10 +760,36 @@ class MainWindow(QMainWindow):
             # AMW's model will emit frame_content_updated, which AMW handles and signals MW if needed.
         self.status_bar.showMessage("All pads and current view cleared.", 2000)
 
+
     # --- Signal Handlers from Other Managers (Color Picker, Static Layouts) ---
-    def _handle_final_color_selection_from_manager(self, color: QColor):
+    def _handle_final_color_selection_from_manager(self, color: QColor): # Assuming QColor is imported
         self.selected_qcolor = color
         self.status_bar.showMessage(f"Active color: {color.name().upper()}", 3000)
+
+    # --- ADD THE METHOD BELOW ---
+    def _handle_apply_static_layout_data(self, colors_hex: list):
+        if not self.akai_controller.is_connected():
+            self.status_bar.showMessage("Connect to device first.", 2000)
+            return
+
+        # 1. Deactivate Screen Sampler if active
+        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            # Use the method identified as most direct for stopping the sampler
+            self.screen_sampler_manager.stop_sampling_thread() 
+
+        # 2. Stop Animator Playback
+        if self.animator_manager:
+            self.animator_manager.action_stop() # This stops playback and should reset its UI cues
+
+        # 3. Apply colors to the Animator's current edit frame (if animator is available)
+        #    and then let the animator update the main display grid.
+        if self.animator_manager and self.animator_manager.active_sequence_model:
+            # This method was added to SequenceModel in the previous step
+            self.animator_manager.active_sequence_model.update_all_pads_in_current_edit_frame(colors_hex)
+        else: 
+            # If no animator or no active model, just apply directly to grid/hardware
+            self.apply_colors_to_main_pad_grid(colors_hex, update_hw=True)     
+        self.status_bar.showMessage("Static layout applied.", 2000)
     # --- Request Sampler Disable ---
     def _handle_paint_black_button(self):
         self._handle_request_sampler_disable() # Ensure sampler off
@@ -715,60 +799,88 @@ class MainWindow(QMainWindow):
             self.color_picker_manager.set_current_selected_color(black_color, source="paint_black_button")
         self.status_bar.showMessage("Active color: Black (Off)", 2000)
     # --- Request Sampler Disable ---
-    def _handle_apply_static_layout_data(self, colors_hex: list):
-        if not self.akai_controller.is_connected():
-            self.status_bar.showMessage("Connect to device first.", 2000); return
-        self._handle_request_sampler_disable()
-        if self.animator_manager: self.animator_manager.action_stop() # Stop animation
-        self.apply_colors_to_main_pad_grid(colors_hex, update_hw=True)
-        # Also update current animator frame if one is selected
-        if self.animator_manager and self.animator_manager.active_sequence_model.get_current_edit_frame_index() != -1:
-            self.animator_manager.active_sequence_model.update_all_pads_in_current_edit_frame(colors_hex)
-        if colors_hex and colors_hex[0] and self.color_picker_manager: # Set picker to first color
-            first_color = QColor(colors_hex[0])
-            if first_color.isValid():
-                self.color_picker_manager.set_current_selected_color(first_color, source="static_layout_apply")
-    # --- Static Layouts Manager ---
+    def _handle_request_sampler_disable(self):
+        """Called when animator manager wants to ensure sampler is off."""
+        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            self.screen_sampler_manager.stop_sampling_thread() # <<< USE THIS METHOD
+            # stop_sampling_thread() should handle emitting status updates and activity changes.
+            # self.status_bar.showMessage("Screen sampler deactivated due to animator activity.", 2000) # Optional here
+    
     def _provide_grid_colors_for_static_save(self):
         """Provides current grid colors to StaticLayoutsManager when it requests them."""
         if self.static_layouts_manager and self.pad_grid_frame:
             current_colors = self.pad_grid_frame.get_current_grid_colors_hex()
             self.static_layouts_manager.save_layout_with_colors(current_colors)   
     # --- UI State Management ---
-    def _update_animator_controls_enabled_state(self):
-        """Updates the enabled state of various UI groups based on global app state."""
+    
+    def _update_global_ui_interaction_states(self):
+        """
+        Updates the enabled state of various UI groups (Animator, Sampler, etc.)
+        based on global application state (MIDI connection, animator playback, sampler activity).
+        """
         is_connected = self.akai_controller.is_connected()
-        # Use manager's state
-        is_screen_sampling_active = self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False
-        can_interact_with_direct_controls = is_connected and not is_screen_sampling_active
-        # Animator Manager Widget
-        if self.animator_manager:
-            self.animator_manager.set_overall_enabled_state(can_interact_with_direct_controls)
-            if self.new_sequence_action: self.new_sequence_action.setEnabled(can_interact_with_direct_controls)
-            if self.save_sequence_as_action and self.animator_manager:
-                 self.save_sequence_as_action.setEnabled(can_interact_with_direct_controls)
-        # Eyedropper
-        can_use_eyedropper = is_connected # Eyedropper can be used if connected
-        if self.eyedropper_button: self.eyedropper_button.setEnabled(can_use_eyedropper)
-        if self.eyedropper_action: self.eyedropper_action.setEnabled(can_use_eyedropper)
-        # Sync checked states if needed (set_eyedropper_mode does this)
-        # Global Play/Pause Action
-        if self.play_pause_action:
-            # Enable if animator can be interacted with and (ideally) has frames
-            # AMW's action_play_pause_toggle will handle "no frames" case.
-            self.play_pause_action.setEnabled(can_interact_with_direct_controls)
-        # Pad Grid (InteractivePadGridFrame)
-        if self.pad_grid_frame: self.pad_grid_frame.setEnabled(can_interact_with_direct_controls)        
-        # Quick Tools & Other Right Panel Managers
-        if self.clear_all_button: self.clear_all_button.setEnabled(can_interact_with_direct_controls)
-        if self.color_button_off: self.color_button_off.setEnabled(can_interact_with_direct_controls)
-        if self.color_picker_manager: self.color_picker_manager.set_enabled(can_interact_with_direct_controls)
-        if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(can_interact_with_direct_controls)        
-        # Screen Sampler UI
+        
+        is_animator_playing = False
+        if self.animator_manager and self.animator_manager.active_sequence_model:
+            is_animator_playing = self.animator_manager.active_sequence_model.get_is_playing()
+
+        is_sampler_active = False
         if self.screen_sampler_manager:
-            # MainWindow tells SSM the current connection status and general enable status.
-            # SSM is then responsible for updating its own UI (ScreenSamplerUIManager)
-            self.screen_sampler_manager.set_overall_enabled_state(is_connected, is_connected)
+            is_sampler_active = self.screen_sampler_manager.is_sampling_active()
+
+        # --- Animator Manager State ---
+        # Animator can be interacted with if connected AND sampler is NOT active.
+        can_interact_with_animator = is_connected and not is_sampler_active
+        if self.animator_manager:
+            self.animator_manager.set_overall_enabled_state(can_interact_with_animator)
+            # Global QActions related to animator
+            if self.new_sequence_action: self.new_sequence_action.setEnabled(can_interact_with_animator)
+            if self.save_sequence_as_action: self.save_sequence_as_action.setEnabled(can_interact_with_animator and self.animator_manager.active_sequence_model.get_frame_count() > 0)
+            if self.undo_action: self.undo_action.setEnabled(can_interact_with_animator and bool(self.animator_manager.active_sequence_model._undo_stack))
+            if self.redo_action: self.redo_action.setEnabled(can_interact_with_animator and bool(self.animator_manager.active_sequence_model._redo_stack))
+            if self.copy_action: self.copy_action.setEnabled(can_interact_with_animator and len(self.animator_manager.sequence_timeline_widget.get_selected_item_indices()) > 0)
+            if self.cut_action: self.cut_action.setEnabled(can_interact_with_animator and len(self.animator_manager.sequence_timeline_widget.get_selected_item_indices()) > 0)
+            if self.paste_action: self.paste_action.setEnabled(can_interact_with_animator and bool(self.animator_manager.frame_clipboard))
+            if self.duplicate_action: self.duplicate_action.setEnabled(can_interact_with_animator and len(self.animator_manager.sequence_timeline_widget.get_selected_item_indices()) > 0)
+            if self.delete_action: self.delete_action.setEnabled(can_interact_with_animator and len(self.animator_manager.sequence_timeline_widget.get_selected_item_indices()) > 0)
+            if self.play_pause_action: self.play_pause_action.setEnabled(can_interact_with_animator and self.animator_manager.active_sequence_model.get_frame_count() > 0)
+
+
+        # --- Screen Sampler Manager State ---
+        # Sampler group can be enabled if connected.
+        # Sampler's "Toggle Sampling" button can be used if connected AND animator is NOT playing.
+        if self.screen_sampler_manager:
+            overall_sampler_ui_enabled = is_connected
+            can_toggle_sampling_button = is_connected and not is_animator_playing
+            self.screen_sampler_manager.update_ui_for_global_state(
+                overall_sampler_ui_enabled,
+                can_toggle_sampling_button
+            )
+
+        # --- Direct Pad Grid, Color Picker, Quick Tools, Static Layouts ---
+        # These can be interacted with if connected AND sampler is NOT active AND animator is NOT playing.
+        # (Or, if animator is loaded/paused but not actively playing, direct pad interaction updates the current frame)
+        can_interact_with_direct_controls = is_connected and not is_sampler_active and not is_animator_playing
+        
+        # A more nuanced approach for direct controls:
+        # Allow direct interaction if sampler is off. If animator is loaded but not playing,
+        # direct interaction edits the current animator frame.
+        can_use_direct_pad_painting = is_connected and not is_sampler_active
+
+        if self.pad_grid_frame: self.pad_grid_frame.setEnabled(can_use_direct_pad_painting)
+        if self.color_picker_manager: self.color_picker_manager.set_enabled(can_use_direct_pad_painting)
+        
+        if self.quick_tools_group_ref: # Check if quick_tools_group_ref (the QGroupBox) exists
+            self.quick_tools_group_ref.setEnabled(can_use_direct_pad_painting)
+            # Eyedropper specifically can be used if connected, even if sampler/animator are active,
+            # as it just reads the current pad state. But its action (painting) is restricted.
+            # For simplicity, tie eyedropper button to can_use_direct_pad_painting for now.
+            if self.eyedropper_button: self.eyedropper_button.setEnabled(can_use_direct_pad_painting)
+            if self.eyedropper_action: self.eyedropper_action.setEnabled(can_use_direct_pad_painting)
+
+        if self.static_layouts_manager: 
+            self.static_layouts_manager.set_enabled_state(can_use_direct_pad_painting)
+    
     # --- MIDI Connection Management ---
     def _on_port_combo_changed(self, index: int):
         """Handles selection change in MIDI port combo box."""
@@ -810,8 +922,8 @@ class MainWindow(QMainWindow):
         #
         def final_update():
             print(f"DEBUG final_update: port_combo is {self.port_combo_direct_ref}")
-            self._update_animator_controls_enabled_state()
-        QTimer.singleShot(0, final_update)
+            self._update_global_ui_interaction_states()
+        QTimer.singleShot(0, self._update_global_ui_interaction_states)
 
     # --- Application Exit ---
     def closeEvent(self, event):

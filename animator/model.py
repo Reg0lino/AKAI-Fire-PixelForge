@@ -392,6 +392,41 @@ class SequenceModel(QObject):
             self.frame_delay_ms = delay_ms
             self.properties_changed.emit()
             self._mark_modified()
+
+    def update_all_pads_in_current_edit_frame(self, colors_hex_list: list[str]) -> bool:
+        current_frame_obj = self.get_current_edit_frame_object()
+        if current_frame_obj and isinstance(colors_hex_list, list) and len(colors_hex_list) == 64:
+            changed = False
+            new_colors_normalized = []
+            for i, hex_color in enumerate(colors_hex_list):
+                q_color = QColor(hex_color) # Ensure QColor is imported at the top of model.py
+                normalized_hex = q_color.name() if q_color.isValid() else QColor("black").name()
+                new_colors_normalized.append(normalized_hex)
+                # Directly access AnimationFrame.colors for comparison
+                if i < len(current_frame_obj.colors) and current_frame_obj.colors[i] != normalized_hex:
+                    changed = True
+                elif i >= len(current_frame_obj.colors): # Should not happen if frame.colors is always 64
+                    changed = True 
+            
+            if changed:
+                self._push_undo_state()
+                current_frame_obj.colors = new_colors_normalized # Assign the whole new list
+                self.frame_content_updated.emit(self._current_edit_frame_index)
+                self._mark_modified()
+            return True
+        return False
+
+    def clear_pads_in_current_edit_frame(self):
+        current_frame_obj = self.get_current_edit_frame_object()
+        if current_frame_obj:
+            blank_colors = [QColor("black").name()] * 64 # Ensure QColor is imported
+            if current_frame_obj.colors != blank_colors: # Check if already blank
+                self._push_undo_state()
+                current_frame_obj.colors = blank_colors # Assign the blank list
+                self.frame_content_updated.emit(self._current_edit_frame_index)
+                self._mark_modified()
+            return True
+        return False
             
     # --- Playback Methods ---
     def start_playback(self, start_index: int = None):

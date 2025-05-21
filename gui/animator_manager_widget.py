@@ -44,6 +44,8 @@ class AnimatorManagerWidget(QWidget):
     sequence_modified_status_changed = pyqtSignal(bool, str) # is_modified, sequence_name
     undo_redo_state_changed = pyqtSignal(bool, bool)      # can_undo, can_redo
     clipboard_state_changed = pyqtSignal(bool)            # has_clipboard_content
+    animator_playback_active_status_changed = pyqtSignal(bool) # <<< ADD THIS NEW SIGNAL (is_playing)
+    request_load_sequence_with_prompt = pyqtSignal(str) # filepath of sequence to load
 
     # Signal to MainWindow if sampler needs to be disabled due to animator interaction
     request_sampler_disable = pyqtSignal()
@@ -116,7 +118,8 @@ class AnimatorManagerWidget(QWidget):
     def _connect_ui_signals(self):
         # Animator Studio Buttons
         self.sequence_selection_combo.currentIndexChanged.connect(self._on_sequence_combo_changed)
-        self.load_sequence_button.clicked.connect(self._on_load_selected_sequence_button_clicked)
+        # self.load_sequence_button.clicked.connect(self._on_load_selected_sequence_button_clicked)
+        self.load_sequence_button.clicked.connect(self._request_load_selected_sequence_from_main)
         self.new_sequence_button.clicked.connect(lambda: self.action_new_sequence(prompt_save=True))
         self.save_sequence_as_button.clicked.connect(self.action_save_sequence_as)
         self.delete_sequence_button.clicked.connect(self._on_delete_selected_sequence_button_clicked)
@@ -395,7 +398,8 @@ class AnimatorManagerWidget(QWidget):
                 current_frame_colors = self.active_sequence_model.get_frame_colors(edit_idx) if edit_idx !=-1 else None
                 self.active_frame_data_for_display.emit(current_frame_colors if current_frame_colors else [QColor("black").name()] * 64)
             else: # It was a pause
-                self.playback_status_update.emit("Sequence paused.", 3000)        
+                self.playback_status_update.emit("Sequence paused.", 3000) 
+        self.animator_playback_active_status_changed.emit(is_playing) # <<< ADD THIS LINE to emit the new signal       
         self._update_ui_for_current_sequence() # Refresh timeline playback indicator
         self._emit_state_updates()
 
@@ -566,43 +570,48 @@ class AnimatorManagerWidget(QWidget):
         self.delete_sequence_button.setEnabled(can_delete_selected)
 
     def _handle_load_sequence_request(self, filepath: str):
-        # This is called internally or by MainWindow if it handles global open action
-        self.request_sampler_disable.emit()
+        self.request_sampler_disable.emit() # Good to keep here
+        # The "is_modified" check and prompt is GONE from here, MainWindow handles it.
+        
+        # Check if already loaded (optional, but good for performance)
         if self.active_sequence_model.loaded_filepath and \
            os.path.normpath(self.active_sequence_model.loaded_filepath) == os.path.normpath(filepath):
             self.playback_status_update.emit(f"Sequence '{os.path.basename(filepath)}' already active.", 2000)
             return
 
-        if self.active_sequence_model.is_modified:
-            # Let MainWindow handle the prompt_save_if_modified logic
-            # This manager should assume if it's called, it's safe to proceed or MainWindow handled it.
-            pass
-
         self.stop_current_animation_playback()
-        new_model = SequenceModel()
+        new_model = SequenceModel() # Ensure SequenceModel is imported
         if new_model.load_from_file(filepath):
             self.active_sequence_model = new_model
-            self._connect_signals_for_active_sequence_model() # Connect to the new model
-            self._update_ui_for_current_sequence() # Full UI refresh for new model
+            self._connect_signals_for_active_sequence_model() 
+            self._update_ui_for_current_sequence() 
             self.playback_status_update.emit(f"Sequence '{self.active_sequence_model.name}' loaded.", 2000)
             self.refresh_sequences_list_and_select(
                 self.active_sequence_model.name,
                 self._get_type_id_from_filepath(filepath)
             )
         else:
-            QMessageBox.warning(self, "Load Error", f"Failed to load: {os.path.basename(filepath)}") # Needs parent from MainWindow
+            # If self.parent() is MainWindow, this is fine. Otherwise, MainWindow should show this.
+            # For now, let AMW show it, but ideally, MainWindow shows all top-level dialogs.
+            QMessageBox.warning(self.parent(), "Load Error", f"Failed to load: {os.path.basename(filepath)}")
             self.refresh_sequences_list_and_select()
         self._emit_state_updates()
 
     def _on_load_selected_sequence_button_clicked(self):
+        # This method is now effectively replaced by _request_load_selected_sequence_from_main
+        # and the logic it triggers in MainWindow.
+        # We can keep it simple or remove it if _request_load_selected_sequence_from_main is connected directly.
+        # For clarity, let's have _request_load_selected_sequence_from_main handle it.
+        pass # Or remove if you connect _request_load_selected_sequence_from_main directly
+
+    def _request_load_selected_sequence_from_main(self):
         index = self.sequence_selection_combo.currentIndex()
         if index > 0:
             item_data = self.sequence_selection_combo.itemData(index)
-            if item_data and "path" in item_data:              
-                if self.active_sequence_model.is_modified:
-                     # TODO: Better handling via MainWindow for this dialog
-                    QMessageBox.information(self, "Info", "Save current changes before loading (not fully implemented here).")
-                self._handle_load_sequence_request(item_data["path"])
+            if item_data and "path" in item_data:
+                filepath_to_load = item_data["path"]
+                # Emit signal to MainWindow to handle the prompt and conditional load
+                self.request_load_sequence_with_prompt.emit(filepath_to_load)
             else:
                 self.playback_status_update.emit("Sequence info not found.", 2000)
         else:

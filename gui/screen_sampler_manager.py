@@ -237,6 +237,54 @@ class ScreenSamplerManager(QObject):
         else:
             self.ui_manager.set_recording_status_text("Idle. Ready to record.")
             self.ui_manager.update_record_button_ui(is_recording=False, can_record=True)
+            
+    def update_ui_for_global_state(self, overall_sampler_ui_enabled: bool, can_toggle_sampling_button_enabled: bool):
+        """
+        Updates the ScreenSamplerUIManager based on global application state.
+        - overall_sampler_ui_enabled: Should the main sampler groupbox be enabled (e.g., based on MIDI connection).
+        - can_toggle_sampling_button_enabled: Specific flag for the 'Toggle Ambient Sampling' button 
+                                              (e.g., disabled if animator is playing).
+        """
+        if not GUI_IMPORTS_OK or not hasattr(self.ui_manager, 'set_overall_enabled_state'):
+            return
+
+        # 1. Set the overall enabled state of the sampler's QGroupBox UI
+        self.ui_manager.set_overall_enabled_state(overall_sampler_ui_enabled)
+
+        # 2. Specifically set the enabled state of the "Toggle Ambient Sampling" button
+        if hasattr(self.ui_manager, 'enable_sampling_button') and self.ui_manager.enable_sampling_button:
+            # If overall_sampler_ui_enabled is False, the button will be disabled by its parent QGroupBox.
+            # This logic primarily handles the case where the group *is* enabled, but the toggle specifically
+            # needs to be controlled (e.g., by animator playback).
+            actual_toggle_button_state = overall_sampler_ui_enabled and can_toggle_sampling_button_enabled
+            self.ui_manager.enable_sampling_button.setEnabled(actual_toggle_button_state)
+
+            # If the toggle button is being disabled WHILE it's checked (i.e., sampling is active),
+            # then force sampling off.
+            if not actual_toggle_button_state and self.ui_manager.enable_sampling_button.isChecked():
+                self.ui_manager.enable_sampling_button.setChecked(False) # This will trigger its toggle signal
+                                                                      # and ScreenSamplerManager will stop sampling.
+        
+        # 3. Update other sampler UI elements like record button based on current states
+        #    The set_overall_enabled_state method in ScreenSamplerUIManager already handles
+        #    some of this, but we might need to re-evaluate its internal logic or call it here.
+        #    For now, relying on ScreenSamplerUIManager's set_overall_enabled_state to cascade
+        #    and its internal logic reacting to the enable_sampling_button state.
+        #    We might also need to refresh the record button state specifically.
+        if hasattr(self.ui_manager, 'update_record_button_ui'):
+            self.ui_manager.update_record_button_ui(
+                is_recording=self.is_actively_recording,
+                can_record=(overall_sampler_ui_enabled and \
+                            can_toggle_sampling_button_enabled and \
+                            self.is_sampling_thread_active and \
+                            not self.is_actively_recording) or \
+                           (overall_sampler_ui_enabled and \
+                            self.is_actively_recording) # Can always stop if recording
+            )
+        
+        # Update configure button state too (might be part of ui_manager.set_overall_enabled_state)
+        if hasattr(self.ui_manager, 'configure_preview_button') and self.ui_manager.configure_preview_button:
+             self.ui_manager.configure_preview_button.setEnabled(overall_sampler_ui_enabled)
 
     def is_sampling_active(self) -> bool:
         return self.is_sampling_thread_active
