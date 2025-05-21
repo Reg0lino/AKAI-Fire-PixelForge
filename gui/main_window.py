@@ -493,6 +493,9 @@ class MainWindow(QMainWindow):
             self.animator_manager.request_sampler_disable.connect(self._handle_request_sampler_disable)
         # AkaiFireController signals
     def _on_sampler_activity_changed(self, is_active: bool):
+        if is_active:
+            if self.animator_manager:
+                self.animator_manager.stop_current_animation_playback()
         self._update_animator_controls_enabled_state()
         # This will be called when the screen sampler starts/stops sampling
     def _create_edit_actions(self):
