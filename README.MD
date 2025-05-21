@@ -1,5 +1,8 @@
 # AKAI Fire RGB Controller
 
+## Release temporarily down until I fix the exe and file structure for saved jsons. working on it.
+
+
 ## 🎛️ Overview
 
 The AKAI Fire RGB Controller is a Python desktop application designed to provide comprehensive control over the RGB LEDs of an Akai Fire MIDI controller. It allows users to create static color layouts, design frame-by-frame animations, and utilize a screen sampler to reflect desktop colors onto the device pads dynamically. The application features a modern, dark-themed, and intuitive user interface built with PyQt6.
