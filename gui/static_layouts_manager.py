@@ -19,12 +19,17 @@ class StaticLayoutsManager(QGroupBox):
     request_current_grid_colors = pyqtSignal()
     status_message_requested = pyqtSignal(str, int)
 
-    def __init__(self, presets_base_path: str, parent: QWidget | None = None,
+    def __init__(self, 
+                 user_static_layouts_path: str,
+                 prefab_static_layouts_path: str,
+                 parent: QWidget | None = None, # Keep parent if needed for QGroupBox
                  group_box_title: str = "▦ Static Pad Layouts"):
-        super().__init__(group_box_title, parent)
+        super().__init__(group_box_title, parent) # Pass parent to QGroupBox
 
-        self.presets_base_path = presets_base_path
-        self.loaded_layouts = {} # {display_name: {path, type, format ("list" or "object")}}
+        # self.presets_base_path = presets_base_path # Old way
+        self.user_static_layouts_path = user_static_layouts_path
+        self.prefab_static_layouts_path = prefab_static_layouts_path
+        self.loaded_layouts = {} 
 
         self._init_ui()
         self.refresh_layouts_list()
@@ -72,8 +77,14 @@ class StaticLayoutsManager(QGroupBox):
              self.layouts_combo.setEnabled(False) # Disable if truly no layouts
 
     def _get_layouts_dir_path(self, layout_type="user") -> str:
-        dir_name = USER_STATIC_DIR_NAME if layout_type == "user" else PREFAB_STATIC_DIR_NAME
-        return os.path.join(self.presets_base_path, STATIC_BASE_SUBDIR, dir_name)
+        # This method now directly returns the full path passed during __init__
+        if layout_type == "user":
+            return self.user_static_layouts_path
+        elif layout_type == "prefab":
+            return self.prefab_static_layouts_path
+        else:
+            print(f"Warning: Unknown layout_type '{layout_type}' in StaticLayoutsManager. Defaulting to user path.")
+            return self.user_static_layouts_path # Fallback
 
     def _sanitize_filename(self, name: str) -> str:
         name = re.sub(r'[^\w\s-]', '', name).strip(); name = re.sub(r'[-\s]+', '_', name)

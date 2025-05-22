@@ -232,26 +232,16 @@ class SequenceTimelineWidget(QWidget):
 
 
     def _on_current_item_changed(self, current: QListWidgetItem, previous: QListWidgetItem):
-        # This signal is primarily for single-item focus changes.
-        # We use itemSelectionChanged for more robust multi-select updates.
         if current:
             index = self.frame_list_widget.row(current)
-            # To avoid duplicate signals if selectionChanged already handled it,
-            # we primarily rely on selectionChanged to emit frame_selected.
-            # However, if only one item is ever selected, this can be the primary source.
-            # For now, let's ensure frame_selected is emitted correctly for single selection logic.
             if len(self.frame_list_widget.selectedItems()) <= 1:
                  self.frame_selected.emit(index)
-        # else:
-            # If no item is current (e.g., list cleared), emit -1
-            # self.frame_selected.emit(-1) # This might conflict if selection is cleared but then re-established
 
     def _on_item_selection_changed(self):
         selected_items = self.frame_list_widget.selectedItems()
         if selected_items:
-            # For simplicity, emit the index of the first selected item for 'frame_selected' signal
-            # MainWindow can then use get_selected_item_indices() for the full list.
             first_selected_index = self.frame_list_widget.row(selected_items[0])
+            print(f"DEBUG TimelineWidget: _on_item_selection_changed. Emitting frame_selected({first_selected_index})") # ADD THIS
             self.frame_selected.emit(first_selected_index)
         else:
             self.frame_selected.emit(-1) # No items selected
@@ -308,11 +298,6 @@ class SequenceTimelineWidget(QWidget):
         num_selected = len(selected_indices)
 
         # --- Add Frame Actions (Always available) ---
-        add_snapshot_action = QAction(ICON_ADD_SNAPSHOT + " Add Snapshot Frame", self)
-        add_snapshot_action.setStatusTip(f"Add Snapshot (Ctrl+Shift+A). Inserts after selection or at end.")
-        add_snapshot_action.triggered.connect(lambda: self.add_frame_action_triggered.emit("snapshot"))
-        menu.addAction(add_snapshot_action)
-
         add_blank_action = QAction(ICON_ADD_BLANK + " Add Blank Frame", self)
         add_blank_action.setStatusTip(f"Add Blank Frame (Ctrl+Shift+B). Inserts after selection or at end.")
         add_blank_action.triggered.connect(lambda: self.add_frame_action_triggered.emit("blank"))

@@ -36,7 +36,7 @@ ICON_PAUSE = "⏸️"
 ICON_STOP = "⏹️"
 
 class SequenceControlsWidget(QWidget):
-    add_frame_requested = pyqtSignal(str) # "snapshot" or "blank"
+    add_frame_requested = pyqtSignal(str) # "blank" will be emitted
     delete_selected_frame_requested = pyqtSignal()
     duplicate_selected_frame_requested = pyqtSignal()
     copy_frames_requested = pyqtSignal()      # <<< NEW
@@ -60,19 +60,19 @@ class SequenceControlsWidget(QWidget):
         self_main_layout.setContentsMargins(5, 5, 5, 5)
         self_main_layout.setSpacing(8)
 
-        # --- Bar 1: Frame Editing & Navigation ---
         bar1_layout = QHBoxLayout()
         bar1_layout.setSpacing(6)
 
-        # Frame Editing Section
-        self.add_frame_button = QPushButton(f"{ICON_ADD_FRAME} Add")
-        # Tooltip and StatusTip will be updated once hotkeys for Add Snapshot/Blank are confirmed
-        self.add_frame_button.setToolTip("Add new frame (Snapshot or Blank via menu)")
-        self.add_frame_button.setStatusTip("Add Snapshot (Ctrl+Shift+A) or Blank Frame (Ctrl+Shift+B). Right-click menu for options.")
-        self.add_frame_button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.add_frame_button.customContextMenuRequested.connect(self._show_add_frame_menu)
-        self.add_frame_button.clicked.connect(lambda: self.add_frame_requested.emit("snapshot"))
+        # --- MODIFY self.add_frame_button ---
+        self.add_frame_button = QPushButton(f"{ICON_ADD_BLANK} Add Blank") # Updated text & icon
+        self.add_frame_button.setToolTip("Add New Blank Frame (Ctrl+Shift+B)")
+        self.add_frame_button.setStatusTip("Adds a new blank frame to the sequence.")
+        # Remove context menu from this button
+        # self.add_frame_button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu) 
+        # self.add_frame_button.customContextMenuRequested.connect(self._show_add_frame_menu) 
+        self.add_frame_button.clicked.connect(lambda: self.add_frame_requested.emit("blank")) # Main click now adds blank
         bar1_layout.addWidget(self.add_frame_button)
+        # --- END OF MODIFICATION ---
 
         self.duplicate_frame_button = QPushButton(ICON_DUPLICATE)
         self.duplicate_frame_button.setToolTip("Duplicate Selected Frame(s) (Ctrl+D)")
@@ -184,21 +184,6 @@ class SequenceControlsWidget(QWidget):
         self.delay_ms_spinbox.valueChanged.connect(self._on_delay_spinbox_changed)
         self.delay_ms_spinbox.setVisible(False)
 
-
-    def _show_add_frame_menu(self, position):
-        menu = QMenu(self)
-        # Assuming ICON_ADD_SNAPSHOT and ICON_ADD_BLANK are available
-        # And assuming Ctrl+Shift+A and Ctrl+Shift+B are the chosen shortcuts
-        snapshot_action = QAction(ICON_ADD_SNAPSHOT + " Snapshot Current Grid (Ctrl+Shift+A)", self)
-        snapshot_action.setStatusTip("Add a new frame by capturing the current colors on the main pad grid (Shortcut: Ctrl+Shift+A).")
-        snapshot_action.triggered.connect(lambda: self.add_frame_requested.emit("snapshot"))
-        menu.addAction(snapshot_action)
-
-        blank_action = QAction(ICON_ADD_BLANK + " Blank Frame (Ctrl+Shift+B)", self)
-        blank_action.setStatusTip("Add a new frame with all pads set to black (off) (Shortcut: Ctrl+Shift+B).")
-        blank_action.triggered.connect(lambda: self.add_frame_requested.emit("blank"))
-        menu.addAction(blank_action)
-        menu.exec(self.add_frame_button.mapToGlobal(position))
 
     def _on_play_pause_toggled(self, checked):
         if checked:

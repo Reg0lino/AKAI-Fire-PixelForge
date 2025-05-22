@@ -24,7 +24,7 @@ from .interactive_pad_grid import InteractivePadGridFrame
 from .screen_sampler_manager import ScreenSamplerManager
 from .animator_manager_widget import AnimatorManagerWidget 
 from hardware.akai_fire_controller import AkaiFireController
-from utils import get_resource_path # <<< ADD THIS IMPORT
+from utils import get_resource_path
 # --- Constants ---
 INITIAL_WINDOW_WIDTH = 1050
 INITIAL_WINDOW_HEIGHT = 900
@@ -34,20 +34,45 @@ APP_AUTHOR = "YourProjectAuthorName"
 SAMPLER_PREFS_FILENAME = "sampler_user_prefs.json"
 MAIN_CONFIG_FILENAME = "fire_controller_config.json"
 DEFAULT_SAMPLING_FPS = 10
+PRESETS_BASE_DIR_NAME = "presets"
 # --- Global Functions ---
-def get_resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
+def get_user_documents_presets_path(app_specific_folder_name: str = "Akai Fire RGB Controller User Presets") -> str:
+    """
+    Determines the path for storing user-created presets (animations, static layouts)
+    within the user's Documents folder.
+    """
     try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        # Not bundled, running from source
-        # Assume this function is in a file within 'gui' or similar, 
-        # and 'resources' is at the project root.
-        # Adjust if your get_resource_path is elsewhere.
-        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) # Goes up one level from current file's dir
+        documents_path = ""
+        # More robust way to find Documents folder
+        if sys.platform == "win32":
+            import ctypes.wintypes
+            CSIDL_PERSONAL = 5       # My Documents
+            SHGFP_TYPE_CURRENT = 0   # Get current, not default value
+            buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+            ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_PERSONAL, None, SHGFP_TYPE_CURRENT, buf)
+            documents_path = buf.value
+            if not documents_path: # Fallback if SHGetFolderPathW fails
+                 documents_path = os.path.join(os.path.expanduser("~"), "Documents")
+        elif sys.platform == "darwin": # macOS
+            documents_path = os.path.join(os.path.expanduser("~"), "Documents")
+        else: # Linux and other Unix-like
+            documents_path = os.environ.get('XDG_DOCUMENTS_DIR', os.path.join(os.path.expanduser("~"), "Documents"))
+            if not os.path.isdir(documents_path): # Fallback if XDG_DOCUMENTS_DIR is not set or invalid
+                 documents_path = os.path.join(os.path.expanduser("~"), "Documents")
 
-    return os.path.join(base_path, relative_path)
+        if not os.path.isdir(documents_path): # If "Documents" truly doesn't exist, use home
+            print(f"Warning: Standard Documents folder not found at '{documents_path}'. Using user home directory.")
+            documents_path = os.path.expanduser("~")
+
+        app_presets_dir = os.path.join(documents_path, app_specific_folder_name)
+        os.makedirs(app_presets_dir, exist_ok=True) # Ensure the directory exists
+        # print(f"DEBUG: User documents presets path: {app_presets_dir}")
+        return app_presets_dir
+    except Exception as e:
+        print(f"WARNING: Error determining user presets storage path in Documents (using CWD fallback): {e}")
+        fallback_dir = os.path.join(os.getcwd(), "user_presets_fallback")
+        os.makedirs(fallback_dir, exist_ok=True)
+        return fallback_dir
 # user config_dir
 def get_user_config_file_path(filename: str) -> str:
     """
@@ -82,6 +107,14 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT)
         self._set_window_icon()
         self.quick_tools_group_ref: QGroupBox | None = None # For Quick Tools group on right panel
+
+        self.constants_are_defined_correctly_PRESETS_BASE_DIR_NAME = "presets"
+        self.bundled_presets_base_path = self._get_presets_base_dir_path()
+        print(f"DEBUG: In __init__, self.bundled_presets_base_path is now: {getattr(self, 'bundled_presets_base_path', 'NOT SET')}") # ADD THIS
+
+        self.user_documents_presets_path = get_user_documents_presets_path()
+        print(f"DEBUG: In __init__, self.user_documents_presets_path is now: {self.user_documents_presets_path}") # ADD THIS
+
         self.akai_controller = AkaiFireController(auto_connect=False)
         self.selected_qcolor = QColor("red") # Current color for direct painting
         # Attributes related to direct pad interaction (eyedropper)
@@ -174,9 +207,11 @@ class MainWindow(QMainWindow):
     # --- New Slot Methods for AnimatorManagerWidget Signals ---
     def _on_animator_frame_data_for_display(self, colors_hex_list: list | None):
         """Receives color data from AnimatorManager and updates grid/hardware."""
+        print(f"DEBUG MW: _on_animator_frame_data_for_display CALLED with colors_hex_list (sample): {str(colors_hex_list)[:100]}...") # ADD THIS
         if colors_hex_list:
             self.apply_colors_to_main_pad_grid(colors_hex_list, update_hw=True)
-        else: # No data or empty/invalid frame selected
+        else: 
+            print("DEBUG MW: _on_animator_frame_data_for_display - Clearing grid due to None/empty colors_hex_list.") # ADD THIS
             self.clear_main_pad_grid_ui(update_hw=True)
     # --- Animator Manager Methods ---
     def _on_animator_sequence_modified_status_changed(self, is_modified: bool, sequence_name: str):
@@ -260,11 +295,6 @@ class MainWindow(QMainWindow):
     def action_animator_play_pause_toggle(self):
         if self.animator_manager: self.animator_manager.action_play_pause_toggle()
     # --- Animator Manager Methods ---
-    def action_animator_add_snapshot_frame(self):
-        if self.animator_manager and self.pad_grid_frame:
-            current_grid_colors = self.pad_grid_frame.get_current_grid_colors_hex()
-            self.animator_manager.action_add_frame("snapshot", snapshot_data=current_grid_colors)
-    # --- Animator Manager Methods ---
     def action_animator_add_blank_frame(self):
         if self.animator_manager:
             self.animator_manager.action_add_frame("blank")
@@ -314,25 +344,36 @@ class MainWindow(QMainWindow):
             print(f"MainWindow WARNING: Window icon not found at '{icon_path}'")
     # --- Directory Management ---
     def _get_presets_base_dir_path(self) -> str:
-        """Determines the base path for presets (static layouts, sequences)."""
-        try:
-            gui_dir_path = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(gui_dir_path)
-        except NameError:
-            project_root = os.path.dirname(os.path.abspath(sys.argv[0]))
-        return os.path.join(project_root, PRESETS_BASE_DIR_NAME)
+        """Determines the base path for BUNDLED presets (static layouts, sequences)."""
+        path = get_resource_path(PRESETS_BASE_DIR_NAME) # PRESETS_BASE_DIR_NAME is "presets"
+        print(f"DEBUG: _get_presets_base_dir_path() is returning: {path}") # ADD THIS
+        return path
     # --- Directory Management ---
     def ensure_user_dirs_exist(self):
-        """Ensures that user-specific subdirectories for presets and sequences exist."""
-        paths = [
-            os.path.join(self.presets_base_dir_path, "static", "user"),
-            os.path.join(self.presets_base_dir_path, "static", "prefab"),
-            os.path.join(self.presets_base_dir_path, "sequences", "user"),
-            os.path.join(self.presets_base_dir_path, "sequences", "prefab"),
-            os.path.join(self.presets_base_dir_path, "sequences", "sampler_recordings") # Ensure sampler dir exists
+        """Ensures that user-specific and prefab subdirectories for presets and sequences exist."""
+        # Prefab paths (from bundled application data)
+        prefab_static_dir = os.path.join(self.bundled_presets_base_path, "static", "prefab")
+        prefab_sequences_dir = os.path.join(self.bundled_presets_base_path, "sequences", "prefab")
+
+        # User paths (in Documents/YourAppName User Presets/)
+        # Base for user static layouts will be "User's Documents/App User Presets/static"
+        # Base for user sequences will be "User's Documents/App User Presets/sequences"
+        user_static_layouts_base = os.path.join(self.user_documents_presets_path, "static")
+        user_sequences_base = os.path.join(self.user_documents_presets_path, "sequences")
+
+        paths_to_create = [
+            prefab_static_dir,
+            prefab_sequences_dir,
+            os.path.join(user_static_layouts_base, "user"), # Documents/.../static/user
+            os.path.join(user_sequences_base, "user"),      # Documents/.../sequences/user
+            os.path.join(user_sequences_base, "sampler_recordings") # Documents/.../sequences/sampler_recordings
         ]
-        for path in paths:
-            os.makedirs(path, exist_ok=True)
+        for path in paths_to_create:
+            try:
+                os.makedirs(path, exist_ok=True)
+                # print(f"DEBUG: Ensured directory: {path}")
+            except Exception as e:
+                print(f"Warning: Could not create directory {path}: {e}")
     # --- UI Layout and Initialization Methods ---
     def _init_ui_layout(self):
         """Initializes the main window's central widget and top-level layout (left/right panels)."""
@@ -398,8 +439,10 @@ class MainWindow(QMainWindow):
             self.right_panel_layout_v.addWidget(self.quick_tools_group_ref)
         # Static Layouts Manager
         self.static_layouts_manager = StaticLayoutsManager(
-            presets_base_path=self.presets_base_dir_path,
+            user_static_layouts_path=os.path.join(self.user_documents_presets_path, "static", "user"),
+            prefab_static_layouts_path=os.path.join(self.bundled_presets_base_path, "static", "prefab"),
             group_box_title="▦ Static Pad Layouts"
+            # parent=self # Handled by QGroupBox super
         )
         self.right_panel_layout_v.addWidget(self.static_layouts_manager)      
         self.right_panel_layout_v.addStretch(1)
@@ -424,9 +467,13 @@ class MainWindow(QMainWindow):
         return tool_buttons_group
     # init left panel
     def _init_animator_and_sampler_ui_left_panel(self):
-        # Animator Manager Widget
+        # --- MODIFY AnimatorManagerWidget INSTANTIATION ---
         self.animator_manager = AnimatorManagerWidget(
-            presets_base_path=self.presets_base_dir_path,
+            # user_sequences_path=os.path.join(self.user_documents_presets_path, "sequences", "user"), # OLD/WRONG KWARG
+            user_sequences_base_path=os.path.join(self.user_documents_presets_path, "sequences", "user"), # <<< CORRECTED KWARG
+            sampler_recordings_path=os.path.join(self.user_documents_presets_path, "sequences", "sampler_recordings"),
+            # prefab_sequences_path=os.path.join(self.bundled_presets_base_path, "sequences", "prefab"), # OLD KWARG
+            prefab_sequences_base_path=os.path.join(self.bundled_presets_base_path, "sequences", "prefab"), # <<< CORRECTED KWARG
             parent=self
         )
         self.left_panel_layout.addWidget(self.animator_manager)
