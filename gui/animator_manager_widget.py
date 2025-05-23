@@ -193,6 +193,84 @@ class AnimatorManagerWidget(QWidget):
         self.clipboard_state_changed.emit(bool(self.frame_clipboard))
         self._update_animator_controls_enabled_state() # Local UI update
 
+# In class AnimatorManagerWidget(QWidget):
+
+    # --- NEW Methods for External Navigation Control ---
+
+    def get_navigation_item_count(self) -> int:
+        """Returns the number of actual items in the sequence combo box (excluding placeholder)."""
+        if self.sequence_selection_combo:
+            # If the first item is a placeholder like "--- Select ---", don't count it.
+            # Or, count all and let MainWindow handle index adjustments if placeholder is always at index 0.
+            # For simplicity, let's assume we only care about actual sequence items.
+            count = 0
+            for i in range(self.sequence_selection_combo.count()):
+                # Check if itemData exists, as placeholder might not have it
+                if self.sequence_selection_combo.itemData(i) is not None:
+                    count += 1
+            return count
+        return 0
+
+    def get_navigation_item_text_at_logical_index(self, logical_index: int) -> str | None:
+        """
+        Returns the display text of the sequence at the given logical_index.
+        Logical_index is 0-based for actual sequence items, skipping placeholder.
+        """
+        if self.sequence_selection_combo:
+            actual_combo_index = -1
+            current_logical_idx = -1
+            for i in range(self.sequence_selection_combo.count()):
+                if self.sequence_selection_combo.itemData(i) is not None: # This is an actual item
+                    current_logical_idx += 1
+                    if current_logical_idx == logical_index:
+                        actual_combo_index = i
+                        break
+            
+            if actual_combo_index != -1:
+                return self.sequence_selection_combo.itemText(actual_combo_index)
+        return None
+
+    def set_navigation_current_item_by_logical_index(self, logical_index: int) -> str | None:
+        if self.sequence_selection_combo:
+            actual_combo_index_to_set = -1
+            current_logical_idx = -1
+            for i in range(self.sequence_selection_combo.count()):
+                if self.sequence_selection_combo.itemData(i) is not None: 
+                    current_logical_idx += 1
+                    if current_logical_idx == logical_index:
+                        actual_combo_index_to_set = i
+                        break
+            
+            if actual_combo_index_to_set != -1:
+                # --- ADD DEBUG PRINTS ---
+                current_gui_index = self.sequence_selection_combo.currentIndex()
+                current_gui_text = self.sequence_selection_combo.currentText()
+                text_at_new_index = self.sequence_selection_combo.itemText(actual_combo_index_to_set)
+                print(f"AMW TRACE: Nav: Current GUI index={current_gui_index} ('{current_gui_text}')")
+                print(f"AMW TRACE: Nav: Trying to set GUI index to {actual_combo_index_to_set} ('{text_at_new_index}') for logical_index {logical_index}")
+                # --- END DEBUG PRINTS ---
+
+                if current_gui_index != actual_combo_index_to_set:
+                    self.sequence_selection_combo.setCurrentIndex(actual_combo_index_to_set)
+                    print(f"AMW TRACE: Nav: setCurrentIndex({actual_combo_index_to_set}) CALLED.") # Confirm call
+                    # _on_sequence_combo_changed will be called by Qt if index truly changed.
+                # else: # Optional
+                    # print(f"AMW TRACE: Nav: GUI index {actual_combo_index_to_set} already selected.")
+                return self.sequence_selection_combo.itemText(actual_combo_index_to_set) # Return text of (now) current item
+        return None
+    
+    def trigger_navigation_current_item_action(self):
+        """
+        Triggers the action for the currently selected item in the sequence combo box,
+        which is typically loading it.
+        """
+        # print("AMW TRACE: trigger_navigation_current_item_action called.") # Optional
+        # This reuses the logic from the "Load" button.
+        # Ensure _request_load_selected_sequence_from_main handles the current selection correctly.
+        self._request_load_selected_sequence_from_main()
+
+    # --- END NEW Methods ---
+
     # --- Public Methods for MainWindow to call (e.g., from QActions) ---
     def action_undo(self):
         self.request_sampler_disable.emit()
@@ -429,10 +507,43 @@ class AnimatorManagerWidget(QWidget):
         if self.active_sequence_model.get_is_playing(): self.active_sequence_model.stop_playback()
 
     def on_timeline_frame_selected(self, frame_index: int):
-        print(f"DEBUG AMW: on_timeline_frame_selected CALLED with frame_index: {frame_index}") # ADD THIS
-        self.request_sampler_disable.emit()
-        print(f"DEBUG AMW: on_timeline_frame_selected - Calling model.set_current_edit_frame_index({frame_index})") # ADD THIS
+        # This slot is called when the timeline's selection (often single item focus) changes.
+        print(f"DEBUG AMW: on_timeline_frame_selected CALLED with frame_index from timeline: {frame_index}")
+        
+        self.request_sampler_disable.emit() # Good: ensure sampler is off if user interacts with timeline
+
+        # Step 1: Tell the model about the new intended edit frame.
+        # The model will only emit current_edit_frame_changed if the index *actually* differs from its current one.
+        print(f"DEBUG AMW: on_timeline_frame_selected - Calling model.set_current_edit_frame_index({frame_index})")
         self.active_sequence_model.set_current_edit_frame_index(frame_index)
+
+        # Step 2: Proactively fetch and display the content of this frame_index.
+        # This ensures the canvas updates even if the model's current_edit_frame_index didn't change
+        # (e.g., re-clicking the same frame to refresh its view on the canvas).
+        # This also decouples this specific UI action (timeline click wants to see frame X)
+        # from relying solely on the on_model_edit_frame_changed slot for this particular update path.
+        
+        current_colors_hex = None
+        if frame_index != -1 and self.active_sequence_model: # Check model exists
+            print(f"DEBUG AMW: on_timeline_frame_selected - Proactively fetching colors for frame_index: {frame_index}")
+            current_colors_hex = self.active_sequence_model.get_frame_colors(frame_index)
+            print(f"DEBUG AMW: on_timeline_frame_selected - Proactively fetched colors (sample): {str(current_colors_hex)[:100]}...")
+        else:
+            print(f"DEBUG AMW: on_timeline_frame_selected - frame_index is -1 or no model, using blank.")
+            
+        # Ensure QColor is imported at the top of this file if not already
+        # from PyQt6.QtGui import QColor
+        final_data_to_emit = current_colors_hex if current_colors_hex else [QColor("black").name()] * 64
+        
+        print(f"DEBUG AMW: on_timeline_frame_selected - Emitting active_frame_data_for_display (sample): {str(final_data_to_emit)[:100]}...")
+        self.active_frame_data_for_display.emit(final_data_to_emit)
+        
+        # Note: self.on_model_edit_frame_changed will still be called if the model *did* change its index
+        # and emit current_edit_frame_changed. This might lead to a double emit of active_frame_data_for_display
+        # if the index changed. This is usually harmless but could be optimized later if it causes issues
+        # (e.g., by having on_model_edit_frame_changed check if the data is already what it's about to send).
+        # For now, this direct update from timeline click is the priority.
+
 
     def on_timeline_add_frame_action(self, frame_type: str): # frame_type will now only be "blank" from timeline menu
         # print(f"DEBUG AMW.on_timeline_add_frame_action: type='{frame_type}'") # Optional debug

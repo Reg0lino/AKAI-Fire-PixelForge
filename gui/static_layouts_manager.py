@@ -75,6 +75,7 @@ class StaticLayoutsManager(QGroupBox):
              self.layouts_combo.clear() # Clear "--- Select ---"
              self.layouts_combo.addItem("No static layouts found") # Add the specific message
              self.layouts_combo.setEnabled(False) # Disable if truly no layouts
+            
 
     def _get_layouts_dir_path(self, layout_type="user") -> str:
         # This method now directly returns the full path passed during __init__
@@ -189,6 +190,94 @@ class StaticLayoutsManager(QGroupBox):
             if current_layout_name in self.loaded_layouts:
                 can_delete = self.loaded_layouts[current_layout_name].get("type") == "user"
         self.delete_button.setEnabled(can_delete)
+
+# In class StaticLayoutsManager(QGroupBox):
+
+    # --- NEW Methods for External Navigation Control ---
+
+    def get_navigation_item_count(self) -> int:
+        """Returns the number of actual items in the layouts combo box (excluding placeholder)."""
+        if self.layouts_combo:
+            count = 0
+            for i in range(self.layouts_combo.count()):
+                if self.layouts_combo.itemText(i) != "--- Select Static Layout ---" and \
+                   self.layouts_combo.itemText(i) != "No static layouts found":
+                    # A more robust way might be to check if itemData exists if you add it,
+                    # or if the key exists in self.loaded_layouts.
+                    # For now, checking against known placeholder/status texts.
+                    # Or simply: if i > 0 and self.layouts_combo.itemText(i) != "No static layouts found": count +=1
+                    # Assuming placeholder is always at index 0.
+                    if i > 0 : # Index 0 is "--- Select ---" or "No layouts"
+                         current_text = self.layouts_combo.itemText(i)
+                         if current_text in self.loaded_layouts: # Check against known loaded layouts
+                              count +=1
+            return count
+        return 0
+
+    def get_navigation_item_text_at_logical_index(self, logical_index: int) -> str | None:
+        """
+        Returns the display text of the layout at the given logical_index.
+        Logical_index is 0-based for actual layout items, skipping placeholder.
+        """
+        if self.layouts_combo:
+            actual_combo_index = -1
+            current_logical_idx = -1
+            for i in range(self.layouts_combo.count()):
+                # Consider actual items to be those in self.loaded_layouts
+                current_text = self.layouts_combo.itemText(i)
+                if current_text in self.loaded_layouts:
+                    current_logical_idx += 1
+                    if current_logical_idx == logical_index:
+                        actual_combo_index = i
+                        break
+            
+            if actual_combo_index != -1:
+                return self.layouts_combo.itemText(actual_combo_index)
+        return None
+
+    def set_navigation_current_item_by_logical_index(self, logical_index: int) -> str | None:
+        if self.layouts_combo:
+            actual_combo_index_to_set = -1
+            current_logical_idx = -1
+            for i in range(self.layouts_combo.count()):
+                current_text = self.layouts_combo.itemText(i)
+                if current_text in self.loaded_layouts: 
+                    current_logical_idx += 1
+                    if current_logical_idx == logical_index:
+                        actual_combo_index_to_set = i
+                        break
+            
+            if actual_combo_index_to_set != -1:
+                # --- ADD DEBUG PRINTS ---
+                current_gui_index = self.layouts_combo.currentIndex()
+                current_gui_text = self.layouts_combo.currentText()
+                text_at_new_index = self.layouts_combo.itemText(actual_combo_index_to_set)
+                print(f"SLM TRACE: Nav: Current GUI index={current_gui_index} ('{current_gui_text}')")
+                print(f"SLM TRACE: Nav: Trying to set GUI index to {actual_combo_index_to_set} ('{text_at_new_index}') for logical_index {logical_index}")
+                # --- END DEBUG PRINTS ---
+
+                if current_gui_index != actual_combo_index_to_set:
+                    self.layouts_combo.setCurrentIndex(actual_combo_index_to_set)
+                    print(f"SLM TRACE: Nav: setCurrentIndex({actual_combo_index_to_set}) CALLED.") # Confirm call
+                    # _on_combo_selection_changed will be called by Qt.
+                # else: # Optional
+                    # print(f"SLM TRACE: Nav: GUI index {actual_combo_index_to_set} already selected.")
+                return self.layouts_combo.itemText(actual_combo_index_to_set) # Return text of (now) current item
+        return None
+    
+    def trigger_navigation_current_item_action(self):
+        """
+        Triggers the action for the currently selected item in the layouts combo box,
+        which is applying it.
+        """
+        print("SLM TRACE: trigger_navigation_current_item_action called.") # Optional
+        # This reuses the logic from the "Apply Layout" button.
+        if self.apply_button.isEnabled(): # Check if apply is possible
+            self._handle_apply_layout()
+        else: # Optional
+            print("SLM TRACE: Apply button not enabled, no action taken.")
+
+    # --- END NEW Methods ---
 
     def _handle_apply_layout(self):
         selected_display_name = self.layouts_combo.currentText()

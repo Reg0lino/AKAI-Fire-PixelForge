@@ -102,6 +102,7 @@ class ScreenSamplerManager(QObject):
     sampler_status_update = pyqtSignal(str, int)
     sampling_activity_changed = pyqtSignal(bool)
     new_sequence_from_recording_ready = pyqtSignal(str)
+    sampler_monitor_changed = pyqtSignal(str) # <<< NEW SIGNAL (emits new monitor name/ID string)
 
     def __init__(self,
                  presets_base_path: str,
@@ -392,6 +393,79 @@ class ScreenSamplerManager(QObject):
         
         print(f"--- SSM populate_monitor_list_for_ui EXIT ---")
 
+    def toggle_sampling_state(self):
+        """Toggles the screen sampler ON or OFF."""
+        if not GUI_IMPORTS_OK or not hasattr(self.ui_manager, 'enable_sampling_button'):
+            print("SSM ERROR: UI Manager or toggle button not available for toggle_sampling_state.")
+            self.sampler_status_update.emit("Error: Sampler UI not ready.", 3000)
+            return
+
+        current_state_is_on = self.ui_manager.enable_sampling_button.isChecked()
+        new_state_to_set = not current_state_is_on
+        
+        # print(f"SSM TRACE: toggle_sampling_state called. Current visual state is ON: {current_state_is_on}. Setting to: {new_state_to_set}") # Optional
+        
+        # Update the UI button state, which in turn triggers _handle_ui_sampling_control_changed
+        # This ensures the logic flow is consistent with a GUI click.
+        if hasattr(self.ui_manager.enable_sampling_button, 'setChecked'):
+            self.ui_manager.enable_sampling_button.setChecked(new_state_to_set)
+        else: # Fallback if button is somehow not checkable (should not happen)
+            self._handle_ui_sampling_control_changed(new_state_to_set, {
+                'monitor_capture_id': self.current_sampler_params.get('monitor_id', 1),
+                'frequency_ms': self.current_sampler_params.get('frequency_ms', self._fps_to_ms(DEFAULT_SAMPLING_FPS))
+            })
+        
+        # Status update is handled by _synchronize_and_control_sampling_thread via _handle_ui_sampling_control_changed
+
+    def cycle_target_monitor(self):
+        """Cycles to the next available monitor for sampling."""
+        if not self.is_sampling_thread_active:
+            self.sampler_status_update.emit("Enable sampler to cycle monitors.", 2000)
+            return
+
+        if not self.screen_sampler_monitor_list_cache:
+            self.populate_monitor_list_for_ui(force_fetch=True) # Try to get monitors if cache is empty
+            if not self.screen_sampler_monitor_list_cache:
+                self.sampler_status_update.emit("No monitors available to cycle.", 3000)
+                return
+        
+        if len(self.screen_sampler_monitor_list_cache) <= 1:
+            self.sampler_status_update.emit("Only one monitor available.", 2000)
+            # Optionally, still emit current monitor name if needed for OLED refresh
+            current_monitor_id = self.current_sampler_params.get('monitor_id', 1)
+            current_monitor_info = next((m for m in self.screen_sampler_monitor_list_cache if m['id'] == current_monitor_id), None)
+            if current_monitor_info:
+                self.sampler_monitor_changed.emit(current_monitor_info.get('name_for_ui', f"Monitor {current_monitor_id}"))
+            return
+
+        current_monitor_id = self.current_sampler_params.get('monitor_id', 1)
+        current_idx = -1
+        for i, monitor in enumerate(self.screen_sampler_monitor_list_cache):
+            if monitor['id'] == current_monitor_id:
+                current_idx = i
+                break
+        
+        next_idx = (current_idx + 1) % len(self.screen_sampler_monitor_list_cache)
+        new_monitor_info = self.screen_sampler_monitor_list_cache[next_idx]
+        new_monitor_id = new_monitor_info['id']
+
+        self.current_sampler_params['monitor_id'] = new_monitor_id
+        
+        # Update the UI ComboBox to reflect the new selection
+        if GUI_IMPORTS_OK and hasattr(self.ui_manager, 'set_selected_monitor_ui'):
+            self.ui_manager.set_selected_monitor_ui(new_monitor_id)
+        
+        # Apply preferences for the newly selected monitor
+        self._apply_prefs_for_current_monitor() 
+        
+        # If sampling is active, restart it with the new monitor settings
+        if self.is_sampling_thread_active:
+            self._synchronize_and_control_sampling_thread(True) # True to (re)start sampling
+
+        new_monitor_name = new_monitor_info.get('name_for_ui', f"Monitor {new_monitor_id}")
+        self.sampler_status_update.emit(f"Sampler switched to: {new_monitor_name}", 2500)
+        self.sampler_monitor_changed.emit(new_monitor_name) # Emit signal for OLED update
+        # print(f"SSM TRACE: Cycled monitor to ID: {new_monitor_id}, Name: {new_monitor_name}") # Optional
         
     def _show_capture_preview_dialog(self):
         if not GUI_IMPORTS_OK: return
