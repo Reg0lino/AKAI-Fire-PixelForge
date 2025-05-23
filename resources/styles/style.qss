@@ -193,3 +193,50 @@ QGroupBox#CustomSwatchesGroup {
 QGroupBox#StaticPresetsGroup { 
     margin-top: 10px;
 }
+QPushButton#PatternUpButton,
+QPushButton#PatternDownButton,
+QPushButton#GridLeftButton,
+QPushButton#GridRightButton {
+    min-height: 10px;  /* Allow Python to set height to 12px, this is just a lower bound */
+    padding: 1px 3px;  /* Minimal padding: 1px top/bottom, 3px left/right */
+    border: 1px solid #777777; 
+    border-radius: 1px;
+    /* --- CHANGE: Set your desired light grey background --- */
+    background-color: #A8A8A8; /* Example: Light Grey - REPLACE WITH YOUR CHOICE */
+}
+
+QPushButton#PatternUpButton:hover,
+QPushButton#PatternDownButton:hover,
+QPushButton#GridLeftButton:hover,
+QPushButton#GridRightButton:hover {
+    background-color: #B8B8B8; /* Slightly lighter hover - REPLACE */
+    border-color: #888888;
+}
+
+QPushButton#PatternUpButton:pressed,
+QPushButton#PatternDownButton:pressed,
+QPushButton#GridLeftButton:pressed,
+QPushButton#GridRightButton:pressed {
+    background-color: #989898; /* Slightly darker pressed - REPLACE */
+}
+
+QPushButton#BrowserButton {
+    min-height: 10px; 
+    padding: 4px;    
+    border: 1px solid #777777;
+    border-radius: 2px;
+    /* --- CHANGE: Set your desired light grey background --- */
+    background-color: #A8A8A8; /* Example: Light Grey - REPLACE */
+}
+QPushButton#BrowserButton:hover {
+    background-color: #B8B8B8; /* Slightly lighter hover - REPLACE */
+    border-color: #888888;
+}
+QPushButton#BrowserButton:pressed {
+    background-color: #989898; /* Slightly darker pressed - REPLACE */
+}
+QDial {
+    background-color: #202020; /* Very dark grey - this might only affect the bounding box */
+}
+QDial::groove { background: #1A1A1A; }
+QDial::handle { background: #333333; border: 1px solid #444444; }

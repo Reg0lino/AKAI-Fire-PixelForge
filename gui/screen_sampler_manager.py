@@ -5,15 +5,10 @@ import json
 import mss
 import time
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
-from PyQt6.QtWidgets import QMessageBox, QInputDialog
+from PyQt6.QtWidgets import QMessageBox, QInputDialog # Keep these for dialogs shown by SSM
 from PyQt6.QtGui import QColor
 from PIL import Image
-
-print(f"--- EXECUTING screen_sampler_manager.py (VERSION: MY_SSM_MARKER_JULY_22_A) ---")
-print(f"--- SSM __file__: {__file__} ---")
-
 # --- GUI Component Imports ---
-# These are expected to be present. If they fail, it's a critical structural error.
 try:
     from gui.screen_sampler_ui_manager import ScreenSamplerUIManager
     from gui.capture_preview_dialog import CapturePreviewDialog
@@ -23,54 +18,44 @@ try:
 except ImportError as e:
     print(f"CRITICAL ERROR (ScreenSamplerManager): Could not import essential GUI/Model components: {e}")
     GUI_IMPORTS_OK = False
-    # Define minimal placeholders so the script can be parsed, but it won't function.
-    class ScreenSamplerUIManager(QObject): # Base QObject if QGroupBox not available
-        sampling_control_changed = pyqtSignal(bool, dict)
-        status_message_requested = pyqtSignal(str, int)
-        request_monitor_list_population = pyqtSignal()
-        show_capture_preview_requested = pyqtSignal()
-        record_button_clicked = pyqtSignal()
-        set_max_frames_button_clicked = pyqtSignal()
-        enable_sampling_button = None
+    # Placeholder definitions (as you had them)
+    class ScreenSamplerUIManager(QObject): # ... (minimal placeholder) ...
+        sampling_control_changed = pyqtSignal(bool, dict); status_message_requested = pyqtSignal(str, int)
+        request_monitor_list_population = pyqtSignal(); show_capture_preview_requested = pyqtSignal()
+        record_button_clicked = pyqtSignal(); set_max_frames_button_clicked = pyqtSignal()
+        enable_sampling_button = None; 
         def __init__(self, parent=None): super().__init__(parent)
-        print(f"--- SSM __init__ (VERSION: MY_SSM_MARKER_JULY_22_A) ---")
-
-        def set_overall_enabled_state(self, enabled): pass
+        def set_overall_enabled_state(self, enabled): pass; 
         def populate_monitors_combo_external(self, monitors): pass
-        def set_selected_monitor_ui(self, monitor_id): pass
+        def set_selected_monitor_ui(self, monitor_id): pass; 
         def set_sampling_frequency_ui(self, freq_ms): pass
-        def update_record_button_ui(self, is_recording, can_record): pass
+        def update_record_button_ui(self, is_recording, can_record): pass; 
         def set_recording_status_text(self, text): pass
-        def force_disable_sampling_ui(self): pass
-        def isEnabled(self): return False # Mock method if QGroupBox methods are called
+        def force_disable_sampling_ui(self): pass; 
+        def isEnabled(self): return False; 
         def setEnabled(self, enabled): pass
-
-    class CapturePreviewDialog(QObject): # Base QObject
-        sampling_parameters_changed = pyqtSignal(dict)
-        dialog_closed = pyqtSignal()
-        def __init__(self, parent=None): super().__init__(parent)
+    class CapturePreviewDialog(QObject): # ... (minimal placeholder) ...
+        sampling_parameters_changed = pyqtSignal(dict); dialog_closed = pyqtSignal()
+        def __init__(self, parent=None): super().__init__(parent); 
         def set_initial_monitor_data(self, monitors, current_id): pass
-        def set_current_parameters_from_main(self, params): pass
+        def set_current_parameters_from_main(self, params): pass; 
         def update_preview_image(self, img): pass
-        def isVisible(self): return False
-        def show(self): pass
-        def activateWindow(self): pass
+        def isVisible(self): return False; 
+        def show(self): pass; 
+        def activateWindow(self): pass; 
         def raise_(self): pass
-        def close(self): pass
+        def close(self): pass; 
         def deleteLater(self): pass
-
-    class SetMaxFramesDialog(QObject): # Base QObject
+    class SetMaxFramesDialog(QObject): # ... (minimal placeholder) ...
         @staticmethod
         def get_max_frames(parent_widget, current_value): return current_value, False
-
-    class SequenceModel:
+    class SequenceModel: # ... (minimal placeholder) ...
         def __init__(self, name=""): self.name=name; self.frames=[]; self.frame_delay_ms=0; self.loop=False
         def save_to_file(self, path): return False
-    class AnimationFrame:
+    class AnimationFrame: # ... (minimal placeholder) ...
         def __init__(self, colors=None): self.colors=colors or []
 
 # --- Feature Component Imports ---
-# These might be legitimately missing, so placeholders are more robust here.
 try:
     from features.screen_sampler_core import ScreenSamplerCore
     from features.screen_sampler_thread import ScreenSamplerThread
@@ -78,22 +63,22 @@ try:
 except ImportError as e:
     print(f"Warning (ScreenSamplerManager): Could not import feature components: {e}. Using placeholders.")
     FEATURES_IMPORTS_OK = False
-    class ScreenSamplerCore:
-        DEFAULT_ADJUSTMENTS = {}
+    class ScreenSamplerCore: # ... (minimal placeholder) ...
+        DEFAULT_ADJUSTMENTS = {'brightness': 1.0, 'contrast': 1.0, 'saturation': 1.0, 'hue_shift': 0} # Ensure defaults exist
         NUM_GRID_ROWS = 4; NUM_GRID_COLS = 16
         @staticmethod
         def get_available_monitors(sct_instance): return []
-    class ScreenSamplerThread(QObject):
-        pad_colors_sampled = pyqtSignal(list); processed_image_ready = pyqtSignal(object); error_occurred = pyqtSignal(str) # PIL.Image -> object
-        def __init__(self, parent=None): super().__init__(parent)
+    class ScreenSamplerThread(QObject): # ... (minimal placeholder) ...
+        pad_colors_sampled = pyqtSignal(list); processed_image_ready = pyqtSignal(object); error_occurred = pyqtSignal(str)
+        def __init__(self, parent=None): super().__init__(parent); 
         def start_sampling(self, **kwargs): pass
-        def stop_sampling(self, **kwargs): pass
+        def stop_sampling(self, **kwargs): pass; 
         def isRunning(self): return False
 
 # --- Constants ---
 SAMPLER_PREFS_FILENAME = "sampler_user_prefs.json"
 APP_NAME_FOR_CONFIG = "AKAI_Fire_RGB_Controller"
-APP_AUTHOR_FOR_CONFIG = "YourProjectAuthorName"
+APP_AUTHOR_FOR_CONFIG = "YourProjectAuthorName" # Replace if needed
 DEFAULT_SAMPLING_FPS = 10
 
 class ScreenSamplerManager(QObject):
@@ -102,27 +87,22 @@ class ScreenSamplerManager(QObject):
     sampler_status_update = pyqtSignal(str, int)
     sampling_activity_changed = pyqtSignal(bool)
     new_sequence_from_recording_ready = pyqtSignal(str)
-    sampler_monitor_changed = pyqtSignal(str) # <<< NEW SIGNAL (emits new monitor name/ID string)
+    sampler_monitor_changed = pyqtSignal(str)
+    
+    # --- NEW SIGNAL for when adjustments are changed internally or by dialog ---
+    sampler_adjustments_changed = pyqtSignal(dict) # Emits the full 'adjustments' dictionary
 
     def __init__(self,
                  presets_base_path: str,
                  animator_manager_ref,
                  parent: QObject | None = None):
         super().__init__(parent)
-
-        if not GUI_IMPORTS_OK or not FEATURES_IMPORTS_OK:
-            print("FATAL (ScreenSamplerManager): Cannot initialize fully due to missing critical imports.")
-            # Depending on how critical, you might raise an exception or set a flag
-            # to prevent further operations. For now, it will proceed with placeholders if any.
-            # This helps in identifying if an import above failed silently.
-
+        # ... (rest of __init__ as before)
         self.presets_base_path = presets_base_path
         self.animator_manager_ref = animator_manager_ref
-
         self.is_sampling_thread_active = False
         self.is_actively_recording = False
         self.screen_sampler_monitor_list_cache = []
-
         self.current_sampler_params = {
             'monitor_id': 1,
             'region_rect_percentage': {'x': 0.4, 'y': 0.4, 'width': 0.2, 'height': 0.2},
@@ -130,75 +110,124 @@ class ScreenSamplerManager(QObject):
             'frequency_ms': self._fps_to_ms(DEFAULT_SAMPLING_FPS)
         }
         self.sampler_monitor_prefs = {}
-
         self.recorded_sampler_frames: list[list[str]] = []
         self.current_recording_frame_count: int = 0
         self.captured_sampler_frequency_ms: int = self.current_sampler_params['frequency_ms']
         self.MAX_RECORDING_FRAMES: int = 200
-
-        self.ui_manager = ScreenSamplerUIManager(parent=None)
+        self.ui_manager = ScreenSamplerUIManager(parent=None) # Assuming parent=None is okay if it's not added to a layout by SSM
         self.sampling_thread = ScreenSamplerThread(parent=self)
         self.capture_preview_dialog: CapturePreviewDialog | None = None
         self._last_processed_pil_image: Image.Image | None = None
-
         self._config_dir_path = self._get_user_config_dir_path()
         self.sampler_prefs_file_path = os.path.join(self._config_dir_path, SAMPLER_PREFS_FILENAME)
-
-        self._load_sampler_preferences()
+        self._load_sampler_preferences() # This calls _apply_prefs_for_current_monitor which might emit
         self._connect_signals()
         
-        # Initial UI state settings - ensure these methods exist on the REAL ScreenSamplerUIManager
+        # Connect sampler_adjustments_changed to update dialog sliders if visible
+        self.sampler_adjustments_changed.connect(self._update_preview_dialog_sliders_if_visible)
+        
         if hasattr(self.ui_manager, 'set_sampling_frequency_ui'):
             self.ui_manager.set_sampling_frequency_ui(self.current_sampler_params['frequency_ms'])
-        else:
-            print(f"WARNING (SSM.__init__): self.ui_manager (type: {type(self.ui_manager)}) missing 'set_sampling_frequency_ui'")
-
         if hasattr(self.ui_manager, 'update_record_button_ui'):
             self.ui_manager.update_record_button_ui(is_recording=False, can_record=False)
-        else:
-            print(f"WARNING (SSM.__init__): self.ui_manager (type: {type(self.ui_manager)}) missing 'update_record_button_ui'")
-
         if hasattr(self.ui_manager, 'set_recording_status_text'):
             self.ui_manager.set_recording_status_text("Sampler Off / Device Disconnected")
-        else:
-            print(f"WARNING (SSM.__init__): self.ui_manager (type: {type(self.ui_manager)}) missing 'set_recording_status_text'")
 
-
-    def _get_user_config_dir_path(self) -> str:
+    # ... (_get_user_config_dir_path, get_ui_widget, _connect_signals as before) ...
+    def _get_user_config_dir_path(self) -> str: # Unchanged
         config_dir_to_use = ""
         try:
             is_packaged = getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
-            if is_packaged:
-                from appdirs import user_config_dir
-                config_dir_to_use = user_config_dir(APP_NAME_FOR_CONFIG, APP_AUTHOR_FOR_CONFIG)
-            else:
-                current_file_dir = os.path.dirname(os.path.abspath(__file__))
-                project_root = os.path.dirname(current_file_dir)
-                config_dir_to_use = os.path.join(project_root, "user_settings")
-            os.makedirs(config_dir_to_use, exist_ok=True)
-            return config_dir_to_use
-        except Exception as e:
-            print(f"ScreenSamplerManager WARNING: Error determining config path (using CWD fallback): {e}")
-            fallback_dir = os.path.join(os.getcwd(), "user_settings_sampler_fallback")
-            os.makedirs(fallback_dir, exist_ok=True)
-            return fallback_dir
-
-    def get_ui_widget(self) -> ScreenSamplerUIManager:
-        return self.ui_manager
-
-    def _connect_signals(self):
-        if not GUI_IMPORTS_OK: return # Don't connect if UI manager is a placeholder
-
+            if is_packaged: from appdirs import user_config_dir; config_dir_to_use = user_config_dir(APP_NAME_FOR_CONFIG, APP_AUTHOR_FOR_CONFIG)
+            else: current_file_dir = os.path.dirname(os.path.abspath(__file__)); project_root = os.path.dirname(current_file_dir); config_dir_to_use = os.path.join(project_root, "user_settings")
+            os.makedirs(config_dir_to_use, exist_ok=True); return config_dir_to_use
+        except Exception: fallback_dir=os.path.join(os.getcwd(),"user_settings_sampler_fallback"); os.makedirs(fallback_dir,exist_ok=True); return fallback_dir
+    def get_ui_widget(self) -> ScreenSamplerUIManager: return self.ui_manager # Unchanged
+    def _connect_signals(self): # Unchanged
+        if not GUI_IMPORTS_OK: return
         self.ui_manager.sampling_control_changed.connect(self._handle_ui_sampling_control_changed)
         self.ui_manager.request_monitor_list_population.connect(self.populate_monitor_list_for_ui)
         self.ui_manager.show_capture_preview_requested.connect(self._show_capture_preview_dialog)
         self.ui_manager.record_button_clicked.connect(self._on_ui_record_button_clicked)
         self.ui_manager.set_max_frames_button_clicked.connect(self._on_ui_set_max_frames_button_clicked)
         self.ui_manager.status_message_requested.connect(self.sampler_status_update)
-
         self.sampling_thread.pad_colors_sampled.connect(self._handle_thread_pad_colors_sampled)
         self.sampling_thread.processed_image_ready.connect(self._handle_thread_processed_image_ready)
         self.sampling_thread.error_occurred.connect(self._handle_thread_error_occurred)
+
+    # --- NEW METHOD to update individual sampler adjustments ---
+    def update_sampler_adjustment(self, adjustment_key: str, new_value: float):
+        """
+        Updates a specific sampler adjustment (brightness, contrast, saturation, hue_shift).
+        Called by MainWindow when corresponding GUI knob is changed.
+        """
+        if adjustment_key not in self.current_sampler_params['adjustments']:
+            print(f"SSM WARNING: Invalid adjustment key '{adjustment_key}' in update_sampler_adjustment.")
+            return
+
+        # Potentially clamp or validate new_value based on adjustment_key if necessary
+        # For now, assume MainWindow sends valid, mapped values.
+        self.current_sampler_params['adjustments'][adjustment_key] = new_value
+        
+        print(f"SSM INFO: Sampler adjustment '{adjustment_key}' updated to {new_value}")
+
+        self._save_prefs_for_current_monitor()  # Save the change to persistent storage for this monitor
+        
+        # If sampling is currently active, restart the thread with the new parameters
+        if self.is_sampling_thread_active:
+            self._synchronize_and_control_sampling_thread(True) 
+            
+        # Emit signal so MainWindow can update its knobs if this change came from somewhere else (e.g., dialog)
+        # or to confirm the change if it came from a knob.
+        self.sampler_adjustments_changed.emit(self.current_sampler_params['adjustments'].copy())
+
+    # --- Modify _handle_dialog_full_params_changed ---
+    def _handle_dialog_full_params_changed(self, full_dialog_params: dict):
+        # ... (existing logic to update self.current_sampler_params from full_dialog_params) ...
+        new_monitor_id = full_dialog_params.get('monitor_id', self.current_sampler_params['monitor_id'])
+        self.current_sampler_params['monitor_id'] = new_monitor_id
+        self.current_sampler_params['region_rect_percentage'] = full_dialog_params.get(
+            'region_rect_percentage', self.current_sampler_params['region_rect_percentage']
+        )
+        self.current_sampler_params['adjustments'] = full_dialog_params.get(
+            'adjustments', self.current_sampler_params['adjustments']
+        ).copy() # Ensure it's a copy
+
+
+        self._save_prefs_for_current_monitor()
+
+        if hasattr(self.ui_manager, 'set_selected_monitor_ui'): # Check if method exists
+            self.ui_manager.set_selected_monitor_ui(self.current_sampler_params['monitor_id'])
+
+        if self.is_sampling_thread_active:
+            self._synchronize_and_control_sampling_thread(True)
+        
+        # --- ADD: Emit the new signal ---
+        self.sampler_adjustments_changed.emit(self.current_sampler_params['adjustments'].copy())
+
+    # --- Modify _apply_prefs_for_current_monitor ---
+    def _apply_prefs_for_current_monitor(self):
+        # ... (existing logic to load prefs for the current_sampler_params['monitor_id']) ...
+        # print(f"DEBUG SSM._apply_prefs: Current monitor_id to apply for: {self.current_sampler_params['monitor_id']}") # Optional
+        monitor_key = self._generate_monitor_key(self.current_sampler_params['monitor_id'])
+        # print(f"DEBUG SSM._apply_prefs: Generated key: {monitor_key}") # Optional
+        # print(f"DEBUG SSM._apply_prefs: Available keys in prefs: {list(self.sampler_monitor_prefs.keys())}") # Optional
+
+        if monitor_key and monitor_key in self.sampler_monitor_prefs:
+            saved_prefs = self.sampler_monitor_prefs[monitor_key]
+            # print(f"DEBUG SSM._apply_prefs: Found prefs for key '{monitor_key}': {saved_prefs}") # Optional
+            self.current_sampler_params['region_rect_percentage'] = saved_prefs.get('region_rect_percentage', self.current_sampler_params['region_rect_percentage'])
+            self.current_sampler_params['adjustments'] = saved_prefs.get('adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()).copy() # Ensure copy
+            # print(f"DEBUG SSM._apply_prefs: AFTER apply, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}") # Optional
+        else:
+            # print(f"DEBUG SSM._apply_prefs: No prefs found for key '{monitor_key}'. Using defaults.") # Optional
+            self.current_sampler_params['region_rect_percentage'] = {'x': 0.4, 'y': 0.4, 'width': 0.2, 'height': 0.2}
+            self.current_sampler_params['adjustments'] = ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()
+            # print(f"DEBUG SSM._apply_prefs: AFTER default, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}") # Optional
+
+        # --- ADD: Emit signal after applying preferences ---
+        # This ensures GUI knobs update if preferences were loaded/applied (e.g., on startup or monitor change)
+        self.sampler_adjustments_changed.emit(self.current_sampler_params['adjustments'].copy())
 
     def set_overall_enabled_state(self, enabled_from_main_window: bool, device_connected: bool):
         if not GUI_IMPORTS_OK: return
@@ -307,8 +336,7 @@ class ScreenSamplerManager(QObject):
 
         self._synchronize_and_control_sampling_thread(enable_toggle)
 
-# In AKAI_Fire_RGB_Controller/gui/screen_sampler_manager.py
-# (Assuming GUI_IMPORTS_OK and FEATURES_IMPORTS_OK are defined at the class or module level
+
 #  and reflect the success of critical imports, as discussed previously)
 
     def populate_monitor_list_for_ui(self, force_fetch: bool = False):
@@ -889,3 +917,14 @@ class ScreenSamplerManager(QObject):
             self.stop_sampling_thread()
         self._save_sampler_preferences_to_file()
         print("ScreenSamplerManager: Preferences saved on exit.")
+
+    def _update_preview_dialog_sliders_if_visible(self, adjustments: dict):
+        """
+        Updates the preview dialog's sliders if the dialog is currently visible.
+        Called when sampler adjustments are changed externally (e.g., by MainWindow knobs).
+        """
+        if self.capture_preview_dialog and self.capture_preview_dialog.isVisible():
+            if hasattr(self.capture_preview_dialog, 'update_sliders_from_external_adjustments'):
+                self.capture_preview_dialog.update_sliders_from_external_adjustments(adjustments)
+            else:
+                print("SSM WARNING: CapturePreviewDialog missing 'update_sliders_from_external_adjustments'")

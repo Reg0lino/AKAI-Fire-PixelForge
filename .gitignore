@@ -76,3 +76,4 @@ Thumbs.db
 # Pytest cache
 .pytest_cache/
 .coverage
+minimal_qt_test.py

@@ -11,7 +11,7 @@ class ScreenSamplerCore:
     DEFAULT_FALLBACK_LOGICAL_HEIGHT = 128
     DEFAULT_FULLSCREEN_DOWNSCALE_DIMENSIONS = (100, 100) # For the single averaged color if overall region is full
     DEFAULT_ADJUSTMENTS = {
-        'saturation': 1.0, 'contrast': 1.0, 'brightness': 1.0, 'hue_shift': 0
+        'saturation': 2.0, 'contrast': 1.0, 'brightness': 1.5, 'hue_shift': 0
     }
     _save_temp_preview_image_for_diagnosis = False 
     

@@ -87,12 +87,19 @@ class AnimatorManagerWidget(QWidget):
         QTimer.singleShot(0, self.refresh_sequences_list_and_select)
         self._update_ui_for_current_sequence() # <<< CALLS _emit_state_updates
         self._emit_state_updates() # <<< CALLS _emit_state_updates AGAIN
+
+
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0,0,0,0) # Manager widget itself might not need margins
+        main_layout.setContentsMargins(0,0,0,0)
         main_layout.setSpacing(10)
+
+        # --- Animator Studio GroupBox (Sequence Selection & Actions) ---
         self.animator_studio_group_box = QGroupBox("🎬 Animator Studio")
+        # Set a size policy that allows it to take preferred height but not expand excessively
+        self.animator_studio_group_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed) # Fixed vertical
         animator_studio_layout = QVBoxLayout(self.animator_studio_group_box)
+        # ... (rest of combo_load_layout and action_buttons_layout as before) ...
         combo_load_layout = QHBoxLayout()
         combo_load_layout.addWidget(QLabel("Sequence:"))
         self.sequence_selection_combo = QComboBox()
@@ -101,6 +108,7 @@ class AnimatorManagerWidget(QWidget):
         self.load_sequence_button = QPushButton("📲 Load")
         combo_load_layout.addWidget(self.load_sequence_button)
         animator_studio_layout.addLayout(combo_load_layout)
+        
         action_buttons_layout = QHBoxLayout()
         self.new_sequence_button = QPushButton("✨ New")
         action_buttons_layout.addWidget(self.new_sequence_button)
@@ -110,19 +118,39 @@ class AnimatorManagerWidget(QWidget):
         action_buttons_layout.addWidget(self.delete_sequence_button)
         action_buttons_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         animator_studio_layout.addLayout(action_buttons_layout)        
-        main_layout.addWidget(self.animator_studio_group_box)
+        main_layout.addWidget(self.animator_studio_group_box) # Add the groupbox to the main layout
 
         # Separator
         separator_line = QFrame()
         separator_line.setFrameShape(QFrame.Shape.HLine)
         separator_line.setFrameShadow(QFrame.Shadow.Sunken)
         main_layout.addWidget(separator_line)
-        # Timeline and Controls Widgets
+
+        # --- Timeline and Controls Widgets ---
         self.sequence_timeline_widget = SequenceTimelineWidget()
-        main_layout.addWidget(self.sequence_timeline_widget)
+        # --- CRITICAL CHANGES FOR TIMELINE WIDGET ---
+        # 1. Set a vertical size policy that allows it to expand.
+        self.sequence_timeline_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        # 2. Set a minimum height. This is an estimate.
+        #    Height of one frame item (guesstimate from your timeline code or inspection) ~40-50px?
+        #    Spacing between items ~5px?
+        #    Scrollbar height if visible?
+        #    Let's aim for roughly 2 rows + spacing. If one row is ~50px high with its preview and label,
+        #    two rows would be ~100px. Add some for margins/padding within the timeline widget.
+        #    This value might need tuning.
+        desired_min_timeline_height = 120 # Try this first (e.g., 2 rows * 50px/row + 20px padding/spacing)
+        self.sequence_timeline_widget.setMinimumHeight(desired_min_timeline_height)
+        # --- END CRITICAL CHANGES ---
+        main_layout.addWidget(self.sequence_timeline_widget) # Stretch factor for this widget is handled by its size policy now
+
         self.sequence_controls_widget = SequenceControlsWidget()
+        # Controls widget usually has a fixed height based on its buttons
+        self.sequence_controls_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         main_layout.addWidget(self.sequence_controls_widget)
 
+        # --- Ensure AnimatorManagerWidget itself can expand vertically ---
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        
     def _connect_ui_signals(self):
         # Animator Studio Buttons
         self.sequence_selection_combo.currentIndexChanged.connect(self._on_sequence_combo_changed)

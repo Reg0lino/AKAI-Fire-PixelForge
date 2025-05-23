@@ -78,6 +78,7 @@ class AkaiFireController(QObject):
         self.port_name_used = None
         self.in_port_name_used = None
         self.midi_input_thread: MidiInputThread | None = None
+        self.current_brightness_factor: float = 1.0 # 0.0 to 1.0
         self.NON_GRID_BUTTON_CCS = [
             FIRE_BUTTON_STEP, FIRE_BUTTON_NOTE, FIRE_BUTTON_DRUM, FIRE_BUTTON_PERFORM,
             FIRE_BUTTON_SHIFT, FIRE_BUTTON_ALT, FIRE_BUTTON_PATTERN_SONG,
@@ -180,26 +181,68 @@ class AkaiFireController(QObject):
         try: self.out_port.send(mido.Message.from_bytes(sysex_header + data_bytes + sysex_ender)); time.sleep(0.002) 
         except Exception as e: print(f"AkaiFireController: Error sending SysEx: {e}")
 
+    def set_global_brightness_factor(self, factor: float):
+        self.current_brightness_factor = max(0.0, min(float(factor), 1.0)) # Ensure it's a float and clamped
+        # print(f"AkaiCtrl TRACE: Brightness factor set to {self.current_brightness_factor}") # Optional
+
     def set_pad_color(self, row, col, r8, g8, b8):
         if not self.is_connected() or not (0 <= row <= 3 and 0 <= col <= 15): return
+        
+        # Apply global brightness factor
+        r_adj = int(r8 * self.current_brightness_factor)
+        g_adj = int(g8 * self.current_brightness_factor)
+        b_adj = int(b8 * self.current_brightness_factor)
+        
         pad_idx = (row * 16) + col
-        r7, g7, b7 = max(0, min(r8, 255))>>1, max(0, min(g8, 255))>>1, max(0, min(b8, 255))>>1
+        # Ensure values are clamped after scaling before 7-bit conversion
+        r7 = max(0, min(r_adj, 255)) >> 1
+        g7 = max(0, min(g_adj, 255)) >> 1
+        b7 = max(0, min(b_adj, 255)) >> 1
+        
         self._send_sysex([0x65, 0x00, 0x04, pad_idx, r7, g7, b7])
 
-    def set_multiple_pads_color(self, pad_data_list):
+    def set_multiple_pads_color(self, pad_data_list, bypass_global_brightness: bool = False):
         if not self.is_connected() or not pad_data_list: return
-        payload = []; count = 0
+        payload = []
+        count = 0
+        
+        brightness_to_apply = 1.0 if bypass_global_brightness else self.current_brightness_factor
+        # print(f"AkaiCtrl TRACE: set_multiple_pads_color using brightness_to_apply: {brightness_to_apply}, bypass_flag: {bypass_global_brightness}")
+
+
         for item in pad_data_list:
-            idx, r8, g8, b8 = -1,0,0,0
-            if len(item)==4: idx,r8,g8,b8 = item
-            elif len(item)==5: ro,co,r,g,b = item; idx=(ro*16)+co if 0<=ro<=3 and 0<=co<=15 else -1; r8,g8,b8=r,g,b
-            else: continue
+            idx, r8, g8, b8 = -1, 0, 0, 0 # Default values
+            if len(item) == 4: # Assuming (idx, r, g, b)
+                idx, r8, g8, b8 = item
+            elif len(item) == 5: # Assuming (row, col, r, g, b)
+                ro, co, r_val, g_val, b_val = item
+                if 0 <= ro <= 3 and 0 <= co <= 15:
+                    idx = (ro * 16) + co
+                    r8, g8, b8 = r_val, g_val, b_val
+                else:
+                    continue # Skip invalid row/col
+            else:
+                continue # Skip malformed item
+
             if idx == -1: continue
-            r7,g7,b7 = max(0,min(r8,255))>>1, max(0,min(g8,255))>>1, max(0,min(b8,255))>>1
-            payload.extend([idx, r7, g7, b7]); count += 1
+
+            # Apply brightness
+            r_adj = int(r8 * brightness_to_apply)
+            g_adj = int(g8 * brightness_to_apply)
+            b_adj = int(b8 * brightness_to_apply)
+
+            # Ensure values are clamped after scaling before 7-bit conversion
+            r7 = max(0, min(r_adj, 255)) >> 1
+            g7 = max(0, min(g_adj, 255)) >> 1
+            b7 = max(0, min(b_adj, 255)) >> 1
+            
+            payload.extend([idx, r7, g7, b7])
+            count += 1
+            
         if not payload: return
-        length = count * 4
-        self._send_sysex([0x65, (length>>7)&0x7F, length&0x7F] + payload)
+        length = count * 4 # Each pad entry is 4 bytes (idx, r, g, b) in the SysEx payload
+        self._send_sysex([0x65, (length >> 7) & 0x7F, length & 0x7F] + payload)
+
 
     def clear_all_pads(self):
         if not self.is_connected(): return

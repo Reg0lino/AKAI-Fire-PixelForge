@@ -1,243 +1,378 @@
+### START OF FILE oled_display_manager.py ###
 # AKAI_Fire_RGB_Controller/managers/oled_display_manager.py
-from PyQt6.QtCore import QObject, pyqtSignal, QTimer, Qt 
-from oled_utils import oled_renderer 
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer, Qt
+from PyQt6.QtGui import QImage, QPainter, QColor, QFont # Ensure QFont is imported
 
-OLED_WIDTH_PIXELS = 128 
-SCROLL_TIMER_INTERVAL_MS = 50 
-SCROLL_PIXELS_PER_UPDATE = 2  
+# It's good practice to handle potential import errors for project-specific modules
+try:
+    from oled_utils import oled_renderer
+    # Assuming AkaiFireController is not directly used by OLEDDisplayManager itself,
+    # but rather its signals are connected externally by MainWindow.
+    # If it were directly used, an import would be here:
+    # from hardware.akai_fire_controller import AkaiFireController
+    OLED_RENDERER_AVAILABLE = True
+except ImportError as e:
+    print(f"OLEDDisplayManager WARNING: Could not import oled_renderer: {e}. OLED functionality will be limited.")
+    OLED_RENDERER_AVAILABLE = False
+    # Define a placeholder for oled_renderer if critical functions are called
+    class oled_renderer_placeholder:
+        OLED_WIDTH = 128
+        OLED_HEIGHT = 64
+        @staticmethod
+        def load_font(prefer_custom=True, size_px=10): return QFont("Arial", 10) # Fallback font
+        @staticmethod
+        def render_text_to_7bit_packed_buffer(text, font_override, offset_x, center_if_not_scrolling): return None
+        @staticmethod
+        def get_text_width_pixels(text, font): return len(text) * 6 # Rough estimate
+    if 'oled_renderer' not in globals(): # If import failed, assign placeholder
+        oled_renderer = oled_renderer_placeholder
+
 
 class OLEDDisplayManager(QObject):
     request_send_bitmap_to_fire = pyqtSignal(bytearray)
     startup_animation_finished = pyqtSignal()
 
-    def __init__(self, akai_fire_controller_ref, parent=None):
+    DEFAULT_SCROLL_DELAY_MS = 50 # adjust to increase/decrease scroll speed/ the behavior is as follows if you increase the delay:
+    # This is the time interval (in milliseconds) between each small movement (step) of the scrolling text.
+    # Increasing this value:
+    #   - Makes the text scroll slower because there's a longer pause between each tiny shift.
+    #   - The animation will appear less fluid and more "steppy" if the delay is too high for the step size
+    #     (e.g., if you scroll 2 pixels every 500ms, it's very jerky).
+    # Decreasing this value:
+    #   - Makes the text scroll faster and appear smoother (more updates per second).
+    #   - If too low (e.g., below ~30-50ms, depending on processing), it might not have a visible effect
+    #     or could strain resources if updates are too frequent.
+    # This is the duration (in milliseconds) the scroll timer pauses after the text has completely
+    # scrolled off one side and before it reappears from the other side to start the next loop.
+    # Increasing this value: Creates a longer "empty screen" or "waiting" period between full passes of the text.
+    # Decreasing this value: Makes the text loop around more quickly with less of a pause.
+    # Key point: This specifically controls the pause between full scroll cycles,
+    # not the speed of the text itself while it's moving.
+    DEFAULT_SCROLL_RESTART_DELAY_MS = 2000
+
+    # Duration for static text display before scrolling starts again (if needed elsewhere)
+    STATIC_TEXT_DISPLAY_DURATION_MS = 2500
+    # STATIC_TEXT_DISPLAY_DURATION_MS is used by set_display_text(..., temporary_duration_ms=...).
+    # It defines how long a temporary, non-scrolling (static) message (e.g., "Sequence Saved!") is shown
+    # before the display automatically reverts to normal_display_text (which may scroll if long).
+    # Increasing this value: The temporary static message stays visible longer.
+    # Decreasing this value: The temporary static message disappears more quickly.
+    # Key point: This is for temporary static messages only, not for the looping scroll of persistent text.
+    # The _revert_from_temporary_text slot is triggered after this duration.
+
+    def __init__(self, akai_fire_controller_ref, parent: QObject | None = None):
         super().__init__(parent)
-        
-        # --- Normal Text State (sequence names, default welcome) ---
-        self.normal_display_text = "" # This stores the intended "background" text
-        self.default_scrolling_text = "READY" 
-        self.is_displaying_default_normal_text = False # True if normal_display_text is the default
-        
+        # self.akai_fire_controller = akai_fire_controller_ref # Not directly used, connection is external
+
+        self.current_display_text: str | None = None
+        self.normal_display_text: str | None = None
+        self.persistent_override_text: str | None = None
+        self.is_knob_feedback_active: bool = False
+
         self.scroll_timer = QTimer(self)
-        self.scroll_timer.timeout.connect(self._update_scroll_and_render)
+        self.scroll_timer.timeout.connect(self._scroll_text_step)
+        self.current_scroll_offset = 0
+        self.text_width_pixels = 0
+        self.is_scrolling_active = False
+        self.is_startup_animation_playing = False
+
+        self._animation_frames: list[bytearray] = []
+        self._current_animation_frame_index: int = 0
+        self._animation_frame_duration: int = 60 # Default, can be set by play_startup_animation
+
+        self.oled_width = oled_renderer.OLED_WIDTH
+        self.oled_height = oled_renderer.OLED_HEIGHT
         
-        self.current_scroll_offset_x = 0
-        self.current_text_pixel_width = 0 # Width of the text currently being scrolled/displayed
-        self._is_scrolling = False
-        self._active_rendered_text_content = "" # Tracks what was last sent to render to avoid re-renders
-
-        # --- Persistent Override State (for sampler active, etc.) ---
-        self._persistent_override_text: str | None = None
-        self._is_override_scrolling = False
-        self._override_text_pixel_width = 0
-        # self.override_scroll_offset_x = 0 # If override text needs independent scrolling (future)
-
-        # --- Startup Animation State ---
-        self._startup_animation_timer = QTimer(self)
-        self._startup_animation_timer.timeout.connect(self._update_startup_animation_frame)
-        self._startup_frames_list = []
-        self._current_startup_frame_idx = 0
-        self._is_playing_startup_animation = False
+        # Attempt to load font using oled_renderer
+        # self.font = QFont("Arial", 10) # Fallback font
+        # if OLED_RENDERER_AVAILABLE:
+        #     try:
+                # Try to load a taller font for better readability on the small display
+        #         font_to_use = oled_renderer.load_font(prefer_custom=True, size_px=max(10, self.oled_height - 12))
+        #         if font_to_use:
+        #             self.font = font_to_use
+        #     except Exception as e:
+        #         print(f"OLEDDisplayManager: Error loading font via oled_renderer: {e}. Using default.")
         
-        self.get_text_width_func = lambda text_str: len(text_str) * (oled_renderer.DESIRED_FONT_SIZE // 2 if hasattr(oled_renderer, 'DESIRED_FONT_SIZE') else 32)
-        if hasattr(oled_renderer, '_FONT_OBJECT') and oled_renderer._FONT_OBJECT:
-            font_obj = oled_renderer._FONT_OBJECT
-            if hasattr(font_obj, 'getlength'): self.get_text_width_func = font_obj.getlength
-            elif hasattr(font_obj, 'getsize'): self.get_text_width_func = lambda s: font_obj.getsize(s)[0]
+        # print(f"OLEDDisplayManager: Initialized. Font: {self.font.family()}, Size: {self.font.pointSize()}pt / {self.font.pixelSize()}px")
 
-    # --- Public Methods for Controlling Display ---
 
-    def set_display_text(self, text: str | None, scroll_if_needed: bool = True):
-        """
-        Sets the "normal" underlying display text (e.g., sequence name or default welcome).
-        This will be shown if no persistent override is active.
-        """
-        if self._is_playing_startup_animation: return
-
-        effective_normal_text = text if text is not None and text.strip() else self.default_scrolling_text
-        if not effective_normal_text.strip(): effective_normal_text = " " # Ensure not truly empty
-
-        self.is_displaying_default_normal_text = (effective_normal_text == self.default_scrolling_text)
+    # oled_width and oled_height can still be useful if oled_renderer isn't available
+        self.oled_width = 128 
+        self.oled_height = 64
+        if OLED_RENDERER_AVAILABLE: # Use constants from renderer if available
+            self.oled_width = oled_renderer.OLED_WIDTH
+            self.oled_height = oled_renderer.OLED_HEIGHT
         
-        # Only update and re-evaluate if the normal text actually changes
-        if self.normal_display_text == effective_normal_text:
-            # If persistent override is active, don't re-render normal text unnecessarily
-            if self._persistent_override_text is None:
-                 self._trigger_render_with_current_state(scroll_if_needed)
+        # print(f"OLEDDisplayManager: Initialized.") # Simplified print
+
+    def _render_text_to_bitmap(self, text_to_render: str | None) -> bytearray | None:
+        if not OLED_RENDERER_AVAILABLE: return None # Guard clause
+        if text_to_render is None: text_to_render = "" 
+        
+        try:
+            # from oled_utils import oled_renderer # Already imported or handled by OLED_RENDERER_AVAILABLE
+            
+            offset_to_pass = self.current_scroll_offset if self.is_scrolling_active and self.text_width_pixels > self.oled_width else 0
+            center_text = not (self.is_scrolling_active and self.text_width_pixels > self.oled_width)
+            
+            # --- CHANGE FUNCTION CALL AND PARAMETERS ---
+            packed_data = oled_renderer.render_text_to_packed_buffer(
+                text=text_to_render,
+                # font_override is None, so oled_renderer's internal _FONT_OBJECT will be used
+                font_override=None, 
+                offset_x=offset_to_pass,
+                center_if_not_scrolling=center_text
+            )
+            # --- END CHANGE ---
+            return packed_data
+        except Exception as e:
+            print(f"OLEDDisplayManager Error: Rendering text '{text_to_render}': {e}")
+            # import traceback # Uncomment for full traceback during debugging
+            # traceback.print_exc()
+            return None
+
+    def _update_display(self, text_to_show: str | None):
+        self.current_display_text = text_to_show
+        bitmap = self._render_text_to_bitmap(text_to_show)
+        if bitmap:
+            self.request_send_bitmap_to_fire.emit(bitmap)
+        # else: # Optional: send blank if render failed
+            # self.clear_display_content() # Or some error message bitmap
+
+    def _needs_scrolling(self, text: str | None) -> bool:
+        if not OLED_RENDERER_AVAILABLE: return False # Guard clause
+        if not text: 
+            self.text_width_pixels = 0
+            return False
+        try:
+            # from oled_utils import oled_renderer # Already imported or handled
+            
+            # --- CHANGE FUNCTION CALL ---
+            # self.font attribute is removed, oled_renderer uses its internal font
+            self.text_width_pixels = oled_renderer.get_text_actual_width(text) 
+            # --- END CHANGE ---
+            return self.text_width_pixels > self.oled_width
+        except Exception as e:
+            print(f"OLEDDisplayManager Error: Calculating text width for '{text}': {e}")
+            self.text_width_pixels = len(text) * 6 
+            return self.text_width_pixels > self.oled_width
+
+    def _start_scrolling_if_needed(self, text: str):
+        self.stop_scrolling() 
+        if self._needs_scrolling(text): # This correctly sets self.text_width_pixels
+            self.is_scrolling_active = True
+            # --- CHANGE: Initial offset for text to start off-screen right ---
+            # The 'offset_x' in render_text_to_packed_buffer is how much the text's
+            # natural starting point (0 for left-aligned) is shifted *left* of the screen edge.
+            # So, to start text off-screen right, its drawing start point should be OLED_WIDTH.
+            # If render_text_to_packed_buffer draws at (-offset_x + centering_adjust),
+            # we want -offset_x to be OLED_WIDTH. So, offset_x should be -OLED_WIDTH.
+            self.current_scroll_offset = -self.oled_width 
+            print(f"DEBUG OLED: _start_scrolling_if_needed - Text: '{text}', Initial offset: {self.current_scroll_offset}, TextWidth: {self.text_width_pixels}")
+            # --- END CHANGE ---
+            self._update_display(text) # Initial render (text will be off-screen left due to renderer logic for offset_x)
+            self.scroll_timer.start(self.DEFAULT_SCROLL_DELAY_MS)
+            # print(f"OLED Mgr: Started scrolling '{text}' from offset {self.current_scroll_offset}")
+        else:
+            self.is_scrolling_active = False
+            self._update_display(text) # Render static centered text
+
+    def _scroll_text_step(self):
+        if not self.is_scrolling_active or self.current_display_text is None:
+            self.stop_scrolling()
             return
 
-        self.normal_display_text = effective_normal_text
+        # --- CHANGE: To scroll text left, the effective drawing position moves left. ---
+        # If render_text_to_packed_buffer draws at (-offset_x + centering_adjust),
+        # to move text left, -offset_x must decrease. So, offset_x must INCREASE.
+        self.current_scroll_offset += 2 # Increase offset_x
+        # --- END CHANGE ---
         
-        # If there's no persistent override, this new normal text should be displayed.
-        if self._persistent_override_text is None:
-            self._trigger_render_with_current_state(scroll_if_needed)
+        if self.text_width_pixels == 0: # Safety if text changed and width wasn't updated
+            if not self._needs_scrolling(self.current_display_text): # Also updates text_width_pixels
+                self.stop_scrolling() # Text no longer needs scrolling
+                self._update_display(self.current_display_text) # Display it statically
+                return
+        
+        # Loop condition: when the text has completely passed the left edge.
+        # The text starts effectively at -self.current_scroll_offset.
+        # It is off-screen left when -self.current_scroll_offset + self.text_width_pixels < 0
+        # which means text_width_pixels < self.current_scroll_offset
+        if self.text_width_pixels > 0 and self.current_scroll_offset > self.text_width_pixels:
+            # print(f"OLED Mgr: Text '{self.current_display_text}' scrolled off. Resetting.")
+            # Reset to start off-screen right again
+            self.current_scroll_offset = -self.oled_width 
+            self.scroll_timer.setInterval(self.DEFAULT_SCROLL_RESTART_DELAY_MS) 
+        else:
+            self.scroll_timer.setInterval(self.DEFAULT_SCROLL_DELAY_MS)
+        
+        self._update_display(self.current_display_text)
+
+
+
+    def stop_scrolling(self):
+        self.scroll_timer.stop()
+        self.is_scrolling_active = False
+        # Do not reset current_scroll_offset here if we want temporary static text to not jump
+        # self.text_width_pixels = 0 # Keep text_width_pixels if current_display_text is still valid
+
+    def set_display_text(self, text: str | None, scroll_if_needed: bool = True, temporary_duration_ms: int = 0):
+        # print(f"OLED Mgr: set_display_text('{text}') called. Knob feedback active: {self.is_knob_feedback_active}")
+        
+        # If this call is to revert from knob feedback, and the text matches normal_display_text
+        if self.is_knob_feedback_active and text == self.normal_display_text:
+            self.is_knob_feedback_active = False
+            # Proceed to display self.normal_display_text (or persistent if active)
+        elif self.is_knob_feedback_active: # Any other call to set_display_text cancels knob feedback mode
+            self.is_knob_feedback_active = False
+        
+        self.stop_scrolling() # Always stop current scroll before setting new text
+        self.normal_display_text = text # This new text is now the "normal" one
+
+        text_to_actually_show = self.persistent_override_text if self.persistent_override_text is not None else self.normal_display_text
+        
+        if text_to_actually_show is None or text_to_actually_show.strip() == "":
+             text_to_actually_show = " " # Ensure display clears if effectively empty
+
+        if scroll_if_needed:
+            self._start_scrolling_if_needed(text_to_actually_show)
+        else:
+            self._update_display(text_to_actually_show) # Render static
+
+        if temporary_duration_ms > 0:
+            # Make sure a QTimer isn't already running for this purpose or manage it
+            # For simplicity, a new singleShot is fine; it will just call _revert later.
+            QTimer.singleShot(temporary_duration_ms, self._revert_from_temporary_text)
+
+    def _revert_from_temporary_text(self):
+        # print("OLED Mgr: _revert_from_temporary_text called.")
+        # This is ONLY for temporary messages set via set_display_text(..., temporary_duration_ms > 0)
+        # It should revert to the established normal_display_text or persistent_override_text.
+        self.is_knob_feedback_active = False # Ensure this is off
+        
+        text_to_show_after_temp = self.persistent_override_text if self.persistent_override_text is not None else self.normal_display_text
+        
+        if text_to_show_after_temp is None or text_to_show_after_temp.strip() == "":
+            text_to_show_after_temp = " "
+            
+        self.stop_scrolling() # Stop current scroll (which was the temporary text)
+        if self._needs_scrolling(text_to_show_after_temp):
+            self._start_scrolling_if_needed(text_to_show_after_temp)
+        else:
+            self._update_display(text_to_show_after_temp)
 
     def set_persistent_override(self, text: str | None, scroll_if_needed: bool = True):
-        """
-        Sets a persistent message that overrides the normal display text.
-        Pass None to clear the override.
-        """
-        if self._is_playing_startup_animation: return
+        # print(f"OLED Mgr: set_persistent_override('{text}') called.")
+        self.is_knob_feedback_active = False # Persistent override takes precedence
+        self.stop_scrolling()
+        self.persistent_override_text = text
 
-        if text is None or not text.strip():
-            self.clear_persistent_override() # Handles clearing and reverting
-            return
-
-        self._persistent_override_text = text
-        # print(f"OLEDMan TRACE: Persistent override SET to: '{text}'") # Optional
-        self._trigger_render_with_current_state(scroll_if_needed)
+        text_to_show = self.persistent_override_text
+        if text_to_show is None: # Clearing persistent override
+            text_to_show = self.normal_display_text if self.normal_display_text is not None else " "
+        
+        if scroll_if_needed: self._start_scrolling_if_needed(text_to_show)
+        else: self._update_display(text_to_show)
 
     def clear_persistent_override(self):
-        """Clears any persistent override message and reverts to normal display text."""
-        if self._persistent_override_text is None and not self._is_playing_startup_animation: # No override to clear
-             # Ensure normal text is still rendered if it was the active one
-             self._trigger_render_with_current_state(True) # Assume normal text might need scroll
-             return
+        self.set_persistent_override(None, scroll_if_needed=True)
 
-        # print("OLEDMan TRACE: Persistent override CLEARED.") # Optional
-        self._persistent_override_text = None
-        self._is_playing_startup_animation = False # Ensure this is false if we are clearing override
-        self._trigger_render_with_current_state(True) # Re-render with normal text, allow scroll
+    # --- METHODS FOR KNOB FEEDBACK ---
+    def show_temporary_knob_value(self, text: str):
+        # print(f"OLED Mgr: show_temporary_knob_value with '{text}'")
+        if self.is_startup_animation_playing: return # Don't interfere with startup animation
 
-    def _trigger_render_with_current_state(self, scroll_if_needed: bool = True):
+        self.is_knob_feedback_active = True 
+        self.stop_scrolling() 
+        self._update_display(text) 
+
+    def get_current_intended_display_text(self) -> str | None:
+        """Returns what should be displayed if knob feedback or startup animation wasn't active."""
+        if self.is_startup_animation_playing:
+            return None # Or a placeholder like "Starting..." if needed
+        if self.persistent_override_text is not None:
+            return self.persistent_override_text
+        return self.normal_display_text
+
+    def revert_after_knob_feedback(self):
         """
-        Internal method to determine what text to show (override or normal)
-        and then set up scrolling and initiate rendering.
+        Called by MainWindow's timer to restore display after knob feedback.
+        It retrieves what *should* be displayed and re-applies it.
         """
-        self._stop_scrolling_timer()
+        # print("OLED Mgr: revert_after_knob_feedback called.")
+        if self.is_startup_animation_playing: return # Don't revert if startup is still going
 
-        text_to_display = ""
-        is_this_text_override = False
+        self.is_knob_feedback_active = False
+        text_to_restore = self.get_current_intended_display_text()
+        
+        if text_to_restore is None or text_to_restore.strip() == "":
+            text_to_restore = " " # Default to blank if nothing else intended
 
-        if self._persistent_override_text is not None:
-            text_to_display = self._persistent_override_text
-            is_this_text_override = True
+        # print(f"OLED Mgr: Reverting to: '{text_to_restore}'")
+        
+        self.stop_scrolling() # Stop current (knob feedback) display
+        # Now, set the display text, allowing it to scroll if needed.
+        # This will correctly use persistent_override_text if it's set, or normal_display_text.
+        if self.persistent_override_text is not None and text_to_restore == self.persistent_override_text:
+            self.set_persistent_override(text_to_restore, scroll_if_needed=True)
         else:
-            text_to_display = self.normal_display_text
-        
-        if not text_to_display.strip(): # Should not happen if defaults are set
-            text_to_display = " " 
-        
-        # Prevent re-render of exact same static text or restarting identical scroll
-        if self._active_rendered_text_content == text_to_display and \
-           self._is_scrolling == (scroll_if_needed and self.get_text_width_func(text_to_display) > OLED_WIDTH_PIXELS):
-            # print(f"OLEDMan TRACE: _trigger_render - text '{text_to_display}' already active with same scroll state.") # Optional
-            # Still need to ensure timer is running if it's supposed to be scrolling
-            if self._is_scrolling and not self.scroll_timer.isActive():
-                self.scroll_timer.start(SCROLL_TIMER_INTERVAL_MS)
+            self.set_display_text(text_to_restore, scroll_if_needed=True)
+
+    # --- END METHODS FOR KNOB FEEDBACK ---
+
+    def play_startup_animation(self, frames_data: list[bytearray], frame_duration_ms: int):
+        if not frames_data: 
+            self.startup_animation_finished.emit()
+            return
+        if self.is_startup_animation_playing: return # Already playing
+
+        print("OLED Mgr: play_startup_animation called.")
+        self.is_startup_animation_playing = True
+        self.is_knob_feedback_active = False # Startup anim overrides knob feedback
+        self.stop_scrolling()
+
+        self._animation_frames = frames_data
+        self._current_animation_frame_index = 0
+        self._animation_frame_duration = frame_duration_ms
+        QTimer.singleShot(0, self._play_next_startup_frame)
+
+    def _play_next_startup_frame(self):
+        if not self.is_startup_animation_playing or \
+           self._current_animation_frame_index >= len(self._animation_frames):
+            # print("OLED Mgr: Startup animation finished or stopped.")
+            self.is_startup_animation_playing = False
+            self._animation_frames.clear() # Clear frames
+            self.startup_animation_finished.emit()
+            # After animation, restore intended display
+            # self.revert_after_knob_feedback() # This will pick up normal/persistent text
+            # More direct:
+            text_to_show_after_anim = self.get_current_intended_display_text()
+            self.set_display_text(text_to_show_after_anim, scroll_if_needed=True)
             return
 
-        self._active_rendered_text_content = text_to_display
-        self.current_text_pixel_width = self.get_text_width_func(text_to_display)
-
-        if scroll_if_needed and self.current_text_pixel_width > OLED_WIDTH_PIXELS:
-            self._is_scrolling = True
-            # If it's a new text or override, reset scroll. If it's the same text that just
-            # stopped being overridden, its scroll position might need to be preserved (more complex).
-            # For now, always reset scroll when text content source changes.
-            self.current_scroll_offset_x = 0 
-            if not self.scroll_timer.isActive():
-                self.scroll_timer.start(SCROLL_TIMER_INTERVAL_MS)
-        else:
-            self._is_scrolling = False
-            self.current_scroll_offset_x = 0
-        
-        self._render_actual_text(text_to_display, self.current_scroll_offset_x)
-
-
-    def _stop_scrolling_timer(self):
-        if self.scroll_timer.isActive():
-            self.scroll_timer.stop()
-
-    def _update_scroll_and_render(self):
-        """Called by the scroll_timer for continuous scrolling."""
-        if self._is_playing_startup_animation: self._stop_scrolling_timer(); return
-        
-        text_to_scroll = self._persistent_override_text if self._persistent_override_text is not None else self.normal_display_text
-        
-        if not self._is_scrolling or not text_to_scroll.strip():
-            self._stop_scrolling_timer()
-            return
-
-        self.current_scroll_offset_x += SCROLL_PIXELS_PER_UPDATE 
-        
-        # Use self.current_text_pixel_width which was set based on the text_to_scroll
-        if self.current_scroll_offset_x > self.current_text_pixel_width :
-             self.current_scroll_offset_x = -OLED_WIDTH_PIXELS + \
-                (self.current_scroll_offset_x - self.current_text_pixel_width) % SCROLL_PIXELS_PER_UPDATE
-        
-        self._render_actual_text(text_to_scroll, self.current_scroll_offset_x)
-        
-    def _render_actual_text(self, text_content: str, scroll_offset: int):
-        """Shared rendering call used by scrolling and static display updates."""
-        if self._is_playing_startup_animation: return
-        try:
-            packed_bitmap = oled_renderer.get_bitmap_for_text(
-                text_content, 
-                scroll_offset_x=scroll_offset, 
-                target_line_idx=0 
-            )
-            self.request_send_bitmap_to_fire.emit(packed_bitmap)
-        except Exception as e:
-            print(f"OLEDMan ERROR: Error in _render_actual_text: {e}")
-
-    def clear_display_content(self): 
-        if self._is_playing_startup_animation: return
-        # print("OLEDMan TRACE: clear_display_content called - clearing all text states and OLED.") # Optional
-        self._stop_scrolling_timer()
-        self._persistent_override_text = None # Clear override
-        self.normal_display_text = ""      # Clear normal text
-        self._active_rendered_text_content = "" 
-        self._is_scrolling = False
-        self.is_displaying_default_normal_text = False 
-        try:
-            self.request_send_bitmap_to_fire.emit(oled_renderer.get_blank_packed_bitmap())
-        except Exception as e:
-            print(f"OLEDMan ERROR: Error sending blank bitmap on clear_display_content: {e}")
+        frame_bitmap = self._animation_frames[self._current_animation_frame_index]
+        if frame_bitmap:
+            self.request_send_bitmap_to_fire.emit(frame_bitmap)
+        self._current_animation_frame_index += 1
+        QTimer.singleShot(self._animation_frame_duration, self._play_next_startup_frame)
 
     def set_default_scrolling_text_after_startup(self, text: str):
-        self.default_scrolling_text = text if text and text.strip() else "READY"
-        # print(f"OLEDMan INFO: Default text set to: '{self.default_scrolling_text}'") # Optional
-        if not self._persistent_override_text: # Only apply if no override is active
-            # print("OLEDMan INFO: Applying new default text to display immediately (no override).") # Optional
-            self.set_display_text(self.default_scrolling_text, scroll_if_needed=True)
+        if not self.is_startup_animation_playing: # Only if startup is not active
+             # This becomes the new normal text
+            self.set_display_text(text, scroll_if_needed=True)
+        # else: print("OLED Mgr: Startup anim playing, default text deferred.") # Optional
 
-    # --- Startup Animation Methods ---
-    def play_startup_animation(self, frames_data: list, frame_duration_ms: int = 80):
-        if self._is_playing_startup_animation: return 
-        if not frames_data: self.startup_animation_finished.emit(); return
-
-        self._stop_scrolling_timer() 
-        self.clear_persistent_override() # Ensure no override during startup animation
-        self.normal_display_text = ""    # Clear normal text during startup
-        self._active_rendered_text_content = "" # Clear what was last rendered
-
-        self._is_playing_startup_animation = True
-        self._startup_frames_list = frames_data
-        self._current_startup_frame_idx = 0
-        
-        self._startup_animation_timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self._startup_animation_timer.start(frame_duration_ms)
-        self._update_startup_animation_frame()
-
-    def _update_startup_animation_frame(self):
-        if not self._is_playing_startup_animation or \
-           self._current_startup_frame_idx >= len(self._startup_frames_list):
-            if self._startup_animation_timer.isActive(): self._startup_animation_timer.stop()
-            self._is_playing_startup_animation = False 
-            self.startup_animation_finished.emit() 
-            return
-
-        packed_bitmap_frame = self._startup_frames_list[self._current_startup_frame_idx]
-        if isinstance(packed_bitmap_frame, bytearray):
-            self.request_send_bitmap_to_fire.emit(packed_bitmap_frame)
-        else:
-            self.request_send_bitmap_to_fire.emit(oled_renderer.get_blank_packed_bitmap())
-        self._current_startup_frame_idx += 1
+    def clear_display_content(self):
+        # print("OLED Mgr: clear_display_content called.")
+        self.stop_all_activity() # Stops animation and scrolling
+        self.normal_display_text = " "      # Set normal to blank
+        self.persistent_override_text = None # Clear persistent
+        self.is_knob_feedback_active = False
+        self._update_display(" ")           # Send blank space to OLED
 
     def stop_all_activity(self):
-        self._stop_scrolling_timer()
-        if self._startup_animation_timer.isActive():
-            self._startup_animation_timer.stop()
-        self._is_playing_startup_animation = False
-        # No temporary message timer to stop in this version.
+        # print("OLED Mgr: stop_all_activity called.")
+        self.is_startup_animation_playing = False # Stops animation loop
+        self._animation_frames.clear()
+        self.stop_scrolling() # Stops text scrolling timer
