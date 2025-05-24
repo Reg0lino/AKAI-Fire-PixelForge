@@ -213,7 +213,8 @@ class MainWindow(QMainWindow):
         self._oled_knob_feedback_timer.setSingleShot(True)
         self._oled_knob_feedback_timer.timeout.connect(self._revert_oled_after_knob_feedback)
         self._KNOB_FEEDBACK_OLED_DURATION_MS = 1500 
-        
+        self._stop_action_issued_for_oled: bool = False
+
         self._update_current_oled_nav_target_widget()
         self._connect_signals()  # pad_grid_frame and layouts are now guaranteed to exist
         self._create_edit_actions()
@@ -946,7 +947,13 @@ class MainWindow(QMainWindow):
             self.screen_sampler_manager.sampler_monitor_changed.connect(self._on_sampler_monitor_cycled_for_oled)
         else:
             print("MW TRACE WARNING: self.screen_sampler_manager is None during _connect_signals.")
-            
+
+        try:
+            self.animator_manager.animator_playback_active_status_changed.disconnect(self._on_animator_playback_status_for_oled)
+        except TypeError: pass
+        self.animator_manager.animator_playback_active_status_changed.connect(self._on_animator_playback_status_for_oled)
+        print("MW TRACE: Connected animator_playback_active_status_changed for OLED feedback.")
+
         # AnimatorManagerWidget Signals
         if self.animator_manager:
             self.animator_manager.active_frame_data_for_display.connect(self._on_animator_frame_data_for_display)
@@ -1461,18 +1468,55 @@ class MainWindow(QMainWindow):
             # if self.status_bar:
             #     self.status_bar.showMessage(f"Invalid color selected.", 2000)
 
+    def _on_animator_playback_status_for_oled(self, is_playing: bool):
+        if not self.oled_display_manager:
+            return
 
-    def _on_animator_playback_activity_changed(self, is_animator_playing: bool):
-        """Called by AnimatorManagerWidget when its playback state (playing/paused/stopped) changes."""
-        self._update_global_ui_interaction_states() # Refresh UI enabled states
-        # Note: Fire's Play/Stop LEDs are updated by _update_fire_transport_leds
-        # which is directly connected to animator_playback_active_status_changed.
+        oled_message = None
+        # Use a short duration for these messages, e.g., 1 second
+        message_duration_ms = 1000 
 
-        if is_animator_playing: # If animator starts playing, ensure sampler is off
-            if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
-                self.screen_sampler_manager.stop_sampling_thread()
-                self.status_bar.showMessage("Screen sampler stopped due to animation playback.", 2000)
+        if is_playing:
+            oled_message = "▶ PLAY" # Or just "Play"
+        else:
+            # If is_playing is False, it could be a pause or a stop.
+            # The _stop_action_issued_for_oled flag helps distinguish.
+            if self._stop_action_issued_for_oled:
+                # This case will be handled by action_animator_stop directly setting "Stopped"
+                # So, if we reach here and stop_action_issued is true, it means the stop message
+                # was already (or is about to be) displayed. We can simply reset the flag.
+                self._stop_action_issued_for_oled = False 
+                return # Avoid double-messaging "Paused" then "Stopped"
+            else:
+                oled_message = "❚❚ PAUSE" # Or just "Paused"
+        
+        if oled_message:
+            # Temporarily store current intended text, show message, then schedule revert
+            # We can use the same timer mechanism as knob feedback, or simpler set_display_text with duration
+            
+            # Option 1: Using existing knob feedback helper (if you want consistent revert timing)
+            # self._show_knob_feedback_on_oled(oled_message) # Reuses the 1.5s timer
 
+            # Option 2: Using OLEDDisplayManager's temporary message feature (simpler for one-offs)
+            # Ensure OLEDDisplayManager.set_display_text correctly handles reverting after temporary_duration_ms
+            # and doesn't mess up persistent overrides if they were active.
+            # The current OLEDDisplayManager set_display_text handles reverting to normal_display_text
+            # or persistent_override_text correctly.
+            
+            current_intended_text = self.oled_display_manager.get_current_intended_display_text()
+            self.oled_display_manager.set_display_text(oled_message, 
+                                                       scroll_if_needed=False, # Short messages don't need scroll
+                                                       temporary_duration_ms=message_duration_ms)
+            # The _revert_from_temporary_text in OLEDDisplayManager will be called,
+            # which should restore current_intended_text (or what normal_display_text became).
+
+            # If we want to be absolutely sure it reverts to the exact text that was there:
+            # (This is more like the knob feedback mechanism)
+            # if not self._oled_knob_feedback_timer.isActive(): # Check if already showing knob value
+            #     self._oled_previous_intended_text_for_revert = self.oled_display_manager.get_current_intended_display_text()
+            # self.oled_display_manager.show_temporary_knob_value(oled_message) # Re-use this method
+            # self._oled_knob_feedback_timer.start(message_duration_ms) # Use desired duration
+    
     def _update_oled_mirror(self, packed_bitmap_data_7bit: bytearray):
         """
         Updates the on-screen OLED mirror widget with the content being sent

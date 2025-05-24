@@ -218,22 +218,25 @@ class OLEDDisplayManager(QObject):
         # self.text_width_pixels = 0 # Keep text_width_pixels if current_display_text is still valid
 
     def set_display_text(self, text: str | None, scroll_if_needed: bool = True, temporary_duration_ms: int = 0):
-        # print(f"OLED Mgr: set_display_text('{text}') called. Knob feedback active: {self.is_knob_feedback_active}")
+        # ... (handle is_knob_feedback_active as before) ...
         
-        # If this call is to revert from knob feedback, and the text matches normal_display_text
-        if self.is_knob_feedback_active and text == self.normal_display_text:
-            self.is_knob_feedback_active = False
-            # Proceed to display self.normal_display_text (or persistent if active)
-        elif self.is_knob_feedback_active: # Any other call to set_display_text cancels knob feedback mode
-            self.is_knob_feedback_active = False
-        
-        self.stop_scrolling() # Always stop current scroll before setting new text
-        self.normal_display_text = text # This new text is now the "normal" one
-
+        self.normal_display_text = text 
         text_to_actually_show = self.persistent_override_text if self.persistent_override_text is not None else self.normal_display_text
         
         if text_to_actually_show is None or text_to_actually_show.strip() == "":
-             text_to_actually_show = " " # Ensure display clears if effectively empty
+             text_to_actually_show = " "
+
+        # --- ADD CHECK TO PREVENT REDUNDANT SCROLL START ---
+        if self.current_display_text == text_to_actually_show and \
+           ((self.is_scrolling_active and self._needs_scrolling(text_to_actually_show)) or \
+            (not self.is_scrolling_active and not self._needs_scrolling(text_to_actually_show))):
+            # print(f"OLED Mgr: set_display_text - Text '{text_to_actually_show}' is already active with correct scroll state. No change.")
+            if temporary_duration_ms > 0: # Still honor temporary duration for existing display
+                QTimer.singleShot(temporary_duration_ms, self._revert_from_temporary_text)
+            return 
+        # --- END ADD CHECK ---
+
+        self.stop_scrolling() # Now, only stop if we are actually changing text/scroll state
 
         if scroll_if_needed:
             self._start_scrolling_if_needed(text_to_actually_show)
@@ -241,10 +244,28 @@ class OLEDDisplayManager(QObject):
             self._update_display(text_to_actually_show) # Render static
 
         if temporary_duration_ms > 0:
-            # Make sure a QTimer isn't already running for this purpose or manage it
-            # For simplicity, a new singleShot is fine; it will just call _revert later.
             QTimer.singleShot(temporary_duration_ms, self._revert_from_temporary_text)
 
+    def set_persistent_override(self, text: str | None, scroll_if_needed: bool = True):
+        # ... (handle is_knob_feedback_active as before) ...
+        self.persistent_override_text = text
+        text_to_show = self.persistent_override_text
+        if text_to_show is None: 
+            text_to_show = self.normal_display_text if self.normal_display_text is not None else " "
+        
+        # --- ADD CHECK TO PREVENT REDUNDANT SCROLL START ---
+        if self.current_display_text == text_to_show and \
+           ((self.is_scrolling_active and self._needs_scrolling(text_to_show)) or \
+            (not self.is_scrolling_active and not self._needs_scrolling(text_to_show))):
+            # print(f"OLED Mgr: set_persistent_override - Text '{text_to_show}' is already active with correct scroll state. No change.")
+            return
+        # --- END ADD CHECK ---
+
+        self.stop_scrolling() # Now, only stop if we are actually changing text/scroll state
+
+        if scroll_if_needed: self._start_scrolling_if_needed(text_to_show)
+        else: self._update_display(text_to_show)
+        
     def _revert_from_temporary_text(self):
         # print("OLED Mgr: _revert_from_temporary_text called.")
         # This is ONLY for temporary messages set via set_display_text(..., temporary_duration_ms > 0)

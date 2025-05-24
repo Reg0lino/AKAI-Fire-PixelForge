@@ -18,6 +18,10 @@ A_BIT_MUTATE = [
 
 _FONT_OBJECT: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None # Type hint
 CUSTOM_FONT_FILENAME = "TomThumb.ttf" 
+_PRIMARY_FONT_OBJECT = None # This would be your TomThumb
+_SECONDARY_TEXT_FONT_OBJECT = None # For ASCII art
+DEFAULT_SECONDARY_FONT_SIZE_PX = 10 # Or whatever looks good
+
 
 # --- ADJUSTED FONT SIZING ---
 # If TomThumb.ttf is a pixel font designed for a specific height (e.g., to fill OLED height with one char):
@@ -25,7 +29,17 @@ CUSTOM_FONT_TARGET_HEIGHT_PX = 50 # Example: if TomThumb is designed to be ~50px
 # For general purpose text, a smaller size is better for readability of multiple characters
 DEFAULT_TEXT_FONT_SIZE_PX = 12 # For system fallback or general use text
 # --- END ADJUSTED FONT SIZING ---
-
+try:
+    # Try common system monospaced fonts
+    font_name_fallbacks = ["Consolas", "Menlo", "DejaVu Sans Mono", "Liberation Mono"]
+    # ... (logic to find and load one of these into _SECONDARY_TEXT_FONT_OBJECT
+    #      at DEFAULT_SECONDARY_FONT_SIZE_PX) ...
+    if not _SECONDARY_TEXT_FONT_OBJECT:
+         _SECONDARY_TEXT_FONT_OBJECT = ImageFont.load_default() # Ultimate fallback
+except Exception as e:
+    print(f"WARNING (oled_renderer): Could not load secondary text font: {e}")
+    _SECONDARY_TEXT_FONT_OBJECT = ImageFont.load_default()
+    
 try:
     # Ensure utils.get_resource_path is available
     # This assumes oled_renderer.py is in oled_utils, and utils.py is at the project root.
@@ -73,6 +87,22 @@ except (ImportError, IOError, OSError) as e: # Added OSError for broader font lo
         print(f"CRITICAL (oled_renderer): Error loading system fallback font ({e_fallback}). Using Pillow load_default().")
 
 # --- PUBLIC API for OLED Rendering ---
+
+
+
+def show_temporary_knob_value(self, text: str, use_status_font: bool = False):
+    if self.is_startup_animation_playing: return
+    self.is_knob_feedback_active = True 
+    self.stop_scrolling()
+    
+    font_to_use = self.ascii_status_font if use_status_font else self.primary_font # Or just self.font if it's unified
+    
+    # Call _render_text_to_bitmap, passing the chosen font
+    # This means _render_text_to_bitmap needs to accept a font_override
+    bitmap = self._render_text_to_bitmap(text, font_override=font_to_use)
+    if bitmap:
+        self.request_send_bitmap_to_fire.emit(bitmap)
+
 
 def get_text_actual_width(text: str, font_to_use: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None) -> int:
     """Calculates the pixel width of a given text string using the specified font."""
