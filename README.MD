@@ -162,6 +162,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 *   The developers of PyQt, Pillow, python-rtmidi, mido, mss, and appdirs.
 *   The Akai Pro team for creating the Fire controller.
+*   The SEGGER Blog that informed the initial steps to understanding how to fire these animations and particularly the OLED customization!
 *   AI Assistants (Gemini models from Google) for extensive assistance with coding, debugging, refactoring, and planning throughout all stages of this project.
 
 ---
