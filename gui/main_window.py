@@ -114,6 +114,8 @@ class MainWindow(QMainWindow):
     SAMPLER_HUE_KNOB_STEP = 2    # For -180 to 180 range, 2 degrees per physical tick
     GLOBAL_BRIGHTNESS_KNOB_STEP = 1 # For 0-100 range (global brightness), 1% per physical tick
 
+    ANIMATOR_SPEED_KNOB_STEP = 1 # 1 FPS per physical tick, adjust as desired
+
     def __init__(self):
         super().__init__()
         # WINDOW TITLE: Updated to reflect the new name
@@ -180,6 +182,8 @@ class MainWindow(QMainWindow):
         self.button_shift: QPushButton|None=None; self.button_alt: QPushButton|None=None
         self.transport_buttons: dict[str, QPushButton] = {}
         self.utility_buttons_bottom: dict[str, QPushButton] = {}
+
+        self.is_animator_playing: bool = False
 
         # References for right panel UI elements
         self.port_combo_direct_ref: QComboBox | None = None
@@ -575,9 +579,6 @@ class MainWindow(QMainWindow):
         # print("\nMW TRACE: _init_ui_layout - --- Processing Left Panel Structure ---") # Optional
         self.left_panel_widget = QWidget()
         self.left_panel_widget.setObjectName("LeftPanelWidget") # Generic name now
-        # --- CHANGE 2a: Remove test border stylesheet ---
-        # self.left_panel_widget.setStyleSheet("QWidget#LeftPanelWidget_Test { border: 2px solid blue; }") 
-        # --- END CHANGE 2a ---
         # print(f"MW TRACE: _init_ui_layout - self.left_panel_widget created: {self.left_panel_widget}") # Optional
 
         # print("MW TRACE: _init_ui_layout - Creating self.left_panel_layout = QVBoxLayout()") # Optional
@@ -588,12 +589,6 @@ class MainWindow(QMainWindow):
         self.left_panel_layout.setSpacing(8)
         # print(f"MW TRACE: _init_ui_layout - left_panel_layout configured and set on left_panel_widget.") # Optional
 
-        # --- CHANGE 3a: Remove test label from left panel ---
-        # left_test_label = QLabel("--- LEFT PANEL AREA ---")
-        # left_test_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.left_panel_layout.addWidget(left_test_label)
-        # print(f"MW TRACE: _init_ui_layout - Removed test_label from left_panel_layout.") # Optional
-        # --- END CHANGE 3a ---
         
         if self.main_app_layout is not None:
             self.main_app_layout.addWidget(self.left_panel_widget, 2) # Stretch factor 2
@@ -606,9 +601,6 @@ class MainWindow(QMainWindow):
         # print("\nMW TRACE: _init_ui_layout - --- Processing Right Panel Structure ---") # Optional
         self.right_panel_widget = QWidget()
         self.right_panel_widget.setObjectName("RightPanelWidget") # Generic name now
-        # --- CHANGE 2b: Remove test border stylesheet ---
-        # self.right_panel_widget.setStyleSheet("QWidget#RightPanelWidget_Test { border: 2px solid green; }")
-        # --- END CHANGE 2b ---
         # print(f"MW TRACE: _init_ui_layout - self.right_panel_widget created: {self.right_panel_widget}") # Optional
 
         # print("MW TRACE: _init_ui_layout - Creating self.right_panel_layout_v = QVBoxLayout()") # Optional
@@ -621,12 +613,6 @@ class MainWindow(QMainWindow):
         self.right_panel_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         # print(f"MW TRACE: _init_ui_layout - right_panel_layout_v configured and set on right_panel_widget.") # Optional
 
-        # --- CHANGE 3b: Remove test label from right panel ---
-        # right_test_label = QLabel("--- RIGHT PANEL AREA ---")
-        # right_test_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.right_panel_layout_v.addWidget(right_test_label)
-        # print(f"MW TRACE: _init_ui_layout - Removed test_label from right_panel_layout_v.") # Optional
-        # --- END CHANGE 3b ---
 
         if self.main_app_layout is not None:
             self.main_app_layout.addWidget(self.right_panel_widget, 1) # Stretch factor 1
@@ -639,8 +625,7 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready. Please connect to AKAI Fire.") # Restore original status message
-        # print(f"MW TRACE: _init_ui_layout - Status bar set.") # Optional
-        # print("MW TRACE: _init_ui_layout - CLEANUP VERSION FINISHED")
+        print(f"MW TRACE: _init_ui_layout - Status bar set.") # Optional
 
     def _update_oled_and_title_on_sequence_change(self, is_modified: bool, sequence_name: str | None):
         """
@@ -964,6 +949,7 @@ class MainWindow(QMainWindow):
             self.animator_manager.clipboard_state_changed.connect(self._on_animator_clipboard_state_changed)
             self.animator_manager.request_sampler_disable.connect(self._handle_request_sampler_disable)
             self.animator_manager.request_load_sequence_with_prompt.connect(self._handle_animator_request_load_prompt)
+            self.animator_manager.animator_playback_active_status_changed.connect(self._on_animator_playback_status_changed_for_knobs)
         else:
             print("MW TRACE WARNING: self.animator_manager is None during _connect_signals.")
 
@@ -1025,7 +1011,7 @@ class MainWindow(QMainWindow):
                     self.oled_display_manager.request_send_bitmap_to_fire.connect(self.akai_controller.oled_send_full_bitmap)
                 except Exception as e: print(f"MW ERROR: Connect OLED to AkaiCtrl: {e}")
                 
-            # --- NEW Connection to GUI OLED Mirror ---
+            # --- Connection to GUI OLED Mirror ---
             if self.oled_display_mirror_widget: # Check if mirror widget exists
                 try:
                     self.oled_display_manager.request_send_bitmap_to_fire.disconnect(self._update_oled_mirror)
@@ -1034,7 +1020,6 @@ class MainWindow(QMainWindow):
                     self.oled_display_manager.request_send_bitmap_to_fire.connect(self._update_oled_mirror)
                     # print("MW TRACE: Connected OLEDManager signal to GUI mirror.") # Optional
                 except Exception as e_mirror: print(f"MW ERROR: Connect OLED to GUI mirror: {e_mirror}")
-            # --- END NEW Connection ---
         elif not self.oled_display_manager:
             print("MW TRACE WARNING: self.oled_display_manager is None during OLED signal connection attempt.")
         elif not self.akai_controller:
@@ -1043,66 +1028,71 @@ class MainWindow(QMainWindow):
     def _on_physical_encoder_rotated(self, encoder_id: int, delta: int):
         """
         Handles rotation from any of the physical encoders 1-4.
-        Dispatches to global brightness or sampler adjustment logic.
+        Dispatches to global brightness, sampler adjustment, or animator speed logic.
         """
-        sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
+        # print(f"MW TRACE: _on_physical_encoder_rotated - Encoder ID: {encoder_id}, Delta: {delta}, AnimatorPlaying: {self.is_animator_playing}, SamplerActive: {self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False}") # Optional
 
         target_knob: QDial | None = None
-        step = 0
-        is_sampler_control = False
+        step: int = 0
+        handler_to_call = None # Stores the method to call after updating GUI knob
 
-        if sampler_is_active:
-            is_sampler_control = True
-            if encoder_id == 1: # Sampler Brightness
+        # Determine context and target knob/handler
+        if self.is_animator_playing:
+            if encoder_id == 4: # Knob 4 -> Animator Speed
+                target_knob = self.gui_knob4
+                step = self.ANIMATOR_SPEED_KNOB_STEP
+                handler_to_call = self._on_animator_speed_knob_changed
+        
+        elif self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            # Sampler is active, Animator is NOT playing
+            if encoder_id == 1: # Knob 1 -> Sampler Brightness
                 target_knob = self.gui_knob1
                 step = self.SAMPLER_FACTOR_KNOB_STEP
-            elif encoder_id == 2: # Sampler Saturation
+                handler_to_call = self._on_sampler_brightness_knob_changed
+            elif encoder_id == 2: # Knob 2 -> Sampler Saturation
                 target_knob = self.gui_knob2
                 step = self.SAMPLER_FACTOR_KNOB_STEP
-            elif encoder_id == 3: # Sampler Contrast
+                handler_to_call = self._on_sampler_saturation_knob_changed
+            elif encoder_id == 3: # Knob 3 -> Sampler Contrast
                 target_knob = self.gui_knob3
                 step = self.SAMPLER_FACTOR_KNOB_STEP
-            elif encoder_id == 4: # Sampler Hue Shift
+                handler_to_call = self._on_sampler_contrast_knob_changed
+            elif encoder_id == 4: # Knob 4 -> Sampler Hue Shift
                 target_knob = self.gui_knob4
                 step = self.SAMPLER_HUE_KNOB_STEP
-        else: # Sampler is OFF
-            if encoder_id == 1: # Global Pad Brightness
+                handler_to_call = self._on_sampler_hue_knob_changed
+        
+        else: # Global mode (Neither Animator playing nor Sampler active)
+            if encoder_id == 1: # Knob 1 -> Global Pad Brightness
                 target_knob = self.gui_knob1
                 step = self.GLOBAL_BRIGHTNESS_KNOB_STEP
-            # else: Knobs 2,3,4 are unassigned when sampler is off (for now)
+                handler_to_call = self._on_global_brightness_knob_changed
+            # Knobs 2, 3, 4 are unassigned in global mode for now
 
-        if target_knob and step != 0:
-            current_value = target_knob.value()
-            new_value = current_value + (delta * step)
-            new_value = max(target_knob.minimum(), min(new_value, target_knob.maximum()))
+        # If a target knob and action were determined
+        if target_knob and handler_to_call and step != 0:
+            current_gui_value = target_knob.value()
+            new_gui_value = current_gui_value + (delta * step)
+            
+            # Clamp to the target knob's current min/max range
+            # These ranges are set by _update_contextual_knob_configs
+            new_gui_value = max(target_knob.minimum(), min(new_gui_value, target_knob.maximum()))
 
-            if new_value != current_value:
-                # Temporarily block signals on the GUI knob while we set its value
-                # to prevent its own valueChanged signal from immediately firing the
-                # _on_sampler_X_knob_changed or _on_global_brightness_knob_changed,
-                # which might cause a re-entrant call or a double update.
+            if new_gui_value != current_gui_value:
+                # Block signals on the GUI knob, set its value, then unblock
                 target_knob.blockSignals(True)
-                target_knob.setValue(new_value)
+                target_knob.setValue(new_gui_value)
                 target_knob.blockSignals(False)
 
-                # Now, MANUALLY call the appropriate handler that updates the model/controller
-                # This avoids the signal loop and gives us direct control.
-                if is_sampler_control:
-                    if encoder_id == 1: self._on_sampler_brightness_knob_changed(new_value)
-                    elif encoder_id == 2: self._on_sampler_saturation_knob_changed(new_value)
-                    elif encoder_id == 3: self._on_sampler_contrast_knob_changed(new_value)
-                    elif encoder_id == 4: self._on_sampler_hue_knob_changed(new_value)
-                else: # Global mode
-                    if encoder_id == 1: self._on_global_brightness_knob_changed(new_value)
+                # Manually call the appropriate handler with the new GUI knob value
+                # This handler will then update the model (SamplerManager, AnimatorManager, or global_brightness)
+                # and also handle its own OLED feedback.
+                handler_to_call(new_gui_value) 
                 
-                # print(f"MW TRACE: Physical Enc {encoder_id}, Delta {delta} -> GUI Knob new value {new_value}")
+                # print(f"MW TRACE: Physical Enc {encoder_id} (delta {delta}) -> GUI Knob new value {new_gui_value} for handler {handler_to_call.__name__}") # Optional
+        # else: # Optional
+            # print(f"MW TRACE: No action for physical encoder {encoder_id} in current context.")
 
-    # _on_global_brightness_knob_changed, _on_sampler_brightness_knob_changed, etc.
-    # should now primarily focus on:
-    #   1. Converting their `knob_value` argument to the actual model/sampler parameter value.
-    #   2. Calling the appropriate method on AkaiFireController or ScreenSamplerManager.
-    #   3. Updating their own tooltip.
-    # They are called EITHER by their GUI knob's valueChanged signal OR by _on_physical_encoder_rotated.
 
     def _on_global_brightness_knob_changed(self, gui_knob_value: int):
         """
@@ -1117,7 +1107,6 @@ class MainWindow(QMainWindow):
         # --- OLED FEEDBACK ---
         oled_feedback_text = f"GlbBr: {gui_knob_value}%"
         self._show_knob_feedback_on_oled(oled_feedback_text)
-        # --- END OLED FEEDBACK ---
 
         if self.akai_controller:
             self.akai_controller.set_global_brightness_factor(self.global_pad_brightness)
@@ -1276,7 +1265,102 @@ class MainWindow(QMainWindow):
             # --- END CORRECTION ---
             self.gui_knob4.blockSignals(False)
 
+    def _update_contextual_knob_configs(self):
+        sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
+        # self.is_animator_playing is updated by the signal from AnimatorManagerWidget
 
+        # Disconnect all current valueChanged signals from knobs 1-4 first
+        for knob in [self.gui_knob1, self.gui_knob2, self.gui_knob3, self.gui_knob4]:
+            if knob:
+                try: knob.valueChanged.disconnect()
+                except TypeError: pass
+
+        # Configure Knob 1 (Global Brightness or Sampler Brightness)
+        if sampler_is_active:
+            # Setup Knob 1 for Sampler Brightness
+            adj_s = self.screen_sampler_manager.current_sampler_params.get('adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy())
+            if self.gui_knob1:
+                val_b = int(adj_s.get('brightness', 1.0) * 100)
+                self.gui_knob1.setRange(self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX)
+                self.gui_knob1.setValue(val_b)
+                self.gui_knob1.setToolTip(f"Sampler: Brightness ({adj_s.get('brightness', 1.0):.2f}x)")
+                self.gui_knob1.valueChanged.connect(self._on_sampler_brightness_knob_changed)
+        else:
+            # Setup Knob 1 for Global Pad Brightness
+            self._setup_global_brightness_knob() # This already connects its signal
+
+        # Configure Knobs 2 & 3 (Sampler Saturation/Contrast or Global Unassigned)
+        if sampler_is_active:
+            adj_s = self.screen_sampler_manager.current_sampler_params.get('adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy())
+            if self.gui_knob2: # Sampler Saturation
+                val_s = int(adj_s.get('saturation', 1.0) * 100)
+                self.gui_knob2.setRange(self.SAMPLER_SATURATION_KNOB_MIN, self.SAMPLER_SATURATION_KNOB_MAX)
+                self.gui_knob2.setValue(val_s)
+                self.gui_knob2.setToolTip(f"Sampler: Saturation ({adj_s.get('saturation', 1.0):.2f}x)")
+                self.gui_knob2.valueChanged.connect(self._on_sampler_saturation_knob_changed)
+            if self.gui_knob3: # Sampler Contrast
+                val_c = int(adj_s.get('contrast', 1.0) * 100)
+                self.gui_knob3.setRange(self.SAMPLER_CONTRAST_KNOB_MIN, self.SAMPLER_CONTRAST_KNOB_MAX)
+                self.gui_knob3.setValue(val_c)
+                self.gui_knob3.setToolTip(f"Sampler: Contrast ({adj_s.get('contrast', 1.0):.2f}x)")
+                self.gui_knob3.valueChanged.connect(self._on_sampler_contrast_knob_changed)
+        else: # Sampler OFF - Global mode for Knobs 2 & 3
+            if self.gui_knob2: self.gui_knob2.setToolTip("Pan (Global - Unassigned)"); self.gui_knob2.setRange(0,127); self.gui_knob2.setValue(64)
+            if self.gui_knob3: self.gui_knob3.setToolTip("Filter (Global - Unassigned)"); self.gui_knob3.setRange(0,127); self.gui_knob3.setValue(64)
+
+        # Configure Knob 4 (Animator Speed OR Sampler Hue OR Global Unassigned)
+        if self.is_animator_playing and self.animator_manager and self.animator_manager.active_sequence_model:
+            # Animator is PLAYING - Knob 4 controls Animator Speed
+            current_fps = self.animator_manager.get_current_sequence_fps() # New method needed in AMW
+            # Define FPS range for the knob, e.g., 1 to 60 FPS
+            # These should be constants in MainWindow
+            ANIMATOR_FPS_KNOB_MIN, ANIMATOR_FPS_KNOB_MAX = 1, 60 
+            if self.gui_knob4:
+                self.gui_knob4.setRange(ANIMATOR_FPS_KNOB_MIN, ANIMATOR_FPS_KNOB_MAX)
+                self.gui_knob4.setValue(int(round(current_fps)))
+                self.gui_knob4.setToolTip(f"Anim Speed: {current_fps:.1f} FPS")
+                self.gui_knob4.valueChanged.connect(self._on_animator_speed_knob_changed)
+                print("MW TRACE: Knob 4 configured for ANIMATOR SPEED.")
+        elif sampler_is_active and self.screen_sampler_manager:
+            # Sampler is ACTIVE, Animator is NOT PLAYING - Knob 4 controls Sampler Hue
+            adj_s = self.screen_sampler_manager.current_sampler_params.get('adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy())
+            if self.gui_knob4:
+                hue_val_float = adj_s.get('hue_shift', 0)
+                hue_val_int = int(round(hue_val_float))
+                self.gui_knob4.setRange(self.SAMPLER_HUE_KNOB_MIN, self.SAMPLER_HUE_KNOB_MAX)
+                self.gui_knob4.setValue(hue_val_int)
+                self.gui_knob4.setToolTip(f"Sampler: Hue Shift ({hue_val_int:+d})")
+                self.gui_knob4.valueChanged.connect(self._on_sampler_hue_knob_changed)
+                print("MW TRACE: Knob 4 configured for SAMPLER HUE.")
+        else:
+            # NEITHER Animator Playing NOR Sampler Active - Knob 4 is Global Resonance (or Unassigned)
+            if self.gui_knob4:
+                self.gui_knob4.setToolTip("Resonance (Global - Unassigned)")
+                self.gui_knob4.setRange(0,127); self.gui_knob4.setValue(64)
+                # self.gui_knob4.valueChanged.connect(self._on_global_resonance_knob_changed) # Future
+                print("MW TRACE: Knob 4 configured for GLOBAL RESONANCE/UNASSIGNED.")
+
+    def _on_animator_speed_knob_changed(self, knob_value: int): # knob_value is FPS (e.g., 1-60)
+        if self.is_animator_playing and self.animator_manager:
+            new_fps = float(knob_value)
+            self.animator_manager.set_playback_fps(new_fps) # New method needed in AMW
+            if self.gui_knob4:
+                self.gui_knob4.setToolTip(f"Anim Speed: {new_fps:.1f} FPS")
+        
+            # OLED Feedback for Animator Speed
+            oled_feedback_text = f"Spd: {new_fps:.1f}"
+            self._show_knob_feedback_on_oled(oled_feedback_text)
+
+    def _on_animator_playback_status_changed_for_knobs(self, is_playing: bool):
+        """
+        Slot connected to AnimatorManagerWidget's animator_playback_active_status_changed signal.
+        Updates the internal flag and reconfigures knob functions if needed.
+        """
+        # print(f"MW TRACE: _on_animator_playback_status_changed_for_knobs: Animator playing = {is_playing}") # Optional
+        self.is_animator_playing = is_playing
+        self._update_contextual_knob_configs() # Re-evaluate and set knob functions
+
+    
 
     def _create_edit_actions(self):
         """Creates global QActions for menu items and keyboard shortcuts."""
@@ -1336,7 +1420,7 @@ class MainWindow(QMainWindow):
         self.new_sequence_action.setToolTip(f"Create a new animation sequence ({QKeySequence(QKeySequence.StandardKey.New).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.new_sequence_action.triggered.connect(lambda: self.action_animator_new_sequence(prompt_save=True))
         self.addAction(self.new_sequence_action)
-
+        
         self.save_sequence_as_action = QAction("💾 Save Sequence As...", self)
         # StandardKey.SaveAs often Ctrl+Shift+S, StandardKey.Save is Ctrl+S
         self.save_sequence_as_action.setShortcut(QKeySequence.StandardKey.SaveAs) 

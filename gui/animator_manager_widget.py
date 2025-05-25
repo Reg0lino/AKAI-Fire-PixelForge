@@ -150,7 +150,7 @@ class AnimatorManagerWidget(QWidget):
 
         # --- Ensure AnimatorManagerWidget itself can expand vertically ---
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        
+
     def _connect_ui_signals(self):
         # Animator Studio Buttons
         self.sequence_selection_combo.currentIndexChanged.connect(self._on_sequence_combo_changed)
@@ -221,8 +221,67 @@ class AnimatorManagerWidget(QWidget):
         self.clipboard_state_changed.emit(bool(self.frame_clipboard))
         self._update_animator_controls_enabled_state() # Local UI update
 
-# In class AnimatorManagerWidget(QWidget):
+    def get_current_sequence_fps(self) -> float:
+        """
+        Calculates and returns the current sequence's playback speed in FPS.
+        Returns a default (e.g., 10 FPS) if delay is zero or model is unavailable.
+        """
+        if self.active_sequence_model and self.active_sequence_model.frame_delay_ms > 0:
+            return 1000.0 / self.active_sequence_model.frame_delay_ms
+        elif self.active_sequence_model and self.active_sequence_model.frame_delay_ms == 0:
+            # Handle case where delay is 0 (could mean max speed or undefined)
+            # For FPS display, a very high number or a practical cap might be suitable.
+            # Let's return a high practical FPS or a default if delay is 0.
+            return 60.0 # Or some other defined maximum sensible FPS
+        # Fallback if no model or invalid delay
+        # Default FPS from SequenceControlsWidget or a general default
+        if hasattr(self, 'sequence_controls_widget') and self.sequence_controls_widget:
+             # Attempt to get it from the UI if it has a default
+            initial_delay_ms = self.sequence_controls_widget.get_current_delay_ms()
+            if initial_delay_ms > 0:
+                return 1000.0 / initial_delay_ms
+        return 10.0 # General fallback FPS
 
+    def set_playback_fps(self, fps: float):
+        """
+        Sets the playback speed of the current sequence based on FPS.
+        Updates the model's frame_delay_ms and the playback timer if active.
+        """
+        if not self.active_sequence_model:
+            return
+
+        min_fps = 0.1  # Avoid division by zero and ridiculously slow speeds
+        max_fps = 100.0 # Practical upper limit for sanity
+        clamped_fps = max(min_fps, min(fps, max_fps))
+
+        if clamped_fps <= 0: # Should be caught by min_fps, but safety
+            new_delay_ms = 1000 # Default to 1 FPS
+        else:
+            new_delay_ms = int(round(1000.0 / clamped_fps))
+        
+        # Prevent extremely short delays that might overwhelm
+        min_delay_ms = 10 # Corresponds to 100 FPS
+        actual_delay_ms = max(min_delay_ms, new_delay_ms)
+
+        # print(f"AMW DEBUG: set_playback_fps: target_fps={fps}, clamped_fps={clamped_fps}, new_delay_ms={actual_delay_ms}") # Optional
+
+        self.active_sequence_model.set_frame_delay_ms(actual_delay_ms)
+        # The model's set_frame_delay_ms should emit properties_changed,
+        # which _update_ui_for_current_sequence_properties connects to,
+        # which then calls self.sequence_controls_widget.set_frame_delay_ui.
+
+        if self.playback_timer.isActive():
+            self.playback_timer.start(actual_delay_ms) # Restart timer with new interval
+
+        # Optionally, emit a signal if other parts of UI need to know FPS changed directly
+        # self.playback_speed_changed.emit(1000.0 / actual_delay_ms if actual_delay_ms > 0 else 0)
+        
+        # Update controls widget UI (redundant if model signal already does this, but safe)
+        if hasattr(self, 'sequence_controls_widget') and self.sequence_controls_widget:
+            self.sequence_controls_widget.set_frame_delay_ui(actual_delay_ms)
+
+        # Notify MainWindow that properties (including potentially unsaved speed) changed
+        self._emit_state_updates()
     # --- NEW Methods for External Navigation Control ---
 
     def get_navigation_item_count(self) -> int:

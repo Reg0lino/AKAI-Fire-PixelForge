@@ -169,7 +169,7 @@ class OLEDDisplayManager(QObject):
             # If render_text_to_packed_buffer draws at (-offset_x + centering_adjust),
             # we want -offset_x to be OLED_WIDTH. So, offset_x should be -OLED_WIDTH.
             self.current_scroll_offset = -self.oled_width 
-            print(f"DEBUG OLED: _start_scrolling_if_needed - Text: '{text}', Initial offset: {self.current_scroll_offset}, TextWidth: {self.text_width_pixels}")
+            # print(f"DEBUG OLED: _start_scrolling_if_needed - Text: '{text}', Initial offset: {self.current_scroll_offset}, TextWidth: {self.text_width_pixels}")
             # --- END CHANGE ---
             self._update_display(text) # Initial render (text will be off-screen left due to renderer logic for offset_x)
             self.scroll_timer.start(self.DEFAULT_SCROLL_DELAY_MS)
