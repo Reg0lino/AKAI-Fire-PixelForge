@@ -1,42 +1,42 @@
 /* AKAI_Fire_RGB_Controller/resources/styles/style.qss */
 
 QWidget {
-    background-color: #2E2E2E; /* Dark grey background */
-    color: #E0E0E0;            /* Light grey text */
-    font-family: "Segoe UI", Arial, sans-serif; /* Common nice font */
+    background-color: #181818; /* Even darker grey background */
+    color: #B3B3B3;            /* Slightly darker light grey text */
+    font-family: "Segoe UI", Arial, sans-serif;
     font-size: 10pt;
 }
 
 QMainWindow {
-    background-color: #252525; /* Slightly darker for main window */
+    background-color: #131313; /* Even darker for main window */
 }
 
 QPushButton {
-    background-color: #4A4A4A; /* Medium grey for buttons */
-    border: 1px solid #606060;
+    background-color: #393939; /* Darker medium grey for buttons */
+    border: 1px solid #4D4D4D;
     padding: 5px 10px;
     border-radius: 3px;
-    min-height: 20px; /* Ensure general buttons have some height */
+    min-height: 20px;
 }
 
 QPushButton:hover {
-    background-color: #5A5A5A; /* Lighter grey on hover */
-    border: 1px solid #707070;
+    background-color: #474747; /* Darker lighter grey on hover */
+    border: 1px solid #595959;
 }
 
 QPushButton:pressed {
-    background-color: #3A3A3A; /* Darker grey when pressed */
+    background-color: #2E2E2E; /* Darker when pressed */
 }
 
 QPushButton:disabled {
-    background-color: #383838;
-    color: #707070;
-    border-color: #484848;
+    background-color: #2C2C2C;
+    color: #595959;
+    border-color: #393939;
 }
 
 QComboBox {
-    background-color: #4A4A4A;
-    border: 1px solid #606060;
+    background-color: #393939;
+    border: 1px solid #4D4D4D;
     border-radius: 3px;
     padding: 3px 5px;
     min-height: 20px;
@@ -44,7 +44,7 @@ QComboBox {
 
 QComboBox::drop-down {
     border: none;
-    background-color: #555555;
+    background-color: #434343;
     width: 20px;
 }
 
@@ -53,31 +53,30 @@ QComboBox::down-arrow {
 }
 
 QComboBox QAbstractItemView { 
-    background-color: #3E3E3E;
-    border: 1px solid #606060;
-    selection-background-color: #5A7EA6; 
-    color: #E0E0E0;
+    background-color: #313131;
+    border: 1px solid #4D4D4D;
+    selection-background-color: #486287; 
+    color: #B3B3B3;
     padding: 2px;
 }
 
 QStatusBar {
-    background-color: #1E1E1E; 
-    color: #C0C0C0;
+    background-color: #101010; 
+    color: #999999;
     font-size: 9pt;
 }
 
 /* Pad Button Styling - SIZE IS NOW CONTROLLED BY PYTHON'S setFixedSize */
 QPushButton#PadButton { 
-    background-color: #1C1C1C; /* Default for unlit pad */
-    border: 1px solid #404040;
+    background-color: #161616; /* Default for unlit pad */
+    border: 1px solid #333333;
     border-radius: 2px; 
-    padding: 1px; /* Minimal padding for pads */
-    /* Text color for lit pads will be set dynamically in Python */
-    color: transparent; /* For unlit pads */
+    padding: 1px;
+    color: transparent;
 }
 
 QPushButton#PadButton:hover {
-    border: 1px solid #666666; /* Default hover for unlit pad */
+    border: 1px solid #525252;
 }
 /* Dynamic background-color and lit hover border set in Python */
 
@@ -92,7 +91,7 @@ QFrame#ColorSelectionGroup {
 
 QGroupBox {
     font-weight: bold;
-    border: 1px solid #505050;
+    border: 1px solid #404040;
     border-radius: 4px;
     margin-top: 10px; 
     padding-top: 15px; 
@@ -106,63 +105,63 @@ QGroupBox::title {
     subcontrol-position: top left; 
     padding: 0 5px;
     left: 10px; 
-    color: #C0C0C0;
+    color: #999999;
 }
 
 QSlider::groove:horizontal {
-    border: 1px solid #5A5A5A;
+    border: 1px solid #474747;
     height: 8px; 
-    background: #3D3D3D;
+    background: #313131;
     margin: 2px 0;
     border-radius: 4px;
 }
 
 QSlider::handle:horizontal {
-    background: #808080; 
-    border: 1px solid #5A5A5A;
+    background: #666666; 
+    border: 1px solid #474747;
     width: 16px; 
     margin: -4px 0; 
     border-radius: 8px; 
 }
 
 QSlider::handle:horizontal:hover {
-    background: #909090;
+    background: #757575;
 }
 
 /* Styles for Vertical Hue Slider (if needed, though HueSlider.py does custom painting) */
 QSlider::groove:vertical {
-    border: 1px solid #5A5A5A;
+    border: 1px solid #474747;
     width: 8px;
-    background: #3D3D3D;
+    background: #313131;
     margin: 0 2px;
     border-radius: 4px;
 }
 
 QSlider::handle:vertical {
-    background: #808080;
-    border: 1px solid #5A5A5A;
+    background: #666666;
+    border: 1px solid #474747;
     height: 16px;
     margin: 0 -4px;
     border-radius: 8px;
 }
 
 QSlider::handle:vertical:hover {
-    background: #909090;
+    background: #757575;
 }
 
 
 QLineEdit {
-    background-color: #3D3D3D;
-    border: 1px solid #5A5A5A;
+    background-color: #232323;
+    border: 1px solid #474747;
     border-radius: 3px;
     padding: 3px 5px;
-    color: #E0E0E0;
+    color: #B3B3B3;
     min-height: 20px;
 }
 
 /* Main Color Preview Swatch Styling */
 QLabel#MainColorPreview {
-    border: 1px solid #707070;
+    border: 1px solid #595959;
     border-radius: 3px;
     font-weight: bold;
     /* Background color set by Python QPalette */
@@ -170,14 +169,14 @@ QLabel#MainColorPreview {
 
 /* Custom Swatch Buttons Styling - SIZE IS NOW CONTROLLED BY PYTHON'S setFixedSize */
 QPushButton#CustomSwatchButton {
-    background-color: #333333; /* Default empty swatch color */
-    border: 1px dashed #666666; /* Dashed border for empty/unset */
+    background-color: #282828; /* Darker empty swatch color */
+    border: 1px dashed #525252;
     border-radius: 2px;
-    padding: 0px; /* No padding to maximize color area */
+    padding: 0px;
 }
 
 QPushButton#CustomSwatchButton:hover {
-    border: 1px solid #999999;
+    border: 1px solid #7A7A7A;
 }
 /* Filled swatch background-color set dynamically in Python */
 
@@ -197,46 +196,44 @@ QPushButton#PatternUpButton,
 QPushButton#PatternDownButton,
 QPushButton#GridLeftButton,
 QPushButton#GridRightButton {
-    min-height: 10px;  /* Allow Python to set height to 12px, this is just a lower bound */
-    padding: 1px 3px;  /* Minimal padding: 1px top/bottom, 3px left/right */
-    border: 1px solid #777777; 
+    min-height: 10px;
+    padding: 1px 3px;
+    border: 1px solid #5E5E5E; 
     border-radius: 1px;
-    /* --- CHANGE: Set your desired light grey background --- */
-    background-color: #A8A8A8; /* Example: Light Grey - REPLACE WITH YOUR CHOICE */
+    background-color: #868686; /* Darker light grey */
 }
 
 QPushButton#PatternUpButton:hover,
 QPushButton#PatternDownButton:hover,
 QPushButton#GridLeftButton:hover,
 QPushButton#GridRightButton:hover {
-    background-color: #B8B8B8; /* Slightly lighter hover - REPLACE */
-    border-color: #888888;
+    background-color: #9C9C9C;
+    border-color: #6F6F6F;
 }
 
 QPushButton#PatternUpButton:pressed,
 QPushButton#PatternDownButton:pressed,
 QPushButton#GridLeftButton:pressed,
 QPushButton#GridRightButton:pressed {
-    background-color: #989898; /* Slightly darker pressed - REPLACE */
+    background-color: #6F6F6F;
 }
 
 QPushButton#BrowserButton {
     min-height: 10px; 
     padding: 4px;    
-    border: 1px solid #777777;
+    border: 1px solid #5E5E5E;
     border-radius: 2px;
-    /* --- CHANGE: Set your desired light grey background --- */
-    background-color: #A8A8A8; /* Example: Light Grey - REPLACE */
+    background-color: #868686;
 }
 QPushButton#BrowserButton:hover {
-    background-color: #B8B8B8; /* Slightly lighter hover - REPLACE */
-    border-color: #888888;
+    background-color: #9C9C9C;
+    border-color: #6F6F6F;
 }
 QPushButton#BrowserButton:pressed {
-    background-color: #989898; /* Slightly darker pressed - REPLACE */
+    background-color: #6F6F6F;
 }
 QDial {
-    background-color: #202020; /* Very dark grey - this might only affect the bounding box */
+    background-color: #101010;
 }
-QDial::groove { background: #1A1A1A; }
-QDial::handle { background: #333333; border: 1px solid #444444; }
+QDial::groove { background: #0C0C0C; }
+QDial::handle { background: #282828; border: 1px solid #363636; }

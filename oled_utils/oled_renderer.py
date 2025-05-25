@@ -132,62 +132,86 @@ def render_text_to_packed_buffer(text: str,
                                  center_if_not_scrolling: bool = True) -> bytearray:
     """
     Renders text to the 7-bit packed buffer for the Akai Fire OLED.
-    - text: The string to render.
-    - font_override: Optional PIL ImageFont object to use. Defaults to internally loaded font.
-    - offset_x: Horizontal scroll offset (negative for scrolling left).
-    - center_if_not_scrolling: If True and offset_x is 0, text will be horizontally centered.
     """
+    # --- ADD DEBUG PRINT ---
+    # print(f"RENDERER TRACE: render_text_to_packed_buffer - Received font_override: {type(font_override)}, Text: '{text}'")
+    # if font_override and hasattr(font_override, 'font') and hasattr(font_override.font, 'family'):
+    #     print(f"RENDERER TRACE: font_override details: Family='{font_override.font.family}', Size='{font_override.size}'")
+    # elif font_override:
+    #     print(f"RENDERER TRACE: font_override details: Type is basic ImageFont (likely Pillow default).")
+    # --- END DEBUG PRINT ---
+
     actual_font = font_override if font_override is not None else _FONT_OBJECT
+    
+    # --- ADD DEBUG PRINT ---
+    # if actual_font and hasattr(actual_font, 'font') and hasattr(actual_font.font, 'family'):
+    #     print(f"RENDERER TRACE: Using actual_font: Family='{actual_font.font.family}', Size='{actual_font.size}'")
+    # elif actual_font:
+    #     print(f"RENDERER TRACE: Using actual_font: Type is basic ImageFont (likely Pillow default or _FONT_OBJECT is basic).")
+    # else:
+    #     print("RENDERER TRACE: Using actual_font: _FONT_OBJECT is None or actual_font became None.")
+    # --- END DEBUG PRINT ---
+
     if actual_font is None:
-        print("ERROR (oled_renderer.render_text_to_packed_buffer): Font object is None.")
+        print("ERROR (oled_renderer.render_text_to_packed_buffer): Font object (actual_font) is None.")
         return get_blank_packed_bitmap()
 
-    logical_image = Image.new('1', (OLED_WIDTH, OLED_HEIGHT), 0) # 0 = black background
-    draw = ImageDraw.Draw(logical_image)
-    
-    text_x = -offset_x
-    text_y = 0 # Default top alignment
-
+    # ... (rest of the method: logical_image = Image.new(...), draw = ImageDraw.Draw(...), etc.)
+    # ... (as provided in the last full oled_renderer.py script) ...
+    logical_image = Image.new('1', (OLED_WIDTH, OLED_HEIGHT), 0); draw = ImageDraw.Draw(logical_image)
+    text_x = -offset_x; text_y = 0
     try:
-        # Calculate text dimensions using textbbox for accurate positioning
-        # Parameters for textbbox: xy, text, font. xy is the top-left anchor.
-        bbox = draw.textbbox((0,0), text, font=actual_font) # (left, top, right, bottom)
-        text_pixel_width = bbox[2] - bbox[0]
-        text_pixel_height = bbox[3] - bbox[1] # Actual height of the glyphs
-        
-        # Vertical centering
-        if text_pixel_height < OLED_HEIGHT:
-            text_y = (OLED_HEIGHT - text_pixel_height) // 2 - bbox[1] # Adjust by bbox[1] (top offset of glyph)
-        else:
-            text_y = -bbox[1] # Align top of glyphs with top of screen if text is tall
-
-        # Horizontal centering (if not scrolling and requested)
+        bbox = draw.textbbox((0,0), text, font=actual_font); text_pixel_width = bbox[2] - bbox[0]; text_pixel_height = bbox[3] - bbox[1]
+        if text_pixel_height < OLED_HEIGHT: text_y = (OLED_HEIGHT - text_pixel_height) // 2 - bbox[1]
+        else: text_y = -bbox[1]
         if center_if_not_scrolling and offset_x == 0:
-            if text_pixel_width < OLED_WIDTH:
-                text_x = (OLED_WIDTH - text_pixel_width) // 2 - bbox[0] # Adjust by bbox[0] (left offset of glyph)
-            else:
-                text_x = -bbox[0] # Align left of glyphs with left of screen if text is wide
-        else: # Scrolling or left-aligning
-            text_x = -offset_x - bbox[0]
-
-    except AttributeError: # Fallback if font object doesn't have getbbox (e.g. older PIL, basic font)
-        print("WARNING (oled_renderer): Font object does not support 'getbbox'. Using simpler text positioning.")
-        text_pixel_width = get_text_actual_width(text, actual_font) # Use our own function
-        font_size_approx = getattr(actual_font, 'size', DEFAULT_TEXT_FONT_SIZE_PX) 
+            if text_pixel_width < OLED_WIDTH: text_x = (OLED_WIDTH - text_pixel_width) // 2 - bbox[0]
+            else: text_x = -bbox[0]
+        else: text_x = -offset_x - bbox[0]
+    except AttributeError:
+        text_pixel_width = get_text_actual_width(text, actual_font); font_size_approx = getattr(actual_font, 'size', DEFAULT_TEXT_FONT_SIZE_PX) 
         text_y = (OLED_HEIGHT - font_size_approx) // 2 if font_size_approx < OLED_HEIGHT else 0
-        if center_if_not_scrolling and offset_x == 0 and text_pixel_width < OLED_WIDTH:
-            text_x = (OLED_WIDTH - text_pixel_width) // 2
-        else:
-            text_x = -offset_x
-
-    draw.text((text_x, text_y), text, font=actual_font, fill=1) # 1 = white
-    
+        if center_if_not_scrolling and offset_x == 0 and text_pixel_width < OLED_WIDTH: text_x = (OLED_WIDTH - text_pixel_width) // 2
+        else: text_x = -offset_x
+    draw.text((text_x, text_y), text, font=actual_font, fill=1)
     pixels = logical_image.load()
-    def pixel_is_on(x_coord, y_coord):
-        return 0 <= x_coord < OLED_WIDTH and 0 <= y_coord < OLED_HEIGHT and pixels[x_coord, y_coord] != 0
-        
+    def pixel_is_on(x_coord, y_coord): return 0 <= x_coord < OLED_WIDTH and 0 <= y_coord < OLED_HEIGHT and pixels[x_coord, y_coord] != 0
     return _generate_fire_packed_stream_from_logical_pixels(pixel_is_on, OLED_WIDTH, OLED_HEIGHT)
 
+
+def pack_pil_image_to_7bit_stream(pil_monochrome_image: Image.Image) -> bytearray | None:
+    """
+    Takes a pre-rendered 1-bit PIL Image and converts it to the Akai Fire's
+    7-bit packed byte stream.
+    """
+    if pil_monochrome_image is None:
+        print("ERROR (oled_renderer.pack_pil_image_to_7bit_stream): Input PIL image is None.")
+        return None
+    if pil_monochrome_image.mode != '1':
+        print(f"WARNING (oled_renderer.pack_pil_image_to_7bit_stream): Input PIL image mode is '{pil_monochrome_image.mode}', attempting to convert to '1'.")
+        try:
+            pil_monochrome_image = pil_monochrome_image.convert('1')
+        except Exception as e_conv:
+            print(f"ERROR (oled_renderer.pack_pil_image_to_7bit_stream): Failed to convert image to '1' mode: {e_conv}")
+            return None
+            
+    if pil_monochrome_image.width != OLED_WIDTH or pil_monochrome_image.height != OLED_HEIGHT:
+        print(f"ERROR (oled_renderer.pack_pil_image_to_7bit_stream): Image dimensions ({pil_monochrome_image.width}x{pil_monochrome_image.height}) do not match OLED ({OLED_WIDTH}x{OLED_HEIGHT}).")
+        # Optional: resize/crop, but for now, expect correct size
+        return None
+
+    try:
+        pixels = pil_monochrome_image.load()
+        def pixel_is_on(x_coord, y_coord):
+            # For '1' mode, Pillow pixels are 0 (black) or 255 (white).
+            # We consider non-black as 'on'.
+            return pixels[x_coord, y_coord] != 0 
+            
+        return _generate_fire_packed_stream_from_logical_pixels(pixel_is_on, OLED_WIDTH, OLED_HEIGHT)
+    except Exception as e:
+        print(f"ERROR (oled_renderer.pack_pil_image_to_7bit_stream): Exception during packing: {e}")
+        return None
+# --- END ADD NEW FUNCTION ---
 
 # Renamed `get_bitmap_for_text` to `render_text_to_packed_buffer` to match expected name.
 # Kept a wrapper for backward compatibility if any internal part of oled_renderer still uses old name.
