@@ -1,6 +1,53 @@
 # Changelog - AKAI Fire RGB Controller
 
-## [Version 0.8.0] - 5/19/2025 - Sampler Stability & Preference Refinement
+## [Unreleased] - 2025-05-25 (Current Development)
+
+### ✨ Features & Enhancements
+
+*   **OLED Customization - Phase 1 (Startup Text & Font):**
+    *   Implemented `OLEDCustomizerDialog` allowing users to:
+        *   Edit the default startup text displayed on the Akai Fire's OLED.
+        *   Select any system font family and pixel size for this startup text.
+        *   Set a global scroll speed (delay per step) for all OLED scrolling text.
+        *   View a live preview of the customized text within the dialog, including scrolling.
+    *   These OLED settings (text, font family, font size, scroll delay) are saved to and loaded from `user_settings/oled_config.json`, persisting across sessions.
+    *   `OLEDDisplayManager` now dynamically loads the user's chosen system font by rendering text to a `QImage` using Qt's `QFont` and `QPainter`, then converting this `QImage` to a 1-bit PIL `Image` for packing by `oled_renderer`. This resolves previous issues with Pillow's inconsistent system font loading. Resource fonts like "TomThumb.ttf" are still loaded directly as PIL `ImageFont` objects.
+    *   `oled_renderer.py` was updated with a new `pack_pil_image_to_7bit_stream()` function to handle pre-rendered PIL images and `get_text_actual_width()` was refined.
+*   **Dynamic Knob Control for OLED Feedback & Global Brightness:**
+    *   The top four GUI knobs in `MainWindow` are now context-sensitive.
+    *   **Global Pad Brightness:** The first GUI knob (previously "Volume") now controls the global brightness of the physical Akai Fire pads. Its tooltip and value range (0-100%) update accordingly. Physical Akai Fire Encoder 1 (CC 0x10) now controls this GUI knob and the pad brightness.
+    *   **OLED Knob Feedback:** When GUI knobs (Global Brightness, or Sampler Adjustments when sampler is active) are turned, the OLED temporarily displays the knob's current value (e.g., "GlbBr: 50%", "Br: 1.20x") using a dedicated font ("TomThumb.ttf" @ 60px) for consistent appearance. The display reverts to its normal state after a short timeout.
+    *   **Sampler Adjustments via Knobs (Foundation):**
+        *   When the Screen Sampler is active, the top four GUI knobs are reconfigured (tooltips, ranges, values) to control Sampler Brightness, Saturation, Contrast, and Hue Shift.
+        *   The corresponding physical Akai Fire Encoders (CC 0x10-0x13) now control these GUI knobs and sampler parameters.
+        *   `HardwareInputManager` was updated to emit a generic `physical_encoder_rotated(encoder_id, delta)` signal for these encoders.
+        *   `MainWindow` now has a central dispatcher (`_on_physical_encoder_rotated`) to route physical knob inputs based on application context (Global, Sampler Active, or Animator Playing).
+        *   `ScreenSamplerManager` updated with `update_sampler_adjustment()` method and `sampler_adjustments_changed` signal to facilitate external control and UI synchronization.
+        *   `CapturePreviewDialog` (sampler config) sliders have been reordered to Brightness, Saturation, Contrast, Hue to match knob assignment. The dialog's sliders now sync with changes made via the main window knobs.
+*   **Hardware Control Enhancements:**
+    *   The physical BROWSER button (Note 0x21) on the Akai Fire now also toggles the Screen Sampler ON/OFF, in addition to the PERFORM button.
+
+### 🐛 Bug Fixes & Stability
+
+*   **OLED Text Rendering:** Resolved `AttributeError`s in `OLEDDisplayManager` related to missing functions (`render_text_to_7bit_packed_buffer`, `get_text_width_pixels`) in `oled_renderer.py` by aligning function calls and adding the necessary utilities to `oled_renderer.py`.
+*   **OLED Scrolling:** Fixed incorrect OLED text scrolling direction and looping behavior by correcting the offset logic in `OLEDDisplayManager._scroll_text_step` and `_start_scrolling_if_needed`.
+*   **Type Errors for Hue Shift:** Corrected `TypeError` and `ValueError` when setting/displaying Hue Shift values (which are floats) on `QSlider`/`QDial` (which expect ints) and in f-string formatting for tooltips/labels by implementing `int(round(value))` casting in `MainWindow`, `CapturePreviewDialog`, and ensuring consistent data types.
+*   **Missing Method Definitions:** Added several missing handler methods in `MainWindow` (e.g., `_handle_paint_black_button`, `clear_all_hardware_and_gui_pads`, `_handle_final_color_selection_from_manager`, `_handle_apply_static_layout_data`, `_provide_grid_colors_for_static_save`, `apply_colors_to_main_pad_grid`) that were causing `AttributeError`s during UI initialization or interaction.
+*   **`NameError` Resolution:** Fixed `NameError` for `FIRE_BUTTON_BROWSER` in `HardwareInputManager`.
+*   **`UnboundLocalError` Resolution:** Fixed `UnboundLocalError` for `ScreenSamplerCore` in `MainWindow._on_sampler_activity_changed_for_knobs` by ensuring `ScreenSamplerCore` is imported at the module level of `main_window.py`.
+*   **Animator Play/Pause Crash:** Fixed `AttributeError` for `clear_led_suppression_and_update` in `MainWindow.action_animator_play_pause_toggle` by removing the call, as hardware Play/Stop LEDs are currently forced off by `AkaiFireController`.
+*   **Dialog Initialization:** Ensured `OLEDCustomizerDialog` correctly loads and displays the current startup font family and size settings when opened.
+
+### 💬 Developer Notes
+
+*   The `OLEDDisplayManager` now uses a dual strategy for font rendering:
+    1.  **Resource Fonts (e.g., "TomThumb.ttf"):** Loaded as PIL `ImageFont` and rendered directly by `oled_renderer`.
+    2.  **System Fonts:** Rendered by Qt (`QFont`/`QPainter`) to a `QImage`, then converted to a 1-bit PIL `Image` (via `QBuffer` with PNG format), and finally packed by `oled_renderer`. This provides robust system font support.
+*   The "Global Pad Brightness" now applies to all physical pad outputs, including those from the Screen Sampler, unless an explicit bypass is implemented for the sampler path in `AkaiFireController.set_multiple_pads_color`. Current implementation defaults to global brightness always applying.
+
+---
+
+## [Version 0.8.0] - 2025-05-19 - Sampler Stability & Preference Refinement
 
 ### ✨ Features & Enhancements
 
@@ -27,76 +74,44 @@
 
 ### Known Issues
 
-*   The "Sampler Recording" feature in the README was previously marked as "CURRENTLY BUGGED". It should now be functional but may require further testing for edge cases. (Updating README to reflect this).
+*   The "Sampler Recording" feature was previously marked as "CURRENTLY BUGGED". It should now be functional but requires further testing for edge cases.
 
 ---
 
-## [Version 0.7.0]
+## [Version 0.7.0] - (Date Inferred: Pre-2025-05-19)
 
 ### ✨ Features & Enhancements
 
 *   **Sampler Recording Auto-Save & Listing:**
-    *   Sampler recordings are now automatically saved to `presets/sequences/sampler_recordings/` after the user provides a name.
-    *   `SequenceFileManager` now scans this directory and lists these recordings with a `[Sampler]` prefix in the sequence selection dropdown.
-    *   Newly recorded and auto-saved sequences are immediately loaded into the animator and selected in the dropdown.
-    *   `MainWindow.ensure_user_dirs_exist` updated to create `sampler_recordings` directory.
-    *   Constants for sequence directory names (`USER_SEQUENCES_DIR_NAME`, etc.) centralized in `sequence_file_manager.py` and imported into `main_window.py` to resolve `NameError`s.
+    *   Sampler recordings automatically saved to `presets/sequences/sampler_recordings/`.
+    *   Listed with `[Sampler]` prefix in sequence selection.
+    *   Newly recorded sequences auto-loaded.
 *   **Persistent User Settings for Sampler & Color Picker:**
-    *   Implemented saving and loading of screen sampler configurations (region, S/C/B/H adjustments) on a per-monitor basis to `sampler_user_prefs.json`. Monitors are keyed by their geometry string.
-    *   `fire_controller_config.json` (for color picker swatches) is now also saved to the platform-specific user configuration directory (or `user_settings/` during development) via `appdirs`.
-    *   `MainWindow` now uses a `get_user_config_file_path` helper function to manage these paths.
-    *   `ColorPickerManager` now accepts a `config_save_path_func` for standardized config file placement.
+    *   Screen sampler configurations (region, S/C/B/H) saved per-monitor to `sampler_user_prefs.json`.
+    *   Color picker swatches (`fire_controller_config.json`) saved to user config directory via `appdirs`.
 *   **Color Picker "My Colors" Swatch Management:**
-    *   Added right-click context menu to `ColorSwatchButton` instances to "Clear This Swatch" or "Set to Current Picker Color".
-    *   Consolidated "Add to Swatch" and "Clear All Swatches" buttons with icons and improved tooltips/status tips.
+    *   Right-click context menu for swatches ("Clear", "Set to Current").
 *   **Screen Sampler Default Adjustments:**
-    *   `CapturePreviewDialog` sliders now default to values that provide a "boosted" look (e.g., 2.0x saturation, 1.5x contrast) for the pads and the preview image. Reset button now reverts to these new defaults. Slider ranges adjusted.
+    *   `CapturePreviewDialog` sliders default to "boosted" look (e.g., 2.0x saturation).
 
 ### 🐛 Bug Fixes & Stability
 
-*   **Color Picker Visuals:**
-    *   Resolved issue where "My Colors" swatches did not display their saved colors on application startup. Ensured `ColorSwatchButton.set_color()` correctly updates visual style when global QSS is active.
-    *   Fixed `NameError: name 'ICON_DELETE' is not defined` in `ColorPickerManager` by making icon constants class attributes.
-    *   Corrected `ValueError: too many values to unpack (expected 3)` from `QColor.getHsvF()` calls in `ColorPickerManager` by unpacking all four HSVA components.
-    *   Fixed `AttributeError: 'HueSlider' object has no attribute 'set_hue_external'` by updating `ColorPickerManager` to use the correct `HueSlider.set_hue(..., emit_signal=False)` method. `HueSlider.set_hue` updated to support `emit_signal` parameter.
-    *   Resolved issue where numeric input fields (R,G,B,Hex) in `ColorPickerManager` were not populating or updating from slider changes. This was primarily due to fixing underlying multiple UI initialization bugs in `MainWindow`.
-*   **`NameError` for Directory Constants:** Fixed `NameError` in `MainWindow.ensure_user_dirs_exist()` by correctly importing `USER_SEQUENCES_DIR_NAME`, etc., from `sequence_file_manager.py`.
-*   **`SequenceFileManager` Robustness:**
-    *   Fixed `NameError: name 'data' is not defined` in `load_all_sequences_metadata` by ensuring `data` variable is initialized correctly within the loop and improving error handling for malformed JSONs.
-*   **General Stability (Ongoing for Multiple Inits):**
-    *   Addressed several instances of `RuntimeError: wrapped C/C++ object ... has been deleted` by correcting the order of UI initialization and ensuring UI element creation methods (like `_init_direct_controls_right_panel`) are called only once from their designated orchestrator methods (like `_init_managers_right_panel`) within `MainWindow.__init__`. This resolved issues where UI elements were being created multiple times, leading to orphaned objects and crashes.
-*   **Fixed `SyntaxError: invalid syntax` in `hue_slider.py`** by removing `--- START OF FILE ---` marker.
-*   **Fixed `NameError: name 'QSize' is not defined` in `hue_slider.py`** by adding `QSize` to imports.
-*   **Restored "Quick Tools" visibility** by correcting its placement logic in `MainWindow._init_managers_right_panel`.
+*   **Color Picker Visuals & Functionality Fixed.**
+*   **`NameError`s for Directory Constants & `SequenceFileManager` Robustness.**
+*   **General Stability (Resolved Multiple UI Initialization Bugs in `MainWindow`).**
 
-## Previous Versions (Inferred & AI-Summarized from project history)
+---
 
-### Feature Phase: Sampler Recording Framework
-*   Conceptualized and partially implemented sampler recording: UI elements added, `MainWindow` logic to capture frames, prompt for name, and load into animator.
+## Previous Versions (Summary - Pre-0.7.0)
 
-### Feature Phase: Granular Grid Sampling & Monitor View Refinement
-*   Implemented 4x16 Gridded Screen Sampling.
-*   Resizable & Snappable `MonitorViewWidget`.
-*   Fixed Screen Sampler Preview Color Discrepancy.
+*   **Feature Phase: Sampler Recording Framework** (Conceptualized, partial implementation)
+*   **Feature Phase: Granular Grid Sampling & Monitor View Refinement**
+*   **Feature Phase: Interactive Screen Sampler MVP** (Dialog with S/C/B/H sliders)
+*   **Bugfix & Refactor Phase: JSON Loading, Recursion, UI Glitches**
+*   **Feature Phase: Animator UI Enhancements & Core Logic**
+*   **Major Refactoring & Early Bug Squashing** (`MainWindow` modularization)
+*   **Initial Development Phase** (Project Setup, Basic Hardware Control, GUI Foundation)
 
-### Feature Phase: Interactive Screen Sampler MVP
-*   Introduced `CapturePreviewDialog` with `MonitorViewWidget`.
-*   Added S/C/B/H sliders affecting sampler output and a live preview image.
+---
 
-### Bugfix & Refactor Phase: JSON Loading, Recursion, UI Glitches
-*   Robust JSON Loading for static layouts and color picker.
-*   Animator recursion fixes.
-*   `SequenceModel` Undo/Redo & `is_modified` flag improvements.
-
-### Feature Phase: Animator UI Enhancements & Core Logic
-*   `SequenceTimelineWidget` with frame thumbnails.
-*   `SequenceControlsWidget` with animation speed slider.
-
-### Major Refactoring & Early Bug Squashing
-*   `MainWindow` Refactor for modularity (ColorPickerManager, StaticLayoutsManager, etc.).
-*   Resolved numerous early `NameError`s, `AttributeError`s.
-
-### Initial Development Phase
-*   Project Setup, Hardware Control, GUI Foundation, Static Layouts (Initial), Animator (Initial).
-
-### I used Gemini 2.5 HEAVILY for basically every stage of this ....  ( o Y o )
+### I used Gemini (specifically version from May 2025 timeframe) HEAVILY for basically every stage of this project development, debugging, and refactoring. ( o Y o )

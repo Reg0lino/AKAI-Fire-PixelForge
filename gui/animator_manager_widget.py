@@ -50,17 +50,25 @@ class AnimatorManagerWidget(QWidget):
     # Signal to MainWindow if sampler needs to be disabled due to animator interaction
     request_sampler_disable = pyqtSignal()
 
-    def __init__(self, presets_base_path: str, parent: QWidget | None = None):
+    def __init__(self, 
+                 user_sequences_base_path: str, # Changed from user_sequences_base_path
+                 sampler_recordings_path: str,  # New for sampler recordings
+                 prefab_sequences_base_path: str, # Changed from prefab_sequences_base_path
+                 parent: QWidget | None = None):
         super().__init__(parent)
-        self.presets_base_path = presets_base_path # Needed for sequence saving/loading paths
+        self.user_sequences_path = user_sequences_base_path # Corrected
+        self.sampler_recordings_path = sampler_recordings_path # Corrected
+        self.prefab_sequences_path = prefab_sequences_base_path # Corrected
 
         self.active_sequence_model = SequenceModel()
         self._connect_signals_for_active_sequence_model()
 
         self.playback_timer = QTimer(self)
         self.playback_timer.timeout.connect(self.advance_and_play_next_frame)
+
+        self.frame_clipboard: list[AnimationFrame] = [] # Ensure AnimationFrame is imported
         
-        self.frame_clipboard: list[AnimationFrame] = []
+        # self.frame_clipboard: list[AnimationFrame] = [] # <<<< THIS WAS LIKELY THE LINE I PROVIDED BEFORE
 
         # UI Elements
         self.animator_studio_group_box: QGroupBox | None = None
@@ -73,18 +81,25 @@ class AnimatorManagerWidget(QWidget):
         self.sequence_controls_widget: SequenceControlsWidget | None = None        
         self._init_ui()
         self._connect_ui_signals()
+        
 
-        # Initial state updates
+         # Initial state updates
         QTimer.singleShot(0, self.refresh_sequences_list_and_select)
-        self._update_ui_for_current_sequence() # Updates timeline, controls based on model
-        self._emit_state_updates() # Emit initial states for MainWindow
+        self._update_ui_for_current_sequence() # <<< CALLS _emit_state_updates
+        self._emit_state_updates() # <<< CALLS _emit_state_updates AGAIN
+
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0,0,0,0) # Manager widget itself might not need margins
+        main_layout.setContentsMargins(0,0,0,0)
         main_layout.setSpacing(10)
+
+        # --- Animator Studio GroupBox (Sequence Selection & Actions) ---
         self.animator_studio_group_box = QGroupBox("🎬 Animator Studio")
+        # Set a size policy that allows it to take preferred height but not expand excessively
+        self.animator_studio_group_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed) # Fixed vertical
         animator_studio_layout = QVBoxLayout(self.animator_studio_group_box)
+        # ... (rest of combo_load_layout and action_buttons_layout as before) ...
         combo_load_layout = QHBoxLayout()
         combo_load_layout.addWidget(QLabel("Sequence:"))
         self.sequence_selection_combo = QComboBox()
@@ -93,6 +108,7 @@ class AnimatorManagerWidget(QWidget):
         self.load_sequence_button = QPushButton("📲 Load")
         combo_load_layout.addWidget(self.load_sequence_button)
         animator_studio_layout.addLayout(combo_load_layout)
+        
         action_buttons_layout = QHBoxLayout()
         self.new_sequence_button = QPushButton("✨ New")
         action_buttons_layout.addWidget(self.new_sequence_button)
@@ -102,18 +118,38 @@ class AnimatorManagerWidget(QWidget):
         action_buttons_layout.addWidget(self.delete_sequence_button)
         action_buttons_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         animator_studio_layout.addLayout(action_buttons_layout)        
-        main_layout.addWidget(self.animator_studio_group_box)
+        main_layout.addWidget(self.animator_studio_group_box) # Add the groupbox to the main layout
 
         # Separator
         separator_line = QFrame()
         separator_line.setFrameShape(QFrame.Shape.HLine)
         separator_line.setFrameShadow(QFrame.Shadow.Sunken)
         main_layout.addWidget(separator_line)
-        # Timeline and Controls Widgets
+
+        # --- Timeline and Controls Widgets ---
         self.sequence_timeline_widget = SequenceTimelineWidget()
-        main_layout.addWidget(self.sequence_timeline_widget)
+        # --- CRITICAL CHANGES FOR TIMELINE WIDGET ---
+        # 1. Set a vertical size policy that allows it to expand.
+        self.sequence_timeline_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        # 2. Set a minimum height. This is an estimate.
+        #    Height of one frame item (guesstimate from your timeline code or inspection) ~40-50px?
+        #    Spacing between items ~5px?
+        #    Scrollbar height if visible?
+        #    Let's aim for roughly 2 rows + spacing. If one row is ~50px high with its preview and label,
+        #    two rows would be ~100px. Add some for margins/padding within the timeline widget.
+        #    This value might need tuning.
+        desired_min_timeline_height = 120 # Try this first (e.g., 2 rows * 50px/row + 20px padding/spacing)
+        self.sequence_timeline_widget.setMinimumHeight(desired_min_timeline_height)
+        # --- END CRITICAL CHANGES ---
+        main_layout.addWidget(self.sequence_timeline_widget) # Stretch factor for this widget is handled by its size policy now
+
         self.sequence_controls_widget = SequenceControlsWidget()
+        # Controls widget usually has a fixed height based on its buttons
+        self.sequence_controls_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         main_layout.addWidget(self.sequence_controls_widget)
+
+        # --- Ensure AnimatorManagerWidget itself can expand vertically ---
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
     def _connect_ui_signals(self):
         # Animator Studio Buttons
@@ -124,24 +160,9 @@ class AnimatorManagerWidget(QWidget):
         self.save_sequence_as_button.clicked.connect(self.action_save_sequence_as)
         self.delete_sequence_button.clicked.connect(self._on_delete_selected_sequence_button_clicked)
 
-        # Timeline Widget
-        self.sequence_timeline_widget.frame_selected.connect(self.on_timeline_frame_selected)
-        self.sequence_timeline_widget.add_frame_action_triggered.connect(self.on_timeline_add_frame_action) # type: "snapshot" or "blank"
-        self.sequence_timeline_widget.copy_frames_action_triggered.connect(self.action_copy_frames)
-        self.sequence_timeline_widget.cut_frames_action_triggered.connect(self.action_cut_frames)
-        self.sequence_timeline_widget.paste_frames_action_triggered.connect(self.action_paste_frames)
-        self.sequence_timeline_widget.duplicate_selected_action_triggered.connect(self.action_duplicate_selected_frames)
-        self.sequence_timeline_widget.delete_selected_action_triggered.connect(self.action_delete_selected_frames)
-        self.sequence_timeline_widget.select_all_action_triggered.connect(self.action_select_all_frames)
-        self.sequence_timeline_widget.insert_blank_frame_before_action_triggered.connect(
-            lambda index: self.action_add_frame("blank", at_index=index)
-        )
-        self.sequence_timeline_widget.insert_blank_frame_after_action_triggered.connect(
-            lambda index: self.action_add_frame("blank", at_index=index + 1)
-        )
-
         # Controls Widget
-        self.sequence_controls_widget.add_frame_requested.connect(self.action_add_frame) # type: "snapshot" or "blank"
+        self.sequence_controls_widget.add_frame_requested.connect(self.action_add_frame) # Handles "blank" from controls
+        # self.sequence_controls_widget.default_add_button_clicked.connect(self.handle_default_add_button_click) # REMOVED
         self.sequence_controls_widget.delete_selected_frame_requested.connect(self.action_delete_selected_frames)
         self.sequence_controls_widget.duplicate_selected_frame_requested.connect(self.action_duplicate_selected_frames)
         self.sequence_controls_widget.copy_frames_requested.connect(self.action_copy_frames)
@@ -155,6 +176,23 @@ class AnimatorManagerWidget(QWidget):
         self.sequence_controls_widget.pause_requested.connect(self.action_pause)
         self.sequence_controls_widget.stop_requested.connect(self.action_stop)
         self.sequence_controls_widget.frame_delay_changed.connect(self.on_controls_frame_delay_changed)
+
+        # Timeline Widget
+        self.sequence_timeline_widget.add_frame_action_triggered.connect(self.on_timeline_add_frame_action) # Connects to revised method
+        self.sequence_timeline_widget.frame_selected.connect(self.on_timeline_frame_selected)
+        self.sequence_timeline_widget.copy_frames_action_triggered.connect(self.action_copy_frames)
+        self.sequence_timeline_widget.cut_frames_action_triggered.connect(self.action_cut_frames)
+        self.sequence_timeline_widget.paste_frames_action_triggered.connect(self.action_paste_frames)
+        self.sequence_timeline_widget.duplicate_selected_action_triggered.connect(self.action_duplicate_selected_frames)
+        self.sequence_timeline_widget.delete_selected_action_triggered.connect(self.action_delete_selected_frames)
+        self.sequence_timeline_widget.select_all_action_triggered.connect(self.action_select_all_frames)
+        
+        self.sequence_timeline_widget.insert_blank_frame_before_action_triggered.connect(
+            lambda index: self.action_add_frame("blank", at_index=index)
+        )
+        self.sequence_timeline_widget.insert_blank_frame_after_action_triggered.connect(
+            lambda index: self.action_add_frame("blank", at_index=index + 1)
+        )
 
     def _connect_signals_for_active_sequence_model(self):
         # Disconnect previous model's signals first if any
@@ -182,6 +220,143 @@ class AnimatorManagerWidget(QWidget):
         self.undo_redo_state_changed.emit(bool(self.active_sequence_model._undo_stack), bool(self.active_sequence_model._redo_stack))
         self.clipboard_state_changed.emit(bool(self.frame_clipboard))
         self._update_animator_controls_enabled_state() # Local UI update
+
+    def get_current_sequence_fps(self) -> float:
+        """
+        Calculates and returns the current sequence's playback speed in FPS.
+        Returns a default (e.g., 10 FPS) if delay is zero or model is unavailable.
+        """
+        if self.active_sequence_model and self.active_sequence_model.frame_delay_ms > 0:
+            return 1000.0 / self.active_sequence_model.frame_delay_ms
+        elif self.active_sequence_model and self.active_sequence_model.frame_delay_ms == 0:
+            # Handle case where delay is 0 (could mean max speed or undefined)
+            # For FPS display, a very high number or a practical cap might be suitable.
+            # Let's return a high practical FPS or a default if delay is 0.
+            return 60.0 # Or some other defined maximum sensible FPS
+        # Fallback if no model or invalid delay
+        # Default FPS from SequenceControlsWidget or a general default
+        if hasattr(self, 'sequence_controls_widget') and self.sequence_controls_widget:
+             # Attempt to get it from the UI if it has a default
+            initial_delay_ms = self.sequence_controls_widget.get_current_delay_ms()
+            if initial_delay_ms > 0:
+                return 1000.0 / initial_delay_ms
+        return 10.0 # General fallback FPS
+
+    def set_playback_fps(self, fps: float):
+        """
+        Sets the playback speed of the current sequence based on FPS.
+        Updates the model's frame_delay_ms and the playback timer if active.
+        """
+        if not self.active_sequence_model:
+            return
+
+        min_fps = 0.1  # Avoid division by zero and ridiculously slow speeds
+        max_fps = 100.0 # Practical upper limit for sanity
+        clamped_fps = max(min_fps, min(fps, max_fps))
+
+        if clamped_fps <= 0: # Should be caught by min_fps, but safety
+            new_delay_ms = 1000 # Default to 1 FPS
+        else:
+            new_delay_ms = int(round(1000.0 / clamped_fps))
+        
+        # Prevent extremely short delays that might overwhelm
+        min_delay_ms = 10 # Corresponds to 100 FPS
+        actual_delay_ms = max(min_delay_ms, new_delay_ms)
+
+        # print(f"AMW DEBUG: set_playback_fps: target_fps={fps}, clamped_fps={clamped_fps}, new_delay_ms={actual_delay_ms}") # Optional
+
+        self.active_sequence_model.set_frame_delay_ms(actual_delay_ms)
+        # The model's set_frame_delay_ms should emit properties_changed,
+        # which _update_ui_for_current_sequence_properties connects to,
+        # which then calls self.sequence_controls_widget.set_frame_delay_ui.
+
+        if self.playback_timer.isActive():
+            self.playback_timer.start(actual_delay_ms) # Restart timer with new interval
+
+        # Optionally, emit a signal if other parts of UI need to know FPS changed directly
+        # self.playback_speed_changed.emit(1000.0 / actual_delay_ms if actual_delay_ms > 0 else 0)
+        
+        # Update controls widget UI (redundant if model signal already does this, but safe)
+        if hasattr(self, 'sequence_controls_widget') and self.sequence_controls_widget:
+            self.sequence_controls_widget.set_frame_delay_ui(actual_delay_ms)
+
+        # Notify MainWindow that properties (including potentially unsaved speed) changed
+        self._emit_state_updates()
+    # --- NEW Methods for External Navigation Control ---
+
+    def get_navigation_item_count(self) -> int:
+        """Returns the number of actual items in the sequence combo box (excluding placeholder)."""
+        if self.sequence_selection_combo:
+            # If the first item is a placeholder like "--- Select ---", don't count it.
+            # Or, count all and let MainWindow handle index adjustments if placeholder is always at index 0.
+            # For simplicity, let's assume we only care about actual sequence items.
+            count = 0
+            for i in range(self.sequence_selection_combo.count()):
+                # Check if itemData exists, as placeholder might not have it
+                if self.sequence_selection_combo.itemData(i) is not None:
+                    count += 1
+            return count
+        return 0
+
+    def get_navigation_item_text_at_logical_index(self, logical_index: int) -> str | None:
+        """
+        Returns the display text of the sequence at the given logical_index.
+        Logical_index is 0-based for actual sequence items, skipping placeholder.
+        """
+        if self.sequence_selection_combo:
+            actual_combo_index = -1
+            current_logical_idx = -1
+            for i in range(self.sequence_selection_combo.count()):
+                if self.sequence_selection_combo.itemData(i) is not None: # This is an actual item
+                    current_logical_idx += 1
+                    if current_logical_idx == logical_index:
+                        actual_combo_index = i
+                        break
+            
+            if actual_combo_index != -1:
+                return self.sequence_selection_combo.itemText(actual_combo_index)
+        return None
+
+    def set_navigation_current_item_by_logical_index(self, logical_index: int) -> str | None:
+        if self.sequence_selection_combo:
+            actual_combo_index_to_set = -1
+            current_logical_idx = -1
+            for i in range(self.sequence_selection_combo.count()):
+                if self.sequence_selection_combo.itemData(i) is not None: 
+                    current_logical_idx += 1
+                    if current_logical_idx == logical_index:
+                        actual_combo_index_to_set = i
+                        break
+            
+            if actual_combo_index_to_set != -1:
+                # --- ADD DEBUG PRINTS ---
+                current_gui_index = self.sequence_selection_combo.currentIndex()
+                current_gui_text = self.sequence_selection_combo.currentText()
+                text_at_new_index = self.sequence_selection_combo.itemText(actual_combo_index_to_set)
+                print(f"AMW TRACE: Nav: Current GUI index={current_gui_index} ('{current_gui_text}')")
+                print(f"AMW TRACE: Nav: Trying to set GUI index to {actual_combo_index_to_set} ('{text_at_new_index}') for logical_index {logical_index}")
+                # --- END DEBUG PRINTS ---
+
+                if current_gui_index != actual_combo_index_to_set:
+                    self.sequence_selection_combo.setCurrentIndex(actual_combo_index_to_set)
+                    print(f"AMW TRACE: Nav: setCurrentIndex({actual_combo_index_to_set}) CALLED.") # Confirm call
+                    # _on_sequence_combo_changed will be called by Qt if index truly changed.
+                # else: # Optional
+                    # print(f"AMW TRACE: Nav: GUI index {actual_combo_index_to_set} already selected.")
+                return self.sequence_selection_combo.itemText(actual_combo_index_to_set) # Return text of (now) current item
+        return None
+    
+    def trigger_navigation_current_item_action(self):
+        """
+        Triggers the action for the currently selected item in the sequence combo box,
+        which is typically loading it.
+        """
+        # print("AMW TRACE: trigger_navigation_current_item_action called.") # Optional
+        # This reuses the logic from the "Load" button.
+        # Ensure _request_load_selected_sequence_from_main handles the current selection correctly.
+        self._request_load_selected_sequence_from_main()
+
+    # --- END NEW Methods ---
 
     # --- Public Methods for MainWindow to call (e.g., from QActions) ---
     def action_undo(self):
@@ -314,6 +489,7 @@ class AnimatorManagerWidget(QWidget):
         return [QColor("black").name()] * 64 # Placeholder
 
     def _update_ui_for_current_sequence(self):
+        print(f"DEBUG AMW._update_ui_for_current_sequence: Called. Frame count: {self.active_sequence_model.get_frame_count()}") # ADD THIS
         # Updates timeline, controls widget properties based on the active_sequence_model
         all_frames_colors = [self.active_sequence_model.get_frame_colors(i) or [QColor("black").name()] * 64
                              for i in range(self.active_sequence_model.get_frame_count())]
@@ -372,13 +548,22 @@ class AnimatorManagerWidget(QWidget):
         self._update_ui_for_current_sequence() # Refresh timeline thumbnails
 
     def on_model_edit_frame_changed(self, frame_index: int):
+        print(f"DEBUG AMW: on_model_edit_frame_changed CALLED with NEW model_frame_index: {frame_index}") # ADD THIS
         self.stop_current_animation_playback()
+        print(f"DEBUG AMW: on_model_edit_frame_changed - Calling timeline_widget.set_selected_frame_by_index({frame_index})") # ADD THIS
         self.sequence_timeline_widget.set_selected_frame_by_index(frame_index)
         colors_hex = None
         if frame_index != -1:
-            colors_hex = self.active_sequence_model.get_frame_colors(frame_index)       
-        self.active_frame_data_for_display.emit(colors_hex if colors_hex else [QColor("black").name()] * 64)
-        self._emit_state_updates()
+            print(f"DEBUG AMW: on_model_edit_frame_changed - Attempting to get colors for frame_index: {frame_index}") # ADD THIS
+            colors_hex = self.active_sequence_model.get_frame_colors(frame_index) 
+            print(f"DEBUG AMW: on_model_edit_frame_changed - Fetched colors: {str(colors_hex)[:100]}...") # ADD THIS (log sample)
+        else:
+            print("DEBUG AMW: on_model_edit_frame_changed - frame_index is -1, no colors to fetch.") # ADD THIS
+        
+        final_data_to_emit = colors_hex if colors_hex else [QColor("black").name()] * 64 # Ensure QColor imported
+        print(f"DEBUG AMW: on_model_edit_frame_changed - Emitting active_frame_data_for_display with sample: {str(final_data_to_emit)[:100]}...") # ADD THIS
+        self.active_frame_data_for_display.emit(final_data_to_emit)
+        self._emit_state_updates() 
 
     def on_model_playback_state_changed(self, is_playing: bool):
         self.sequence_controls_widget.update_playback_button_state(is_playing)
@@ -409,29 +594,82 @@ class AnimatorManagerWidget(QWidget):
         if self.active_sequence_model.get_is_playing(): self.active_sequence_model.stop_playback()
 
     def on_timeline_frame_selected(self, frame_index: int):
-        self.request_sampler_disable.emit()
+        # This slot is called when the timeline's selection (often single item focus) changes.
+        print(f"DEBUG AMW: on_timeline_frame_selected CALLED with frame_index from timeline: {frame_index}")
+        
+        self.request_sampler_disable.emit() # Good: ensure sampler is off if user interacts with timeline
+
+        # Step 1: Tell the model about the new intended edit frame.
+        # The model will only emit current_edit_frame_changed if the index *actually* differs from its current one.
+        print(f"DEBUG AMW: on_timeline_frame_selected - Calling model.set_current_edit_frame_index({frame_index})")
         self.active_sequence_model.set_current_edit_frame_index(frame_index)
 
-    def on_timeline_add_frame_action(self, frame_type: str): # "snapshot" or "blank"
+        # Step 2: Proactively fetch and display the content of this frame_index.
+        # This ensures the canvas updates even if the model's current_edit_frame_index didn't change
+        # (e.g., re-clicking the same frame to refresh its view on the canvas).
+        # This also decouples this specific UI action (timeline click wants to see frame X)
+        # from relying solely on the on_model_edit_frame_changed slot for this particular update path.
+        
+        current_colors_hex = None
+        if frame_index != -1 and self.active_sequence_model: # Check model exists
+            print(f"DEBUG AMW: on_timeline_frame_selected - Proactively fetching colors for frame_index: {frame_index}")
+            current_colors_hex = self.active_sequence_model.get_frame_colors(frame_index)
+            print(f"DEBUG AMW: on_timeline_frame_selected - Proactively fetched colors (sample): {str(current_colors_hex)[:100]}...")
+        else:
+            print(f"DEBUG AMW: on_timeline_frame_selected - frame_index is -1 or no model, using blank.")
+            
+        # Ensure QColor is imported at the top of this file if not already
+        # from PyQt6.QtGui import QColor
+        final_data_to_emit = current_colors_hex if current_colors_hex else [QColor("black").name()] * 64
+        
+        print(f"DEBUG AMW: on_timeline_frame_selected - Emitting active_frame_data_for_display (sample): {str(final_data_to_emit)[:100]}...")
+        self.active_frame_data_for_display.emit(final_data_to_emit)
+        
+        # Note: self.on_model_edit_frame_changed will still be called if the model *did* change its index
+        # and emit current_edit_frame_changed. This might lead to a double emit of active_frame_data_for_display
+        # if the index changed. This is usually harmless but could be optimized later if it causes issues
+        # (e.g., by having on_model_edit_frame_changed check if the data is already what it's about to send).
+        # For now, this direct update from timeline click is the priority.
+
+
+    def on_timeline_add_frame_action(self, frame_type: str): # frame_type will now only be "blank" from timeline menu
+        # print(f"DEBUG AMW.on_timeline_add_frame_action: type='{frame_type}'") # Optional debug
         self.request_sampler_disable.emit()
         current_edit_idx = self.active_sequence_model.get_current_edit_frame_index()
         insert_at = current_edit_idx + 1 if current_edit_idx != -1 else None
-        self.action_add_frame(frame_type, at_index=insert_at)
+        
+        if frame_type == "blank":
+            self.action_add_frame("blank", at_index=insert_at)
+        # The "snapshot" case is removed here as the timeline menu will no longer offer it.
+        # If timeline somehow still sent "snapshot", action_add_frame would handle it (likely as a blank).
 
     def action_add_frame(self, frame_type: str, at_index: int | None = None, snapshot_data: list[str] | None = None):
-        # snapshot_data is expected if frame_type is "snapshot", provided by MainWindow
+        # print(f"DEBUG AMW.action_add_frame: Called with type='{frame_type}', at_index={at_index}, snapshot_data_present={snapshot_data is not None}") # Optional debug
         self.request_sampler_disable.emit()
         self.stop_current_animation_playback()
-        if frame_type == "snapshot":
-            if snapshot_data:
-                self.active_sequence_model.add_frame_snapshot(snapshot_data, at_index)
-                self.playback_status_update.emit("Snapshot frame added.", 1500)
-            else:
-                self.playback_status_update.emit("Cannot add snapshot: No grid data provided.", 2000)
-        elif frame_type == "blank":
+
+        if frame_type == "blank":
             self.active_sequence_model.add_blank_frame(at_index)
             self.playback_status_update.emit("Blank frame added.", 1500)
-        # Model's frames_changed signal will trigger UI update and _emit_state_updates
+        elif frame_type == "snapshot":
+            # This case would only be hit if some other part of the code calls it with "snapshot" AND data.
+            # UI elements are being changed to not call this directly without data.
+            if snapshot_data:
+                # To handle a "true" snapshot request (if it ever comes with data):
+                # 1. Add a blank frame where the snapshot will be.
+                new_frame_idx = self.active_sequence_model.add_blank_frame(at_index)
+                # 2. If a frame was added and selected, update its content.
+                if new_frame_idx == self.active_sequence_model.get_current_edit_frame_index() and new_frame_idx != -1:
+                    self.active_sequence_model.update_all_pads_in_current_edit_frame(snapshot_data)
+                    self.playback_status_update.emit("Snapshot applied to new frame.", 1500)
+                else:
+                    self.playback_status_update.emit("Snapshot data received, but couldn't apply to new frame.", 3000)
+            else:
+                self.playback_status_update.emit("Snapshot type called without data; adding blank frame instead.", 2500)
+                self.active_sequence_model.add_blank_frame(at_index) # Fallback to blank
+        else:
+            print(f"Warning AMW.action_add_frame: Unknown frame_type '{frame_type}', adding blank frame.")
+            self.active_sequence_model.add_blank_frame(at_index) # Fallback to blank
 
     def action_navigate_first(self):
         self.request_sampler_disable.emit()
@@ -483,20 +721,15 @@ class AnimatorManagerWidget(QWidget):
 
     # --- Sequence File Management ---
     def _get_sequence_dir_path(self, dir_type: str = "user") -> str:
-        # Using constants for subdir names
-        _PREFAB_SEQUENCES_DIR_NAME = "prefab"
-        _USER_SEQUENCES_DIR_NAME = "user"
-        _SAMPLER_RECORDINGS_DIR_NAME = "sampler_recordings"
-        _SEQUENCES_BASE_SUBDIR = "sequences"
-
-        dir_name_map = {
-            "user": _USER_SEQUENCES_DIR_NAME,
-            "prefab": _PREFAB_SEQUENCES_DIR_NAME,
-            "sampler": _SAMPLER_RECORDINGS_DIR_NAME
-        }
-        target_dir_name = dir_name_map.get(dir_type, _USER_SEQUENCES_DIR_NAME)
-        # self.presets_base_path is passed from MainWindow
-        return os.path.join(self.presets_base_path, _SEQUENCES_BASE_SUBDIR, target_dir_name)
+        if dir_type == "user":
+            return self.user_sequences_path
+        elif dir_type == "prefab":
+            return self.prefab_sequences_path
+        elif dir_type == "sampler":
+            return self.sampler_recordings_path
+        else:
+            print(f"Warning: Unknown sequence dir_type '{dir_type}' in AnimatorManagerWidget. Defaulting to user path.")
+            return self.user_sequences_path # Fallback
 
     def _load_all_sequences_metadata(self) -> dict:
         PREFIX_SAMPLER = "[Sampler] "

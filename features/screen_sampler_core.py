@@ -11,7 +11,7 @@ class ScreenSamplerCore:
     DEFAULT_FALLBACK_LOGICAL_HEIGHT = 128
     DEFAULT_FULLSCREEN_DOWNSCALE_DIMENSIONS = (100, 100) # For the single averaged color if overall region is full
     DEFAULT_ADJUSTMENTS = {
-        'saturation': 1.0, 'contrast': 1.0, 'brightness': 1.0, 'hue_shift': 0
+        'saturation': 2.0, 'contrast': 1.0, 'brightness': 1.5, 'hue_shift': 0
     }
     _save_temp_preview_image_for_diagnosis = False 
     
@@ -124,12 +124,6 @@ class ScreenSamplerCore:
                 enhancer_s = ImageEnhance.Color(pil_full_preview_scb_adjusted)
                 pil_full_preview_scb_adjusted = enhancer_s.enhance(current_adjustments['saturation'])
 
-            # (Optional: Save this full preview image for diagnosis)
-            if ScreenSamplerCore._save_temp_preview_image_for_diagnosis and pil_full_preview_scb_adjusted:
-                try:
-                    # ... (save logic as before, name it e.g., _temp_full_scb_preview.png)
-                    pass
-                except: pass
             
             # 4. Subdivide, Average, and Hue Shift for each grid cell
             pad_colors_final = []
@@ -183,27 +177,13 @@ class ScreenSamplerCore:
                     pad_colors_final.append(hue_shifted_color)
             
             return pad_colors_final, pil_full_preview_scb_adjusted
-
+        # Handle specific mss exceptions
         except mss.exception.ScreenShotError: pass # Usually due to invalid region, already handled by size check
         except Exception as e: print(f"ScreenSamplerCore: Error in grid sampling: {e}")
         
         # Fallback if error: return None for colors, but still return preview if available
         return None, pil_full_preview_scb_adjusted
 
-
-    # --- Old capture_average_color (for single color output) - CAN BE REMOVED if not used elsewhere ---
-    # For now, let's keep it commented out or decide if it's needed as a separate feature path.
-    # If MainWindow always expects a list of colors now, this is redundant.
-    """
-    @staticmethod
-    def capture_average_color(
-        sct_instance, monitor_capture_id: int, region_rect_percentage: dict, 
-        adjustments: dict | None = None,
-        fullscreen_downscale_dimensions: tuple[int, int] = DEFAULT_FULLSCREEN_DOWNSCALE_DIMENSIONS
-    ) -> tuple[tuple[int, int, int] | None, Image.Image | None]:
-        # ... (previous implementation for single average color) ...
-        pass 
-    """
 
 if __name__ == '__main__':
     print("ScreenSamplerCore: Main example for GR 그리드 샘플링 started.")
