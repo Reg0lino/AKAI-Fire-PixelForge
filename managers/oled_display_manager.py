@@ -1,6 +1,6 @@
 # AKAI_Fire_RGB_Controller/managers/oled_display_manager.py
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer, Qt, QBuffer, QIODevice
-from PyQt6.QtGui import QImage, QPainter, QColor, QFont, QFontMetrics # Keep QFont for Qt rendering path
+from PyQt6.QtGui import QImage, QPainter, QColor, QFont, QFontMetrics, QFontDatabase
 from PIL import Image, ImageFont # Crucial for PIL font objects
 import os
 import sys # For sys.path manipulation if needed for utils import
@@ -75,9 +75,12 @@ class OLEDDisplayManager(QObject):
     def __init__(self, akai_fire_controller_ref, parent: QObject | None = None):
         super().__init__(parent)
         
+        self.akai_fire_controller = akai_fire_controller_ref # Store the reference
+
+        # Existing attributes for text display
         self.current_display_text: str | None = None      
-        self.normal_display_text: str | None = None       
-        self.persistent_override_text: str | None = None  
+        self.normal_display_text: str | None = None # What to show normally (could be startup text or sequence name)
+        self.persistent_override_text: str | None = None # e.g., "SAMPLING"
         self.is_knob_feedback_active: bool = False 
 
         self.scroll_timer = QTimer(self)
@@ -85,84 +88,251 @@ class OLEDDisplayManager(QObject):
         self.current_scroll_offset = 0
         self.text_width_pixels = 0 
         self.is_scrolling_active = False
-        self.is_startup_animation_playing = False
+        
+        # Existing attributes for the built-in startup animation (the one with pulses/grids)
+        self.is_startup_animation_playing = False # For the hardcoded Fire startup visual
+        self._startup_animation_frames_builtin: list[bytearray] = [] # Renamed to be specific
+        self._current_startup_animation_frame_index_builtin: int = 0 # Renamed
+        self._startup_animation_frame_duration_builtin: int = 60 # Renamed
 
-        self._animation_frames: list[bytearray] = []
-        self._current_animation_frame_index: int = 0
-        self._animation_frame_duration: int = 60
-
+        # --- NEW Attributes for Custom Image/GIF Animation Playback ---
+        self._custom_animation_logical_frames: list[list[str]] | None = None
+        self._custom_animation_current_frame_index: int = 0
+        self._custom_animation_playback_fps: float = 15.0
+        self._custom_animation_loop_behavior: str = "Loop Infinitely" # "Loop Infinitely" or "Play Once"
+        self._custom_animation_timer = QTimer(self) # New timer for custom animations
+        self._custom_animation_timer.timeout.connect(self._play_next_custom_animation_frame) # Connect to new slot
+        self._is_custom_animation_playing: bool = False # Tracks if a user-defined animation is active
+        # --- END NEW Attributes ---
+        
         self.oled_width = oled_renderer.OLED_WIDTH if OLED_RENDERER_AVAILABLE else 128
         self.oled_height = oled_renderer.OLED_HEIGHT if OLED_RENDERER_AVAILABLE else 64
         
+        # Default text/font settings (can be overridden by loaded items)
         self.startup_text: str = "Fire CTRL Ready!" 
         self.startup_font_family: str = "Arial"    
         self.startup_font_size_px: int = 12        
         
-        # --- ADD: Attribute for effective scroll delay ---
-        self.effective_scroll_delay_ms: int = self.DEFAULT_SCROLL_DELAY_MS # Initialize with class default
-        # --- END ADD ---
+        self.effective_scroll_delay_ms: int = self.DEFAULT_SCROLL_DELAY_MS
 
+        # Font objects
         self.active_pil_font_object: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None 
         self.knob_feedback_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
         
-        # --- ADD: Load dedicated font for knob feedback ---
-        if UTILS_AVAILABLE and OLED_RENDERER_AVAILABLE: # Only try if utils and renderer are available
+        # Load dedicated font for knob feedback
+        if UTILS_AVAILABLE and OLED_RENDERER_AVAILABLE:
             try:
                 feedback_font_path = resource_path_func(os.path.join("resources", "fonts", "TomThumb.ttf"))
                 if os.path.exists(feedback_font_path):
-                    self.knob_feedback_pil_font = ImageFont.truetype(feedback_font_path, 60) # Use 60px as requested
+                    self.knob_feedback_pil_font = ImageFont.truetype(feedback_font_path, 60)
                     print(f"OLED Mgr INFO: Loaded TomThumb.ttf @ 60px for knob feedback.")
                 else:
                     print(f"OLED Mgr WARNING: TomThumb.ttf for knob feedback not found at '{feedback_font_path}'.")
-                    raise IOError("Knob feedback font file not found.")
+                    self.knob_feedback_pil_font = ImageFont.load_default() # Fallback
             except Exception as e_kf:
-                print(f"OLED Mgr WARNING: Failed to load TomThumb.ttf @ 60px for knob feedback: {e_kf}. Using Pillow default for feedback.")
-                try:
-                    self.knob_feedback_pil_font = ImageFont.load_default()
-                except: # Should not happen
-                    self.knob_feedback_pil_font = None 
+                print(f"OLED Mgr WARNING: Failed to load TomThumb.ttf @ 60px for knob feedback: {e_kf}. Using Pillow default.")
+                self.knob_feedback_pil_font = ImageFont.load_default()
         elif not UTILS_AVAILABLE:
             print("OLED Mgr WARNING: Utils not available, cannot load specific knob feedback font by path.")
-            try: self.knob_feedback_pil_font = ImageFont.load_default()
-            except: self.knob_feedback_pil_font = None
-        # --- END ADD ---
-        
-        self._try_load_resource_font_for_startup() 
-        
-        print(f"OLEDDisplayManager: Initialized. Startup Font Target: '{self.startup_font_family}' @ {self.startup_font_size_px}px, ScrollDelay: {self.effective_scroll_delay_ms}ms")
-        # ... (logging for active_pil_font_object as before)
+            self.knob_feedback_pil_font = ImageFont.load_default()
+        else: # Only OLED_RENDERER_AVAILABLE is false
+             self.knob_feedback_pil_font = None # Or some placeholder if needed
 
+        self._try_load_resource_font_for_startup() # Initialize active_pil_font_object
+        
+        print(f"OLEDDisplayManager: Initialized. Startup Font: '{self.startup_font_family}' @ {self.startup_font_size_px}px, ScrollDelay: {self.effective_scroll_delay_ms}ms")
+        
     def _try_load_resource_font_for_startup(self):
         """
         Attempts to load self.startup_font_family as a resource font into self.active_pil_font_object.
-        Called on init and when default text settings are updated.
+        Relies on the module-level 'resource_path_func'.
         """
         self.active_pil_font_object = None # Reset
         font_family_to_load = self.startup_font_family
         font_size_to_load = self.startup_font_size_px
 
-        known_resource_fonts = {"tomthumb.ttf": "TomThumb.ttf"} # Can expand this
-        is_known_resource = font_family_to_load.lower() in known_resource_fonts
+        # Simple check for .ttf or .otf often indicates a direct filename for resource fonts
+        is_potential_resource_filename = isinstance(font_family_to_load, str) and \
+                                         font_family_to_load.lower().endswith((".ttf", ".otf"))
 
-        if is_known_resource:
-            actual_resource_filename = known_resource_fonts[font_family_to_load.lower()]
-            print(f"OLED Mgr DEBUG: _try_load_resource_font - Attempting RESOURCE: '{actual_resource_filename}'")
+        if is_potential_resource_filename and UTILS_AVAILABLE: # Check if resource_path_func is expected to work
+            # print(f"OLED Mgr DEBUG: _try_load_resource_font - Attempting RESOURCE: '{font_family_to_load}'")
             try:
-                # Ensure resource_path_func is available
-                if 'resource_path_func' not in globals() or not callable(globals().get('resource_path_func')):
-                    from ..utils import get_resource_path as resource_path_func # Adjust if utils path is different
-                
-                font_path = resource_path_func(os.path.join("resources", "fonts", actual_resource_filename))
+                # Directly use the module-level imported resource_path_func
+                font_path = resource_path_func(os.path.join("resources", "fonts", font_family_to_load))
                 if os.path.exists(font_path):
                     self.active_pil_font_object = ImageFont.truetype(font_path, font_size_to_load)
-                    print(f"OLED Mgr INFO: _try_load_resource_font - SUCCESS - Loaded RESOURCE font '{actual_resource_filename}' into PIL ImageFont.")
+                    print(f"OLED Mgr INFO: _try_load_resource_font - SUCCESS - Loaded RESOURCE font '{font_family_to_load}' @{font_size_to_load}px into PIL ImageFont.")
                 else:
-                    print(f"OLED Mgr WARNING: _try_load_resource_font - Resource font file NOT FOUND: '{font_path}'")
+                    print(f"OLED Mgr WARNING: _try_load_resource_font - Resource font file NOT FOUND: '{font_path}' for family '{font_family_to_load}'")
+            except NameError as ne:
+                 print(f"OLED Mgr CRITICAL ERROR: _try_load_resource_font - 'resource_path_func' is not defined. This indicates an import issue at the module level of oled_display_manager.py. {ne}")
             except Exception as e_res:
-                print(f"OLED Mgr WARNING: _try_load_resource_font - Failed to load resource font '{actual_resource_filename}': {e_res}")
-        # else: # Optional: print if it's not a known resource, will be handled by Qt rendering path
-            # print(f"OLED Mgr DEBUG: _try_load_resource_font - '{font_family_to_load}' is not a known resource filename. Will use Qt rendering.")
+                print(f"OLED Mgr WARNING: _try_load_resource_font - Failed to load resource font '{font_family_to_load}': {e_res}")
+        elif is_potential_resource_filename and not UTILS_AVAILABLE:
+            print(f"OLED Mgr WARNING: _try_load_resource_font - UTILS_AVAILABLE is False. Cannot attempt to load resource font '{font_family_to_load}' by path.")
+        # else: # If not a .ttf/.otf, it will be treated as a system font family name by Qt render path
+            # print(f"OLED Mgr DEBUG: _try_load_resource_font - '{font_family_to_load}' is not a direct resource filename. Will use Qt rendering path if system font.")
+    
+    def _logical_frame_to_pil_image(self, logical_frame: list[str]) -> Image.Image | None:
+        """
+        Converts a logical frame (list of 64 strings, each 128 '0's or '1's)
+        into a 128x64 1-bit PIL Image.
+        '1' represents a white (on) pixel, '0' represents a black (off) pixel.
+        """
+        if not isinstance(logical_frame, list) or len(logical_frame) != self.oled_height:
+            print(
+                f"OLED Mgr ERROR (_logical_frame_to_pil_image): Invalid logical frame format or height. Expected {self.oled_height} rows.")
+            return None
 
+        try:
+            # Create a new 1-bit PIL Image. Mode '1' pixels are 0 (black) or 1 (white).
+            # Some PIL versions/operations prefer 255 for white when converting from other modes,
+            # but for direct '1' mode pixel setting, 0 and 1 are standard.
+            # 0 for black background
+            pil_image = Image.new('1', (self.oled_width, self.oled_height), 0)
+            pixels = pil_image.load()  # Get pixel access object
+
+            for y, row_str in enumerate(logical_frame):
+                if not isinstance(row_str, str) or len(row_str) != self.oled_width:
+                    print(
+                        f"OLED Mgr ERROR (_logical_frame_to_pil_image): Invalid row in logical frame at y={y}. Expected string of length {self.oled_width}.")
+                    # Continue to process other rows, or return None to indicate fatal error
+                    # For robustness, let's try to make the best of it but log errors.
+                    # If one row is bad, the image will be partially incorrect.
+                    # Depending on strictness, you might want to `return None` here.
+                    continue
+
+                for x, pixel_char in enumerate(row_str):
+                    if pixel_char == '1':
+                        pixels[x, y] = 1  # Set white pixel (for '1' mode)
+                    # else: it's '0' or other, remains black due to initial fill
+
+            return pil_image
+        except Exception as e:
+            print(
+                f"OLED Mgr ERROR (_logical_frame_to_pil_image): Exception during conversion: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def play_animation_item(self, item_data: dict):
+        """
+        Plays a custom image/GIF animation based on the provided item_data.
+        item_data is expected to be a dictionary loaded from an animation JSON file.
+        """
+        if not item_data or not isinstance(item_data, dict):
+            print(
+                "OLED Mgr ERROR (play_animation_item): Invalid or empty item_data provided.")
+            self.show_hardcoded_default_message()  # Fallback
+            return
+
+        item_name = item_data.get("item_name", "Unnamed Animation")
+        print(f"OLED Mgr INFO: play_animation_item called for: '{item_name}'")
+
+        # Stop any ongoing text scroll, built-in anim, or previous custom anim
+        self.stop_all_activity()
+
+        self._custom_animation_logical_frames = item_data.get("frames_logical")
+        import_options = item_data.get("import_options_used", {})
+
+        self._custom_animation_playback_fps = float(
+            import_options.get("playback_fps", 15.0))
+        self._custom_animation_loop_behavior = import_options.get(
+            "loop_behavior", "Loop Infinitely")
+
+        if not self._custom_animation_logical_frames or \
+           not isinstance(self._custom_animation_logical_frames, list) or \
+           len(self._custom_animation_logical_frames) == 0:
+            print(
+                f"OLED Mgr ERROR (play_animation_item): No logical frames found for animation '{item_name}'.")
+            self._is_custom_animation_playing = False  # Ensure flag is false
+            self.show_hardcoded_default_message()  # Fallback
+            return
+
+        if self._custom_animation_playback_fps <= 0:
+            print(
+                f"OLED Mgr WARNING (play_animation_item): Invalid playback_fps ({self._custom_animation_playback_fps}) for '{item_name}'. Defaulting to 10 FPS.")
+            self._custom_animation_playback_fps = 10.0
+
+        self._is_custom_animation_playing = True  # Set flag before starting timer
+        self._custom_animation_current_frame_index = 0
+
+        timer_interval_ms = int(1000.0 / self._custom_animation_playback_fps)
+        # Ensure a minimum practical interval (e.g., ~16ms for ~60fps, ~33ms for ~30fps)
+        min_interval = 33
+        if timer_interval_ms < min_interval:
+            print(
+                f"OLED Mgr WARNING (play_animation_item): Calculated interval {timer_interval_ms}ms is too low for '{item_name}'. Clamping to {min_interval}ms.")
+            timer_interval_ms = min_interval
+
+        print(
+            f"OLED Mgr INFO: Starting animation '{item_name}' at {self._custom_animation_playback_fps:.2f} FPS (Interval: {timer_interval_ms}ms), Loop: {self._custom_animation_loop_behavior}")
+
+        self._custom_animation_timer.start(timer_interval_ms)
+        self._play_next_custom_animation_frame()  # Display the first frame immediately
+    
+    def _play_next_custom_animation_frame(self):
+        if not self._is_custom_animation_playing or \
+           not self._custom_animation_logical_frames or \
+           self._custom_animation_current_frame_index >= len(self._custom_animation_logical_frames):
+
+            # This condition means animation ended or was stopped externally.
+            # If it ended naturally (index out of bounds), handle loop or stop.
+            if self._is_custom_animation_playing and \
+               self._custom_animation_logical_frames and \
+               self._custom_animation_current_frame_index >= len(self._custom_animation_logical_frames):
+
+                if self._custom_animation_loop_behavior == "Loop Infinitely":
+                    self._custom_animation_current_frame_index = 0  # Reset for loop
+                    # Continue with the logic below to display the first frame of the new loop
+                else:  # Play Once
+                    print(f"OLED Mgr INFO: Custom animation finished (played once).")
+                    self._custom_animation_timer.stop()
+                    self._is_custom_animation_playing = False
+                    self._custom_animation_logical_frames = None  # Clear frames
+                    # Revert to normal display text (e.g., default startup item or whatever was set)
+                    self.set_display_text(
+                        self.normal_display_text, scroll_if_needed=True)
+                    return  # Explicitly return as animation is done
+
+            else:  # Stopped externally or no frames
+                self._custom_animation_timer.stop()
+                self._is_custom_animation_playing = False  # Ensure flag is correct
+                # No need to clear frames here if stopped externally, might be paused/resumed later (though not implemented yet)
+                return
+
+        # If after potential loop reset, we are still out of bounds (e.g. empty frame list after all)
+        if self._custom_animation_current_frame_index >= len(self._custom_animation_logical_frames):
+            self._custom_animation_timer.stop()
+            self._is_custom_animation_playing = False
+            print(
+                f"OLED Mgr WARNING: Animation frame index out of bounds after loop check. Stopping.")
+            self.set_display_text(
+                self.normal_display_text, scroll_if_needed=True)
+            return
+
+        logical_frame = self._custom_animation_logical_frames[
+            self._custom_animation_current_frame_index]
+        pil_image = self._logical_frame_to_pil_image(logical_frame)
+
+        if pil_image and OLED_RENDERER_AVAILABLE:
+            packed_data = oled_renderer.pack_pil_image_to_7bit_stream(
+                pil_image)
+            if packed_data:
+                self.request_send_bitmap_to_fire.emit(packed_data)
+            else:
+                print(
+                    f"OLED Mgr ERROR: Failed to pack PIL image for custom animation frame {self._custom_animation_current_frame_index}.")
+        elif not OLED_RENDERER_AVAILABLE:
+            # print("OLED Mgr WARNING: OLED Renderer not available for custom animation frame.") # Can be noisy
+            pass
+        elif not pil_image:
+            print(
+                f"OLED Mgr ERROR: Failed to convert logical frame to PIL image for custom animation frame {self._custom_animation_current_frame_index}.")
+
+        self._custom_animation_current_frame_index += 1
+    
     def update_scroll_speed(self, new_delay_ms: int):
         """
         Updates the effective scroll delay for scrolling text.
@@ -536,42 +706,48 @@ class OLEDDisplayManager(QObject):
 
     # --- METHODS FOR KNOB FEEDBACK ---
     def show_temporary_knob_value(self, text: str):
-        """Displays text immediately for knob feedback, does not alter normal/persistent state."""
-        # print(f"OLED Mgr TRACE: show_temporary_knob_value with '{text}'") # Optional
-        if self.is_startup_animation_playing: 
-            # print("OLED Mgr TRACE: Startup animation playing, knob feedback deferred.") # Optional
-            return 
+        # print(f"OLED Mgr TRACE: show_temporary_knob_value with '{text}'")
+        if self.is_startup_animation_playing:  # Built-in visual startup
+            return
 
-        self.is_knob_feedback_active = True 
-        self.stop_scrolling() # Knob values are usually short and static
-        
-        # Use the dedicated knob feedback font
+        # --- NEW: Stop custom animation if active ---
+        if self._is_custom_animation_playing:
+            print(
+                "OLED Mgr INFO: show_temporary_knob_value stopping active custom animation.")
+            self._custom_animation_timer.stop()
+            self._is_custom_animation_playing = False
+            self._custom_animation_logical_frames = None
+        # --- END NEW ---
+
+        self.is_knob_feedback_active = True
+        self.stop_scrolling()
+
         font_for_feedback = self.knob_feedback_pil_font
-        if font_for_feedback is None: # Fallback if dedicated knob font failed to load
-            print("OLED Mgr WARNING: Knob feedback font not loaded, using Pillow default for feedback text.")
+        if font_for_feedback is None:
+            print(
+                "OLED Mgr WARNING: Knob feedback font not loaded, using Pillow default for feedback.")
             try:
                 font_for_feedback = ImageFont.load_default()
-            except: # Ultimate fallback
-                self._update_display("ERR:Font") # Show font error if even default fails
+            except:
+                self._update_display("ERR:Font")
                 return
 
         if OLED_RENDERER_AVAILABLE:
             bitmap = oled_renderer.render_text_to_packed_buffer(
                 text=text,
-                font_override=font_for_feedback, # Explicitly pass the knob feedback font
-                offset_x=0, 
+                font_override=font_for_feedback,
+                offset_x=0,
                 center_if_not_scrolling=True
             )
             if bitmap:
                 self.request_send_bitmap_to_fire.emit(bitmap)
-                self.current_display_text = text # Update what's currently shown
+                self.current_display_text = text
             else:
-                print(f"OLED Mgr WARNING: Failed to render knob feedback text: '{text}' with dedicated font.")
-                # Optionally, try to render with a very basic font or show "..."
-                self._update_display("...") # Fallback display for knob feedback render error
+                print(
+                    f"OLED Mgr WARNING: Failed to render knob feedback text: '{text}'")
+                self._update_display("...")
         else:
             print("OLED Mgr WARNING: OLED Renderer not available for knob feedback.")
-
 
     def get_current_intended_display_text(self) -> str | None:
         """Returns what should be displayed if knob feedback or startup animation wasn't active."""
@@ -605,37 +781,45 @@ class OLEDDisplayManager(QObject):
         # This call will re-evaluate scrolling and use the correct font (active_pil_font_object or Qt render)
         self.set_display_text(text_to_restore, scroll_if_needed=True)
 
-
     def set_display_text(self, text: str | None, scroll_if_needed: bool = True, temporary_duration_ms: int = 0):
-        # print(f"OLED Mgr: set_display_text('{text}') called. Knob feedback: {self.is_knob_feedback_active}, Startup anim: {self.is_startup_animation_playing}") # Optional
-        
-        if self.is_startup_animation_playing:
-            # If startup animation is playing, just update normal_display_text for when it finishes
-            self.normal_display_text = text
+        # print(f"OLED Mgr: set_display_text('{text}') called. TempDur: {temporary_duration_ms}ms")
+
+        # --- NEW: Stop custom animation if active ---
+        if self._is_custom_animation_playing:
+            print("OLED Mgr INFO: set_display_text stopping active custom animation.")
+            self._custom_animation_timer.stop()
+            self._is_custom_animation_playing = False
+            self._custom_animation_logical_frames = None
+        # --- END NEW ---
+
+        if self.is_startup_animation_playing:  # Built-in visual startup
+            self.normal_display_text = text  # Update what to show after built-in anim finishes
             return
 
-        # If this call is to revert from knob feedback AND the text matches normal_display_text
-        if self.is_knob_feedback_active and text == self.normal_display_text:
-            self.is_knob_feedback_active = False # Knob feedback period is over OR explicitly cancelled by this call
-        elif self.is_knob_feedback_active: 
-            self.is_knob_feedback_active = False # Any other call to set_display_text cancels knob feedback mode
-        
-        self.stop_scrolling() 
-        self.normal_display_text = text 
+        if self.is_knob_feedback_active:
+            self.is_knob_feedback_active = False
 
+        self.stop_scrolling()  # Stop any current text scrolling
+        self.normal_display_text = text  # Update the "normal" text to display
+
+        # Determine what to actually show: persistent override takes precedence
         text_to_actually_show = self.persistent_override_text if self.persistent_override_text is not None else self.normal_display_text
-        
+
         if text_to_actually_show is None or text_to_actually_show.strip() == "":
-             text_to_actually_show = " " 
+            text_to_actually_show = " "
 
         if scroll_if_needed:
             self._start_scrolling_if_needed(text_to_actually_show)
         else:
-            self._update_display(text_to_actually_show)
+            self._update_display(text_to_actually_show)  # Render static text
 
         if temporary_duration_ms > 0:
-            QTimer.singleShot(temporary_duration_ms, self._revert_from_temporary_text)
+            # This timer will call _revert_from_temporary_text, which should restore
+            # the normal_display_text or persistent_override_text.
+            QTimer.singleShot(temporary_duration_ms,
+                              self._revert_from_temporary_text)
 
+    
     def set_persistent_override(self, text: str | None, scroll_if_needed: bool = True):
         # print(f"OLED Mgr: set_persistent_override('{text}') called.") # Optional
         if self.is_startup_animation_playing:
@@ -658,32 +842,46 @@ class OLEDDisplayManager(QObject):
         if not frames_data: 
             self.startup_animation_finished.emit()
             return
-        if self.is_startup_animation_playing: return 
+        # if self.is_startup_animation_playing: return # This was for the OLD anim system, not needed for built-in
 
-        # print("OLED Mgr: play_startup_animation called.") # Optional
-        self.is_startup_animation_playing = True
-        self.is_knob_feedback_active = False # Startup anim overrides knob feedback
-        self.stop_scrolling()
+        print("OLED Mgr INFO: play_startup_animation (built-in visual) called.")
+        self.stop_all_activity() 
 
-        self._animation_frames = frames_data
-        self._current_animation_frame_index = 0
-        self._animation_frame_duration = frame_duration_ms
-        QTimer.singleShot(0, self._play_next_startup_frame)
-    
+        self.is_startup_animation_playing = True 
+
+        self._startup_animation_frames_builtin = frames_data # CORRECTED ATTRIBUTE
+        self._current_startup_animation_frame_index_builtin = 0 # CORRECTED ATTRIBUTE
+        self._startup_animation_frame_duration_builtin = frame_duration_ms # CORRECTED ATTRIBUTE
+        
+        if OLED_RENDERER_AVAILABLE:
+            blank_bitmap = oled_renderer.get_blank_packed_bitmap()
+            if blank_bitmap:
+                self.request_send_bitmap_to_fire.emit(blank_bitmap)
+                QTimer.singleShot(50, self._play_next_startup_frame) 
+            else:
+                QTimer.singleShot(0, self._play_next_startup_frame) 
+        else:
+            QTimer.singleShot(0, self._play_next_startup_frame)
+                  
     def _play_next_startup_frame(self):
+        # Use the new '_builtin' suffixed attributes
         if not self.is_startup_animation_playing or \
-           self._current_animation_frame_index >= len(self._animation_frames):
+           self._current_startup_animation_frame_index_builtin >= len(self._startup_animation_frames_builtin):
+            
+            # This means the built-in visual startup animation has finished
             self.is_startup_animation_playing = False
-            self._animation_frames.clear()
-            self.startup_animation_finished.emit() # MainWindow will call set_default_scrolling_text_after_startup
+            self._startup_animation_frames_builtin.clear() # Clear the frames for the built-in anim
+            self.startup_animation_finished.emit() # Signal MainWindow
             return
 
-        frame_bitmap = self._animation_frames[self._current_animation_frame_index]
+        frame_bitmap = self._startup_animation_frames_builtin[self._current_startup_animation_frame_index_builtin]
         if frame_bitmap:
             self.request_send_bitmap_to_fire.emit(frame_bitmap)
-        self._current_animation_frame_index += 1
-        QTimer.singleShot(self._animation_frame_duration, self._play_next_startup_frame)
         
+        self._current_startup_animation_frame_index_builtin += 1
+        QTimer.singleShot(self._startup_animation_frame_duration_builtin, self._play_next_startup_frame)
+        
+           
     def set_default_scrolling_text_after_startup(self, text: str):
         if not self.is_startup_animation_playing: # Only if startup is not active
              # This becomes the new normal text
@@ -699,7 +897,51 @@ class OLEDDisplayManager(QObject):
         self._update_display(" ")           # Send blank space to OLED
 
     def stop_all_activity(self):
-        # print("OLED Mgr: stop_all_activity called.")
-        self.is_startup_animation_playing = False # Stops animation loop
-        self._animation_frames.clear()
-        self.stop_scrolling() # Stops text scrolling timer
+        print("OLED Mgr TRACE: stop_all_activity called.")
+
+        # Stop built-in startup animation
+        self.is_startup_animation_playing = False
+        self._startup_animation_frames_builtin.clear()  # Use correct attribute name
+        # QTimer.singleShot in _play_next_startup_frame will naturally stop if flag is false
+
+        # Stop text scrolling
+        self.scroll_timer.stop()
+        self.is_scrolling_active = False
+
+        # --- NEW: Stop custom animation ---
+        # Check if attribute exists (for safety during dev)
+        if hasattr(self, '_custom_animation_timer'):
+            self._custom_animation_timer.stop()
+        self._is_custom_animation_playing = False
+        if hasattr(self, '_custom_animation_logical_frames'):
+            self._custom_animation_logical_frames = None  # Clear frame data
+    
+    
+    # --- Add New Method to OLEDDisplayManager ---
+    def show_hardcoded_default_message(self):
+        """
+        Displays the application's hardcoded default message using TomThumb.ttf 60px.
+        This is used when no user-defined default item is set or found.
+        """
+        print("OLED Mgr INFO: Showing hardcoded TomThumb default message.")
+        # These constants should be defined in MainWindow or OLEDDisplayManager
+        # For now, using constants similar to MainWindow's defaults for clarity
+        HARDCODED_TEXT = "FIRE  RGB  Controller  by  Reg0lino    =^_^=   " # MainWindow.DEFAULT_OLED_WELCOME_MESSAGE
+        HARDCODED_FONT_FAMILY = "TomThumb.ttf"
+        HARDCODED_FONT_SIZE_PX = 60
+
+        self.stop_scrolling() # Stop any current activity
+
+        # Store these as the 'startup' settings for this specific display instance
+        self.startup_text = HARDCODED_TEXT
+        self.startup_font_family = HARDCODED_FONT_FAMILY
+        self.startup_font_size_px = HARDCODED_FONT_SIZE_PX
+        
+        self._try_load_resource_font_for_startup() # This will attempt to load TomThumb.ttf into self.active_pil_font_object
+
+        self.normal_display_text = self.startup_text # Set this as the normal text
+        
+        # Now display it. set_display_text will use the updated startup_font settings
+        # and the active_pil_font_object if TomThumb loaded correctly.
+        self.set_display_text(self.startup_text, scroll_if_needed=True)
+    # --- End New Method ---

@@ -6,11 +6,13 @@ import glob
 import re
 import time
 from appdirs import user_config_dir
+from appdirs import user_data_dir # For user-specific application data
+from oled_utils import oled_renderer
 
 # --- Qt Imports - CONSOLIDATED AND CORRECTED ---
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,QGroupBox, QLabel, QPushButton, QComboBox, QSizePolicy, QSpacerItem,QStatusBar, QMenu, QMessageBox, QDial, QFrame)
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox, QLabel, QPushButton, QComboBox, QSizePolicy, QSpacerItem, QStatusBar, QMenu, QMessageBox, QDial, QFrame)
 from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QPoint, QEvent)
-from PyQt6.QtGui import (QColor, QPalette, QAction, QMouseEvent, QKeySequence, QIcon, QPixmap, QImage, QPainter, QCloseEvent )
+from PyQt6.QtGui import (QColor, QPalette, QAction, QMouseEvent, QKeySequence, QIcon, QPixmap, QImage, QPainter, QCloseEvent, QFontDatabase )
 # --- End Qt Imports ---
 
 # --- Project-specific Imports ---
@@ -62,6 +64,9 @@ DEFAULT_OLED_STARTUP_TEXT = "FIRE  RGB  Controller  by  Reg0lino    =^_^=   "
 DEFAULT_OLED_FONT_FAMILY = "Arial" # A common system font as a safe default
 DEFAULT_OLED_FONT_SIZE_PX = 10     # A reasonable small default size
 DEFAULT_OLED_SCROLL_DELAY_MS = 180 
+USER_OLED_PRESETS_DIR_NAME = "OLEDCustomPresets"
+USER_OLED_TEXT_ITEMS_SUBDIR = "TextItems"
+USER_OLED_ANIM_ITEMS_SUBDIR = "ImageAnimations"
 
 
 def get_user_documents_presets_path(app_specific_folder_name: str = USER_PRESETS_APP_FOLDER_NAME) -> str:
@@ -120,136 +125,188 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        # WINDOW TITLE: Updated to reflect the new name
-        self.setWindowTitle("AKAI Fire RGB Customizer") # Updated Title
-        # WINDOW SIZE: Set to initial size
+        # WINDOW TITLE & ICON
+        self.setWindowTitle("AKAI Fire RGB Customizer")
         self.setGeometry(100, 100, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT)
-        self._set_window_icon() 
-        
-        self.oled_startup_text: str = DEFAULT_OLED_STARTUP_TEXT
+        self._set_window_icon()
+
+        # --- PATH INITIALIZATION ---
+        # 1. Bundled Presets (Shipped with app)
+        self.bundled_presets_base_path = self._get_presets_base_dir_path()
+
+        # 2. User Documents Presets Path (Top-level for all user-created content)
+        #    e.g., My Documents/Akai Fire RGB Controller User Presets/
+        self.user_documents_presets_path = get_user_documents_presets_path()
+        print(
+            f"MW DEBUG Path INIT: User Documents Presets Path = {self.user_documents_presets_path}")
+
+        # 3. OLED Custom Presets Base Path (Subfolder within User Documents Presets)
+        #    e.g., My Documents/Akai Fire RGB Controller User Presets/OLEDCustomPresets/
+        self.user_oled_presets_base_path = os.path.join(
+            self.user_documents_presets_path, USER_OLED_PRESETS_DIR_NAME)
+        os.makedirs(self.user_oled_presets_base_path, exist_ok=True)
+        print(
+            f"MW DEBUG Path INIT: User OLED Presets Base Path = {self.user_oled_presets_base_path}")
+
+        # 4. Specific OLED Item Type Directories (Subfolders within OLED Presets Base)
+        self.user_oled_text_items_path = os.path.join(
+            self.user_oled_presets_base_path, USER_OLED_TEXT_ITEMS_SUBDIR)
+        self.user_oled_anim_items_path = os.path.join(
+            self.user_oled_presets_base_path, USER_OLED_ANIM_ITEMS_SUBDIR)
+        os.makedirs(self.user_oled_text_items_path, exist_ok=True)
+        os.makedirs(self.user_oled_anim_items_path,
+                    exist_ok=True)  # Create anim dir now
+        print(
+            f"MW DEBUG Path INIT: User OLED Text Items Path = {self.user_oled_text_items_path}")
+        print(
+            f"MW DEBUG Path INIT: User OLED Anim Items Path = {self.user_oled_anim_items_path}")
+        # --- END PATH INITIALIZATION ---
+
+        # --- OLED CONFIGURATION & STATE (Initialize AFTER paths are set) ---
+        self.oled_startup_text: str | None = None  # Will hold relative path from config
+        # Default, overridden by config
+        self.oled_global_scroll_delay_ms: int = DEFAULT_OLED_SCROLL_DELAY_MS
+        # Less directly used now, but kept for potential fallback logic if an item has no font info
         self.oled_startup_font_family: str = DEFAULT_OLED_FONT_FAMILY
         self.oled_startup_font_size_px: int = DEFAULT_OLED_FONT_SIZE_PX
-        self.oled_global_scroll_delay_ms: int = DEFAULT_OLED_SCROLL_DELAY_MS
-        self._load_oled_config() # Load saved OLED settings
 
+        self.available_app_fonts_cache = self._scan_available_app_fonts()
+
+        # Load oled_config.json (populates self.oled_startup_text, self.oled_global_scroll_delay_ms, cued items)
+        self._load_oled_config()
+
+        # Scan for available OLED items (populates self.available_oled_items_cache)
+        # This now uses the correct self.user_oled_presets_base_path
+        self._scan_available_oled_items()
+        # --- END OLED CONFIGURATION & STATE ---
+
+        # --- CORE APPLICATION COMPONENTS ---
         self.akai_controller = AkaiFireController(auto_connect=False)
-        self.selected_qcolor = QColor("#04FF00") 
+        self.selected_qcolor = QColor("#04FF00")
         self.is_eyedropper_mode_active: bool = False
         self._has_played_initial_startup_animation = False
+
+        # --- OLED NAVIGATION STATE ---
         self.current_oled_nav_target_name: str = self.OLED_NAVIGATION_FOCUS_OPTIONS[0]
-        self.current_oled_nav_target_widget: QWidget | None = None 
-        self.current_oled_nav_item_logical_index: int = 0 
-        self._oled_nav_item_count: int = 0 
-        self._oled_nav_interaction_active: bool = False 
-        self._oled_nav_debounce_timer = QTimer(self); self._oled_nav_debounce_timer.setSingleShot(True); self._oled_nav_debounce_timer.setInterval(300) 
+        self.current_oled_nav_target_widget: QWidget | None = None
+        self.current_oled_nav_item_logical_index: int = 0
+        self._oled_nav_item_count: int = 0
+        self._oled_nav_interaction_active: bool = False
+        self._oled_nav_debounce_timer = QTimer(self)
+        self._oled_nav_debounce_timer.setSingleShot(True)
+        self._oled_nav_debounce_timer.setInterval(300)
         self._is_hardware_nav_action_in_progress = False
+        # --- END CORE APPLICATION COMPONENTS ---
 
-        self.bundled_presets_base_path = self._get_presets_base_dir_path() 
-        self.user_documents_presets_path = get_user_documents_presets_path()
-
-        # --- Instantiate All Managers (Logic instances) ---
-        self.color_picker_manager = ColorPickerManager(initial_color=self.selected_qcolor, config_save_path_func=get_user_config_file_path)
+        # --- INSTANTIATE MANAGERS ---
+        self.color_picker_manager = ColorPickerManager(
+            initial_color=self.selected_qcolor, config_save_path_func=get_user_config_file_path)
         self.static_layouts_manager = StaticLayoutsManager(
-            user_static_layouts_path=os.path.join(self.user_documents_presets_path, "static", "user"),
-            prefab_static_layouts_path=os.path.join(self.bundled_presets_base_path, "static", "prefab")
+            user_static_layouts_path=os.path.join(
+                self.user_documents_presets_path, "static", "user"),
+            prefab_static_layouts_path=os.path.join(
+                self.bundled_presets_base_path, "static", "prefab")
         )
         self.animator_manager = AnimatorManagerWidget(
-            user_sequences_base_path=os.path.join(self.user_documents_presets_path, "sequences", "user"),
-            sampler_recordings_path=os.path.join(self.user_documents_presets_path, "sequences", "sampler_recordings"),
-            prefab_sequences_base_path=os.path.join(self.bundled_presets_base_path, "sequences", "prefab"),
-            parent=self 
+            user_sequences_base_path=os.path.join(
+                self.user_documents_presets_path, "sequences", "user"),
+            sampler_recordings_path=os.path.join(
+                self.user_documents_presets_path, "sequences", "sampler_recordings"),
+            prefab_sequences_base_path=os.path.join(
+                self.bundled_presets_base_path, "sequences", "prefab"),
+            parent=self
         )
-        self.screen_sampler_manager = ScreenSamplerManager( 
-            presets_base_path=self.bundled_presets_base_path, 
-            animator_manager_ref=self.animator_manager, 
-            parent=self 
+        self.screen_sampler_manager = ScreenSamplerManager(
+            presets_base_path=self.bundled_presets_base_path,
+            animator_manager_ref=self.animator_manager,
+            parent=self
         )
+
         if self.akai_controller:
-            self.oled_display_manager = OLEDDisplayManager(akai_fire_controller_ref=self.akai_controller, parent=self)
-            self.hardware_input_manager = HardwareInputManager(akai_fire_controller_ref=self.akai_controller, parent=self)
+            self.oled_display_manager = OLEDDisplayManager(
+                akai_fire_controller_ref=self.akai_controller, parent=self)
+            self.hardware_input_manager = HardwareInputManager(
+                akai_fire_controller_ref=self.akai_controller, parent=self)
         else:
-            QMessageBox.critical(self, "Fatal Error", "AkaiFireController failed. Exiting."); sys.exit(1)
-            
-        # --- Initialize UI Element References for Hardware Replica (Top Strip) ---
-        # These are initialized to None, actual QWidget creation happens in helper methods.
-        self.pad_grid_frame: InteractivePadGridFrame | None = None # Crucial for pad interactions
+            QMessageBox.critical(
+                self, "Fatal Error", "AkaiFireController instance could not be created. Application will exit.")
+            # Consider raising an exception here to halt initialization if this is truly fatal.
+            # For development, allowing it to proceed might show other errors.
+            # For now, execution will continue, but oled_display_manager and hardware_input_manager will be None.
+
+        # Initialize OLED Display with Default Item (MUST be AFTER oled_display_manager is created & config loaded)
+        if self.oled_display_manager:
+            self._load_and_apply_default_oled_item()  # Uses data from _load_oled_config()
+            self.oled_display_manager.update_scroll_speed(
+                self.oled_global_scroll_delay_ms)  # Apply loaded global speed
+            self.oled_display_manager.startup_animation_finished.connect(
+                self._on_oled_startup_animation_finished)
+        else:
+            print(
+                "MainWindow CRITICAL: OLEDDisplayManager not initialized. OLED functionality will be absent.")
+        # --- END INSTANTIATE MANAGERS ---
+
+        # --- UI ELEMENT REFERENCES (Initialized to None, populated by _init_ui_layout and sub-methods) ---
+        self.pad_grid_frame: InteractivePadGridFrame | None = None
         self.knob_volume_top_right: QDial | None = None
         self.knob_pan_top_right: QDial | None = None
         self.knob_filter_top_right: QDial | None = None
         self.knob_resonance_top_right: QDial | None = None
-        self.oled_display_mirror_widget: QLabel | None = None 
+        self.oled_display_mirror_widget: QLabel | None = None
         self.knob_select_top_right: QDial | None = None
-
-
-        self.button_pattern_song_top_right: QPushButton | None = None
         self.button_browser_top_right: QPushButton | None = None
         self.button_pattern_up_top_right: QPushButton | None = None
         self.button_pattern_down_top_right: QPushButton | None = None
-        self.button_grid_nav_focus_prev_top_right: QPushButton | None = None 
+        self.button_grid_nav_focus_prev_top_right: QPushButton | None = None
         self.button_grid_nav_focus_next_top_right: QPushButton | None = None
-        self.mute_solo_buttons: list[QPushButton] = []
-        self.mode_buttons: dict[str, QPushButton] = {}
-        self.button_shift: QPushButton|None=None; self.button_alt: QPushButton|None=None
-        self.transport_buttons: dict[str, QPushButton] = {}
-        self.utility_buttons_bottom: dict[str, QPushButton] = {}
-
-        self.is_animator_playing: bool = False
-
-        # References for right panel UI elements
+        self.is_animator_playing: bool = False  # State for knob context
         self.port_combo_direct_ref: QComboBox | None = None
         self.input_port_combo_direct_ref: QComboBox | None = None
         self.connect_button_direct_ref: QPushButton | None = None
-        self.quick_tools_group_ref: QGroupBox | None = None 
+        self.quick_tools_group_ref: QGroupBox | None = None
         self.eyedropper_button: QPushButton | None = None
+        # --- END UI ELEMENT REFERENCES ---
 
+        # Ensures user preset subdirectories for Animator/Static Layouts exist
         self.ensure_user_dirs_exist()
-        
-        # --- Main UI Layout Initialization ---
-        self._init_ui_layout()  # Set up layouts and widgets
 
-        # --- Populate panels (order is important!) ---
-        # print("MW __init__: Populating BOTH panels.") # Optional debug
-        self._populate_left_panel()   # This sets self.pad_grid_frame
+        # --- MAIN UI SETUP ---
+        self._init_ui_layout()
+        self._populate_left_panel()
         self._populate_right_panel()
+        # --- END MAIN UI SETUP ---
 
+        # --- GLOBAL BRIGHTNESS & KNOB SETUP ---
         self.global_pad_brightness: float = 1.0
-        # References to the top 4 GUI knobs
-        self.gui_knob1: QDial | None = None
-        self.gui_knob2: QDial | None = None
-        self.gui_knob3: QDial | None = None
-        self.gui_knob4: QDial | None = None
+        if hasattr(self, 'knob_volume_top_right'):
+            self.gui_knob1 = self.knob_volume_top_right
+        if hasattr(self, 'knob_pan_top_right'):
+            self.gui_knob2 = self.knob_pan_top_right
+        if hasattr(self, 'knob_filter_top_right'):
+            self.gui_knob3 = self.knob_filter_top_right
+        if hasattr(self, 'knob_resonance_top_right'):
+            self.gui_knob4 = self.knob_resonance_top_right
+        self._setup_global_brightness_knob()
+        # --- END GLOBAL BRIGHTNESS & KNOB SETUP ---
 
-        # --- OLED Manager Signal Connection (if applicable after UI creation) ---
-        if self.oled_display_manager:
-            # Pass initial startup text settings to OLEDDisplayManager
-            self.oled_display_manager.update_default_text_settings(
-                self.oled_startup_text,
-                self.oled_startup_font_family,
-                self.oled_startup_font_size_px
-            )
-            self.oled_display_manager.update_scroll_speed(self.oled_global_scroll_delay_ms)
-            self.oled_display_manager.startup_animation_finished.connect(self._on_oled_startup_animation_finished)
-
+        # --- TIMERS & FINAL SETUP ---
         self._oled_knob_feedback_timer = QTimer(self)
         self._oled_knob_feedback_timer.setSingleShot(True)
-        self._oled_knob_feedback_timer.timeout.connect(self._revert_oled_after_knob_feedback)
-        self._KNOB_FEEDBACK_OLED_DURATION_MS = 1500 
+        self._oled_knob_feedback_timer.timeout.connect(
+            self._revert_oled_after_knob_feedback)
+        self._KNOB_FEEDBACK_OLED_DURATION_MS = 1500
         self._stop_action_issued_for_oled: bool = False
 
         self._update_current_oled_nav_target_widget()
-        self._connect_signals()  # pad_grid_frame and layouts are now guaranteed to exist
+        self._connect_signals()
         self._create_edit_actions()
         self.populate_midi_ports()
         self.populate_midi_input_ports()
         self.update_connection_status()
+
+        QTimer.singleShot(0, self._update_contextual_knob_configs)
         QTimer.singleShot(0, self._update_global_ui_interaction_states)
-
-        if hasattr(self, 'knob_volume_top_right'): self.gui_knob1 = self.knob_volume_top_right
-        if hasattr(self, 'knob_pan_top_right'): self.gui_knob2 = self.knob_pan_top_right
-        if hasattr(self, 'knob_filter_top_right'): self.gui_knob3 = self.knob_filter_top_right
-        if hasattr(self, 'knob_resonance_top_right'): self.gui_knob4 = self.knob_resonance_top_right
-
-        self._setup_global_brightness_knob()
+        # --- END TIMERS & FINAL SETUP ---
 
     def _get_presets_base_dir_path(self) -> str:
         """
@@ -297,56 +354,247 @@ class MainWindow(QMainWindow):
         """Returns the full path to the oled_config.json file."""
         # get_user_config_file_path is defined at module level or imported
         return get_user_config_file_path(OLED_CONFIG_FILENAME)
+    
+
+    def _get_user_oled_presets_path(self, subfolder: str | None = None) -> str:
+        """
+        Returns the path to the user's OLEDCustomPresets directory, or a subfolder within it.
+        Creates the directory if it doesn't exist.
+        """
+        base = self.user_oled_presets_base_path # Uses the path set in __init__
+        target_path = os.path.join(base, subfolder) if subfolder else base
+        try:
+            os.makedirs(target_path, exist_ok=True)
+        except OSError as e:
+            print(f"MainWindow Error: Could not create OLED presets directory '{target_path}': {e}")
+            # Fallback to a local dev folder if appdirs path fails (less ideal for installed app)
+            dev_fallback_base = os.path.join(os.getcwd(), "user_dev_oled_presets")
+            target_path = os.path.join(dev_fallback_base, subfolder) if subfolder else dev_fallback_base
+            os.makedirs(target_path, exist_ok=True)
+            print(f"MainWindow Warning: Using fallback OLED presets directory: '{target_path}'")
+        return target_path
+    
+
+    def _scan_available_app_fonts(self) -> list[str]:
+        app_fonts_list = []
+        try:
+            fonts_dir = get_resource_path("resources/fonts") # utils.py debug will show this path
+            print(f"MW DEBUG _scan_available_app_fonts: Scanning directory: '{fonts_dir}'") # New debug
+            if os.path.isdir(fonts_dir):
+                print(f"MW DEBUG _scan_available_app_fonts: Directory exists. Files: {os.listdir(fonts_dir)}") # New debug
+                for filename in os.listdir(fonts_dir):
+                    if filename.lower().endswith((".ttf", ".otf")):
+                        app_fonts_list.append(filename)
+                        print(f"MW DEBUG _scan_available_app_fonts: Found app font: {filename}") # New debug
+            else:
+                print(f"MW DEBUG _scan_available_app_fonts: Directory NOT found: '{fonts_dir}'") # New debug
+            app_fonts_list.sort()
+        except Exception as e:
+            print(f"MainWindow Error: Could not scan for app fonts: {e}")
+    
+        print(f"MW DEBUG _scan_available_app_fonts: Final Discovered App Fonts: {app_fonts_list}")
+        return app_fonts_list
+    
+    def _scan_available_oled_items(self) -> list:
+        """
+        Scans TextItems (and future AnimationItems) directories for .json files,
+        loads their item_name, and returns a list of item dictionaries.
+        Updates self.available_oled_items_cache.
+        This method itself does not load the full content of each JSON, only metadata.
+        """
+        self.available_oled_items_cache = []
+        
+        # Get paths using the helper that also creates them if they don't exist
+        text_items_dir_path = self._get_user_oled_presets_path(USER_OLED_TEXT_ITEMS_SUBDIR)
+        anim_items_dir_path = self._get_user_oled_presets_path(USER_OLED_ANIM_ITEMS_SUBDIR) 
+
+        item_sources = [
+            {"dir_path": text_items_dir_path, "type_label": "text", "relative_subdir": USER_OLED_TEXT_ITEMS_SUBDIR},
+            {"dir_path": anim_items_dir_path, "type_label": "animation", "relative_subdir": USER_OLED_ANIM_ITEMS_SUBDIR}, # Future
+        ]
+
+        for source in item_sources:
+            dir_path = source["dir_path"]
+            item_type = source["type_label"]
+            relative_subdir = source["relative_subdir"]
+
+            if os.path.isdir(dir_path):
+                for filename in os.listdir(dir_path):
+                    if filename.lower().endswith(".json"):
+                        full_path = os.path.join(dir_path, filename)
+                        try:
+                            with open(full_path, 'r', encoding='utf-8') as f:
+                                # Only load enough to get the name, not the whole potentially large file
+                                # For very large JSONs, a more optimized partial read might be better,
+                                # but for typical item name, loading the whole thing is usually fine.
+                                data = json.load(f) 
+                            
+                            item_name = data.get("item_name", os.path.splitext(filename)[0])
+                            # Store path relative to user_oled_presets_base_path for oled_config.json
+                            relative_item_path = os.path.join(relative_subdir, filename)
+                            
+                            self.available_oled_items_cache.append({
+                                'name': item_name,          # For display in lists/combos
+                                'path': relative_item_path, # Relative path for config saving
+                                'type': item_type,          # 'text' or 'animation'
+                                'full_path': full_path      # Absolute path for direct loading by MainWindow
+                            })
+                        except json.JSONDecodeError:
+                            print(f"MainWindow Warning: Invalid JSON in OLED item file '{full_path}'. Skipping.")
+                        except Exception as e:
+                            print(f"MainWindow Error: Failed to process OLED item file '{full_path}': {e}")
+            # else:
+                # print(f"MainWindow Info: OLED item directory not found: '{dir_path}'")
+
+        # Sort by name for consistent display in dialogs/cycling
+        self.available_oled_items_cache.sort(key=lambda x: x['name'].lower())
+        
+        # print(f"MW DEBUG: Scanned OLED items: {len(self.available_oled_items_cache)} found.")
+        # for item in self.available_oled_items_cache:
+        #     print(f"  - {item['name']} ({item['type']}) at '{item['path']}'")
+            
+        return self.available_oled_items_cache
+
+    def _load_oled_item_data(self, relative_item_path: str | None) -> dict | None:
+        """
+        Loads the JSON data for a given relative item path.
+        Returns the item's data dictionary or None if not found/error.
+        """
+        if not relative_item_path:
+            return None
+    
+        # Construct full path from base and relative path
+        full_item_path = os.path.join(self.user_oled_presets_base_path, relative_item_path)
+
+        if os.path.exists(full_item_path):
+            try:
+                with open(full_item_path, 'r', encoding='utf-8') as f:
+                    item_data = json.load(f)
+                return item_data
+            except Exception as e:
+                print(f"MainWindow Error: Could not load OLED item from '{full_item_path}': {e}")
+                return None
+        else:
+            # print(f"MainWindow Info: OLED item file not found: '{full_item_path}'")
+            return None
+
+    def _load_and_apply_default_oled_item(self):
+        if not self.oled_display_manager:
+            print(
+                "MW CRITICAL: _load_and_apply_default_oled_item - OLEDDisplayManager is None.")
+            return
+
+        # self.oled_startup_text (from config) holds the *relative path* to the default item.
+        default_item_data = self._load_oled_item_data(self.oled_startup_text)
+
+        item_applied_successfully = False
+        if default_item_data:
+            item_type = default_item_data.get("item_type")
+            item_name = default_item_data.get("item_name", "Unknown Item")
+            print(
+                f"MW INFO: Attempting to apply default startup item: '{item_name}', Type: '{item_type}'")
+
+            if item_type == "text":
+                # For text items, OLEDDisplayManager uses its update_default_text_settings
+                # which then influences set_display_text.
+                text_content = default_item_data.get("text_content", " ")
+                font_family = default_item_data.get(
+                    "font_family", DEFAULT_OLED_FONT_FAMILY)
+                font_size_px = default_item_data.get(
+                    "font_size_px", DEFAULT_OLED_FONT_SIZE_PX)
+
+                # TODO: Enhance OLEDDisplayManager to accept full text item_data to respect
+                # item-specific scroll speed, alignment, etc., for default startup.
+                # For now, it uses global scroll speed set elsewhere.
+                self.oled_display_manager.update_default_text_settings(
+                    text_content, font_family, font_size_px)
+                # The actual display (scrolling or static) will be handled by OLEDDisplayManager
+                # when it reverts from startup animation or is directly told to display its normal text.
+                # We can explicitly tell it to show its new normal_display_text.
+                self.oled_display_manager.set_display_text(
+                    self.oled_display_manager.normal_display_text, scroll_if_needed=True)
+
+                print(
+                    f"MW INFO: Applied custom default TEXT item: '{item_name}' to OLEDDisplayManager settings.")
+                item_applied_successfully = True
+
+            elif item_type == "image_animation":
+                if hasattr(self.oled_display_manager, 'play_animation_item'):
+                    print(
+                        f"MW INFO: Calling OLEDDisplayManager.play_animation_item for default startup animation: '{item_name}'")
+                    # Pass the entire item_data dictionary to the playback method
+                    self.oled_display_manager.play_animation_item(
+                        default_item_data)
+                    item_applied_successfully = True
+                else:
+                    # This case should ideally not be hit if OLEDDisplayManager is up-to-date
+                    print(
+                        f"MW CRITICAL WARNING: OLEDDisplayManager is missing 'play_animation_item' method. Cannot play default animation '{item_name}'.")
+                    self.oled_display_manager.show_hardcoded_default_message()  # Fallback
+            else:
+                print(
+                    f"MW WARNING: Unknown default item type '{item_type}' for item '{item_name}'.")
+
+        if not item_applied_successfully:
+            print(f"MW INFO: No valid custom default OLED item found or failed to apply. Applying hardcoded application default message.")
+            self.oled_display_manager.show_hardcoded_default_message()
+
+        # The global scroll speed is managed by OLEDDisplayManager via update_scroll_speed,
+        # typically called during __init__ and when settings change via the dialog.
+        # No need to call it here again unless specifically changing it.
 
     def _load_oled_config(self):
-        """Loads OLED startup text and font settings from JSON file."""
+        """Loads global OLED settings (default item path, scroll delay, cued items) from JSON."""
         filepath = self._get_oled_config_filepath()
-        print(f"MW TRACE: Attempting to load OLED config from: {filepath}") # Debug
+        print(f"MW TRACE: Attempting to load OLED config from: {filepath}")
         try:
             if os.path.exists(filepath):
                 with open(filepath, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                self.oled_startup_text = config.get("startup_text", DEFAULT_OLED_STARTUP_TEXT)
-                self.oled_startup_font_family = config.get("startup_font_family", DEFAULT_OLED_FONT_FAMILY)
-                self.oled_startup_font_size_px = config.get("startup_font_size_px", DEFAULT_OLED_FONT_SIZE_PX)
+                # 'oled_startup_text' now stores the *relative path* to the default item
+                self.oled_startup_text = config.get("default_startup_item_path", None) 
                 self.oled_global_scroll_delay_ms = config.get("global_scroll_delay_ms", DEFAULT_OLED_SCROLL_DELAY_MS)
-                print(f"MW INFO: Loaded OLED config: Text='{self.oled_startup_text}', Font='{self.oled_startup_font_family} {self.oled_startup_font_size_px}px'")
+                self.current_cued_text_item_path = config.get("cued_text_item_path", None)
+                self.current_cued_anim_item_path = config.get("cued_anim_item_path", None)
+            
+                print(f"MW INFO: Loaded OLED config: DefaultItemPath='{self.oled_startup_text}', ScrollDelay={self.oled_global_scroll_delay_ms}ms")
             else:
                 print(f"MW INFO: OLED config file not found at '{filepath}'. Using defaults and creating file.")
-                # Initialize with defaults if file doesn't exist
-                self.oled_startup_text = DEFAULT_OLED_STARTUP_TEXT
-                self.oled_startup_font_family = DEFAULT_OLED_FONT_FAMILY
-                self.oled_startup_font_size_px = DEFAULT_OLED_FONT_SIZE_PX
-                self._save_oled_config() # Save defaults to create the file
+                self.oled_startup_text = None # No default item selected initially
+                self.oled_global_scroll_delay_ms = DEFAULT_OLED_SCROLL_DELAY_MS
+                self.current_cued_text_item_path = None
+                self._save_oled_config() # Save defaults
         except json.JSONDecodeError as e:
-            print(f"MW WARNING: Error decoding OLED config JSON from '{filepath}': {e}. Using defaults and attempting to overwrite with valid JSON.")
-            self.oled_startup_text = DEFAULT_OLED_STARTUP_TEXT; self.oled_startup_font_family = DEFAULT_OLED_FONT_FAMILY; self.oled_startup_font_size_px = DEFAULT_OLED_FONT_SIZE_PX
-            self._save_oled_config() # Attempt to save a clean default file
+            print(f"MW WARNING: Error decoding OLED config JSON from '{filepath}': {e}. Using defaults.")
+            self.oled_startup_text = None; self.oled_global_scroll_delay_ms = DEFAULT_OLED_SCROLL_DELAY_MS; self.current_cued_text_item_path = None
+            self._save_oled_config()
         except Exception as e:
             print(f"MW WARNING: Generic error loading OLED config from '{filepath}': {e}. Using defaults.")
-            self.oled_startup_text = DEFAULT_OLED_STARTUP_TEXT
-            self.oled_startup_font_family = DEFAULT_OLED_FONT_FAMILY
-            self.oled_startup_font_size_px = DEFAULT_OLED_FONT_SIZE_PX
+            self.oled_startup_text = None; self.oled_global_scroll_delay_ms = DEFAULT_OLED_SCROLL_DELAY_MS; self.current_cued_text_item_path = None
+    
+        # After loading config, rescan available items as paths might be invalid if files were moved/deleted
+        self._scan_available_oled_items()
+    
+
 
     def _save_oled_config(self):
-        """Saves current OLED startup text, font, and global scroll speed settings to JSON file."""
+        """Saves current global OLED settings (default item path, scroll delay, cued items) to JSON."""
         filepath = self._get_oled_config_filepath()
         config = {
-            "startup_text": self.oled_startup_text,
-            "startup_font_family": self.oled_startup_font_family,
-            "startup_font_size_px": self.oled_startup_font_size_px,
-            "global_scroll_delay_ms": self.oled_global_scroll_delay_ms
-            
+            "default_startup_item_path": self.oled_startup_text, # This now stores the path
+            "global_scroll_delay_ms": self.oled_global_scroll_delay_ms,
+            "cued_text_item_path": self.current_cued_text_item_path,
+            "cued_anim_item_path": self.current_cued_anim_item_path
         }
         print(f"MW TRACE: Attempting to save OLED config to: {filepath} with data: {config}")
         try:
+            # Ensure the directory exists (get_user_config_file_path should handle this, but good practice)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=4)
             print(f"MW INFO: Saved OLED config to '{filepath}'")
         except Exception as e:
             print(f"MW ERROR: Could not save OLED config to '{filepath}': {e}")
-
 
     def _setup_oled_mirror_clickable(self):
         """Makes the OLED mirror QLabel clickable to open the customizer."""
@@ -360,6 +608,9 @@ class MainWindow(QMainWindow):
         else:
             print("MW WARNING: oled_display_mirror_widget not found during _setup_oled_mirror_clickable.")
 
+    
+
+
     def eventFilter(self, obj, event):
         """
         Event filter to catch clicks on the oled_display_mirror_widget.
@@ -372,50 +623,54 @@ class MainWindow(QMainWindow):
         return super().eventFilter(obj, event) # Pass on other events
 
     def _open_oled_customizer_dialog(self):
-        """Opens the OLED Customizer Dialog."""
-        # print("MW TRACE: Opening OLED Customizer Dialog...") # Optional
+        self._scan_available_oled_items()
+        print(
+            f"MW DEBUG _open_oled_customizer_dialog: Passing available_app_fonts: {self.available_app_fonts_cache} to dialog.")
+        # <<< ADD THIS DEBUG PRINT >>>
+        print(
+            f"MW DEBUG _open_oled_customizer_dialog: Passing user_oled_presets_base_path: {self.user_oled_presets_base_path} to dialog.")
+
         dialog = OLEDCustomizerDialog(
-            current_text=self.oled_startup_text,
-            current_font_family=self.oled_startup_font_family,
-            current_font_size_px=self.oled_startup_font_size_px,
-            # --- ADD: Pass current global scroll delay ---
+            current_default_startup_item_path=self.oled_startup_text,  # This is relative path
             current_global_scroll_delay_ms=self.oled_global_scroll_delay_ms,
-            # --- END ADD ---
+            # List of dicts with full_path and relative_path
+            available_oled_items=self.available_oled_items_cache,
+            # This should be the Documents one
+            user_oled_presets_base_path=self.user_oled_presets_base_path,
+            available_app_fonts=self.available_app_fonts_cache,
             parent=self
         )
-        # The dialog's signal now emits 4 arguments
-        try: dialog.startup_settings_changed.disconnect(self._on_oled_startup_settings_changed)
-        except: pass
-        dialog.startup_settings_changed.connect(self._on_oled_startup_settings_changed)
-        
-        if dialog.exec():
-            print("MW INFO: OLED Customizer Dialog accepted (saved).")
-        else:
-            print("MW INFO: OLED Customizer Dialog cancelled.")
-        
+
+        try: dialog.global_settings_changed.disconnect(self._on_oled_global_settings_changed)
+        except TypeError: pass 
+        dialog.global_settings_changed.connect(self._on_oled_global_settings_changed)
+    
+        dialog.exec() 
         dialog.deleteLater()
 
-    def _on_oled_startup_settings_changed(self, new_text: str, new_font_family: str, new_font_size_px: int, new_scroll_delay_ms: int):
-        self.oled_startup_text = new_text
-        self.oled_startup_font_family = new_font_family
-        self.oled_startup_font_size_px = new_font_size_px
-        self.oled_global_scroll_delay_ms = new_scroll_delay_ms # Update attribute
-        
-        self._save_oled_config() # Save all new settings
+    def _on_oled_global_settings_changed(self, new_default_startup_item_path: str | None, new_global_scroll_delay_ms: int):
+        """
+        Called when OLEDCustomizerDialog emits global_settings_changed.
+        Updates MainWindow's state, saves config, and re-applies default OLED item.
+        """
+        print(f"MW INFO: OLED global settings changed from dialog. New default path: '{new_default_startup_item_path}', New scroll delay: {new_global_scroll_delay_ms}ms")
+    
+        self.oled_startup_text = new_default_startup_item_path # Update to store the path
+        self.oled_global_scroll_delay_ms = new_global_scroll_delay_ms
+    
+        self._save_oled_config() # Save the new global settings
 
         if self.oled_display_manager:
-            # Update text and font settings
-            self.oled_display_manager.update_default_text_settings(
-                self.oled_startup_text,
-                self.oled_startup_font_family,
-                self.oled_startup_font_size_px
-            )
-            # --- THIS CALL WAS MISSING OR NEEDS TO BE ENSURED ---
+            # Update global scroll speed immediately
             self.oled_display_manager.update_scroll_speed(self.oled_global_scroll_delay_ms)
-            # --- END ENSURE ---
         
-        print(f"MW INFO: OLED settings updated: Text='{new_text}', Font='{new_font_family} {new_font_size_px}px', ScrollDelay={new_scroll_delay_ms}ms")
-
+            # Reload and apply the (potentially new) default startup item
+            self._load_and_apply_default_oled_item()
+    
+        # After settings change, PATTERN/BROWSER might need re-evaluation of cued item.
+        # For now, we assume cued item is independent or handled by PATTERN button presses.
+        # A full refresh of available items might be good too.
+        self._scan_available_oled_items()
 
     def _initial_knob_setup_based_on_sampler_state(self):
         """Called shortly after startup to set initial knob configs."""
@@ -688,88 +943,56 @@ class MainWindow(QMainWindow):
         print(f"MW TRACE: _populate_left_panel - FINISHED")
     # In class MainWindow(QMainWindow):
 
+    # Inside class MainWindow(QMainWindow):
+    # Add or ensure this method is correctly defined:
+
     def _init_ui_layout(self):
         """
         Initializes the main window layout structure.
-        CLEANUP VERSION: Removes test borders and test labels.
-        - Create central widget.
-        - Create main QHBoxLayout, SET it on central_widget.
-        - Create left_panel_widget (QWidget) and left_panel_layout (QVBoxLayout).
-        - SET left_panel_layout on left_panel_widget.
-        - ADD left_panel_widget to main_app_layout.
-        - Create right_panel_widget (QWidget) and right_panel_layout_v (QVBoxLayout).
-        - SET right_panel_layout_v on right_panel_widget.
-        - ADD right_panel_widget to main_app_layout.
-        - Set status bar.
-        Goal: Clean UI structure ready for actual content population.
         """
-        # print("MW TRACE: _init_ui_layout - CLEANUP VERSION START")
-
         # 1. Create the central widget
         self.central_widget_main = QWidget()
         self.setCentralWidget(self.central_widget_main)
-        # print(f"MW TRACE: _init_ui_layout - Central widget set: {self.central_widget_main}") # Optional
 
         # 2. Create and set the main application layout (QHBoxLayout)
-        # print("MW TRACE: _init_ui_layout - Creating self.main_app_layout = QHBoxLayout()") # Optional
         self.main_app_layout = QHBoxLayout()
-        # print(f"MW TRACE: _init_ui_layout - Setting layout on central_widget_main. Layout obj: {self.main_app_layout}") # Optional
         self.central_widget_main.setLayout(self.main_app_layout)
         self.main_app_layout.setSpacing(10)
         self.main_app_layout.setContentsMargins(5, 5, 5, 5)
-        # print(f"MW TRACE: _init_ui_layout - main_app_layout configured and set on central_widget.") # Optional
 
         # 3. --- Left Panel ---
-        # print("\nMW TRACE: _init_ui_layout - --- Processing Left Panel Structure ---") # Optional
         self.left_panel_widget = QWidget()
-        self.left_panel_widget.setObjectName("LeftPanelWidget") # Generic name now
-        # print(f"MW TRACE: _init_ui_layout - self.left_panel_widget created: {self.left_panel_widget}") # Optional
-
-        # print("MW TRACE: _init_ui_layout - Creating self.left_panel_layout = QVBoxLayout()") # Optional
-        self.left_panel_layout = QVBoxLayout()
-        # print(f"MW TRACE: _init_ui_layout - Setting layout on left_panel_widget. Layout obj: {self.left_panel_layout}") # Optional
-        self.left_panel_widget.setLayout(self.left_panel_layout)
+        self.left_panel_widget.setObjectName("LeftPanelWidget")
+        self.left_panel_layout = QVBoxLayout()  # Create the layout attribute
+        self.left_panel_widget.setLayout(
+            self.left_panel_layout)  # Set it on the widget
         self.left_panel_layout.setContentsMargins(0, 0, 0, 0)
         self.left_panel_layout.setSpacing(8)
-        # print(f"MW TRACE: _init_ui_layout - left_panel_layout configured and set on left_panel_widget.") # Optional
 
-        
         if self.main_app_layout is not None:
-            self.main_app_layout.addWidget(self.left_panel_widget, 2) # Stretch factor 2
-            # print(f"MW TRACE: _init_ui_layout - Added left_panel_widget to main_app_layout.") # Optional
-        # else: # Optional
-            # print("MW CRITICAL _init_ui_layout: self.main_app_layout IS None before adding left_panel_widget.")
-
+            self.main_app_layout.addWidget(
+                self.left_panel_widget, 2)  # Stretch factor 2
 
         # 4. --- Right Panel ---
-        # print("\nMW TRACE: _init_ui_layout - --- Processing Right Panel Structure ---") # Optional
         self.right_panel_widget = QWidget()
-        self.right_panel_widget.setObjectName("RightPanelWidget") # Generic name now
-        # print(f"MW TRACE: _init_ui_layout - self.right_panel_widget created: {self.right_panel_widget}") # Optional
+        self.right_panel_widget.setObjectName("RightPanelWidget")
+        self.right_panel_layout_v = QVBoxLayout()  # Create the layout attribute
+        self.right_panel_widget.setLayout(
+            self.right_panel_layout_v)  # Set it on the widget
 
-        # print("MW TRACE: _init_ui_layout - Creating self.right_panel_layout_v = QVBoxLayout()") # Optional
-        self.right_panel_layout_v = QVBoxLayout()
-        # print(f"MW TRACE: _init_ui_layout - Setting layout on right_panel_widget. Layout obj: {self.right_panel_layout_v}") # Optional
-        self.right_panel_widget.setLayout(self.right_panel_layout_v)
-        # Restore original sizing for right panel
-        self.right_panel_widget.setMinimumWidth(360) 
-        self.right_panel_widget.setMaximumWidth(400) 
-        self.right_panel_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        # print(f"MW TRACE: _init_ui_layout - right_panel_layout_v configured and set on right_panel_widget.") # Optional
-
+        self.right_panel_widget.setMinimumWidth(360)
+        self.right_panel_widget.setMaximumWidth(400)
+        self.right_panel_widget.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
 
         if self.main_app_layout is not None:
-            self.main_app_layout.addWidget(self.right_panel_widget, 1) # Stretch factor 1
-            # print(f"MW TRACE: _init_ui_layout - Added right_panel_widget to main_app_layout.") # Optional
-        else: # Optional
-            print("MW CRITICAL _init_ui_layout: self.main_app_layout IS None before adding right_panel_widget.")
+            self.main_app_layout.addWidget(
+                self.right_panel_widget, 1)  # Stretch factor 1
 
         # --- Status Bar ---
-        # print("\nMW TRACE: _init_ui_layout - Setting up Status Bar") # Optional
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Ready. Please connect to AKAI Fire.") # Restore original status message
-        # print(f"MW TRACE: _init_ui_layout - Status bar set.") # Optional
+        self.status_bar.showMessage("Ready. Please connect to AKAI Fire.")
 
     def _update_oled_and_title_on_sequence_change(self, is_modified: bool, sequence_name: str | None):
         """
@@ -1093,7 +1316,28 @@ class MainWindow(QMainWindow):
             # Sampler control actions
             self.hardware_input_manager.request_toggle_screen_sampler.connect(self._on_request_toggle_screen_sampler)
             self.hardware_input_manager.request_cycle_sampler_monitor.connect(self._on_request_cycle_sampler_monitor)                
-            # print("MW TRACE: Connected HardwareInputManager signals (animator, navigation, sampler).") # Optional
+
+            # --- NEW: OLED item control hardware signals ---
+            # PATTERN UP
+            if hasattr(self.hardware_input_manager, 'oled_pattern_up_pressed'):
+                self.hardware_input_manager.oled_pattern_up_pressed.connect(self._handle_oled_pattern_up)
+            else:
+                print("MW WARNING: HardwareInputManager missing 'oled_pattern_up_pressed' signal.")
+
+            # PATTERN DOWN
+            if hasattr(self.hardware_input_manager, 'oled_pattern_down_pressed'):
+                self.hardware_input_manager.oled_pattern_down_pressed.connect(self._handle_oled_pattern_down)
+            else:
+                print("MW WARNING: HardwareInputManager missing 'oled_pattern_down_pressed' signal.")
+
+            # BROWSER (OLED activation)
+            # If BROWSER was previously connected to sampler toggle, this should be changed in HIM.
+            if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
+                self.hardware_input_manager.oled_browser_activate_pressed.connect(self._handle_oled_browser_activate)
+            else:
+                print("MW WARNING: HardwareInputManager missing 'oled_browser_activate_pressed' signal.")
+
+            # print("MW TRACE: Connected HardwareInputManager signals (animator, navigation, sampler, OLED item control).") # Optional
         else:
             print("MW TRACE WARNING: self.hardware_input_manager is None during _connect_signals.")            
         # OLEDDisplayManager Signal to AkaiFireController AND to GUI Mirror
@@ -1527,25 +1771,27 @@ class MainWindow(QMainWindow):
             # self.status_bar.showMessage("Sampler deactivated by other component.", 2000) # Optional
 
     def _on_oled_startup_animation_finished(self):
-        if self.oled_display_manager:
-            # The default text and font are now managed by OLEDDisplayManager's
-            # internal state, updated via update_default_text_settings.
-            # We just need to tell it to display its "normal" text.
-            # If a persistent override is active (e.g. sampler), it will show that instead.
-            # If not, it shows self.oled_display_manager.normal_display_text (which should be startup_text)
-            
-            # This call will ensure the correct text (startup or persistent) is displayed
-            # with the correct font and scrolling behavior.
-            current_intended_text = self.oled_display_manager.get_current_intended_display_text()
-            if current_intended_text is None: # If nothing specific, use the loaded startup text
-                current_intended_text = self.oled_startup_text
+        print("MW TRACE: _on_oled_startup_animation_finished called.")
+        if not self.oled_display_manager:
+            print("MW WARNING: OLEDDisplayManager not available in _on_oled_startup_animation_finished.")
+            return
 
-            self.oled_display_manager.set_display_text(current_intended_text, scroll_if_needed=True)
-            print(f"MW INFO: OLED startup animation finished. Displaying: '{current_intended_text}'")
-        # else:
-            # print("MW WARNING: OLEDManager not available to set default text after animation.")
+        # After the BUILT-IN startup animation finishes, we need to load and apply
+        # the CONFIGURED default startup item (which could be text or a custom animation).
+        # The built-in startup animation should have cleared any prior custom animation state.
+        
+        # Ensure the flag for built-in startup is false now.
+        # The oled_display_manager._play_next_startup_frame should set this to false when it finishes.
+        # We can double-check here.
+        if hasattr(self.oled_display_manager, 'is_startup_animation_playing'):
+            self.oled_display_manager.is_startup_animation_playing = False
 
 
+        print("MW INFO: Built-in OLED startup animation finished. Applying configured default item...")
+        # This method will check self.oled_startup_text (relative path from config)
+        # and then call either update_default_text_settings or play_animation_item.
+        self._load_and_apply_default_oled_item()
+        
     def _on_sampler_activity_changed(self, is_active: bool):
         """Handles sampler start/stop to update UI, OLED, and animator state."""
         # print(f"MW TRACE: _on_sampler_activity_changed - Sampler Active: {is_active}") # Optional
@@ -2115,6 +2361,126 @@ class MainWindow(QMainWindow):
 
     def _handle_grid_left_pressed(self):
         self._cycle_oled_nav_target(1)
+
+
+    def _handle_oled_pattern_up(self):
+        """Handles PATTERN UP button press for cycling cued OLED text items."""
+        if not self.oled_display_manager or not self.akai_controller.is_connected(): return
+
+        if not self.available_oled_items_cache:
+            self.oled_display_manager.show_temporary_knob_value("No Items") # Or a more descriptive temporary message
+            QTimer.singleShot(1500, self.oled_display_manager.revert_after_knob_feedback)
+            return
+
+        # Filter for text items only for now
+        text_items = [item for item in self.available_oled_items_cache if item['type'] == 'text']
+        if not text_items:
+            self.oled_display_manager.show_temporary_knob_value("No Text Items")
+            QTimer.singleShot(1500, self.oled_display_manager.revert_after_knob_feedback)
+            return
+
+        current_idx = -1
+        if self.current_cued_text_item_path:
+            try:
+                current_idx = [item['path'] for item in text_items].index(self.current_cued_text_item_path)
+            except ValueError:
+                current_idx = -1 # Path not found, reset
+
+        new_idx = (current_idx + 1) % len(text_items)
+        self.current_cued_text_item_path = text_items[new_idx]['path']
+    
+        # Show item name on OLED
+        item_name_to_show = text_items[new_idx]['name']
+        # Make it clear it's a cued item, e.g., by prefixing or using a different style if possible
+        self.oled_display_manager.show_temporary_knob_value(f"Cue: {item_name_to_show[:12]}") # Limit length
+        # No timer for revert here, BROWSER press will show full or other action will override
+
+        self._save_oled_config() # Save the new cued item path
+        print(f"MW INFO: PATTERN UP - Cued OLED Text Item: {self.current_cued_text_item_path}")
+
+    def _handle_oled_pattern_down(self):
+        """Handles PATTERN DOWN button press for cycling cued OLED items (e.g., animations in future)."""
+        if not self.oled_display_manager or not self.akai_controller.is_connected(): return
+        # For now, make it cycle text items backwards, or implement animation cycling later
+    
+        if not self.available_oled_items_cache:
+            self.oled_display_manager.show_temporary_knob_value("No Items")
+            QTimer.singleShot(1500, self.oled_display_manager.revert_after_knob_feedback)
+            return
+
+        text_items = [item for item in self.available_oled_items_cache if item['type'] == 'text']
+        if not text_items:
+            self.oled_display_manager.show_temporary_knob_value("No Text Items")
+            QTimer.singleShot(1500, self.oled_display_manager.revert_after_knob_feedback)
+            return
+
+        current_idx = 0 # Default to first if no cued item
+        if self.current_cued_text_item_path:
+            try:
+                current_idx = [item['path'] for item in text_items].index(self.current_cued_text_item_path)
+            except ValueError:
+                current_idx = 0 
+
+        new_idx = (current_idx - 1 + len(text_items)) % len(text_items) # Cycle backwards
+        self.current_cued_text_item_path = text_items[new_idx]['path']
+        item_name_to_show = text_items[new_idx]['name']
+        self.oled_display_manager.show_temporary_knob_value(f"Cue: {item_name_to_show[:12]}")
+        self._save_oled_config()
+        print(f"MW INFO: PATTERN DOWN - Cued OLED Text Item: {self.current_cued_text_item_path}")
+
+
+    def _handle_oled_browser_activate(self):
+        """Handles BROWSER button press to display the currently cued OLED item."""
+        if not self.oled_display_manager or not self.akai_controller.is_connected(): return
+
+        item_path_to_display = self.current_cued_text_item_path # Prioritize text for now
+        # In future, check self.current_cued_anim_item_path if a mode switch exists
+
+        if not item_path_to_display:
+            self.oled_display_manager.show_temporary_knob_value("Nothing Cued")
+            QTimer.singleShot(1500, self.oled_display_manager.revert_after_knob_feedback)
+            return
+
+        item_data = self._load_oled_item_data(item_path_to_display)
+
+        if item_data and item_data.get("item_type") == "text":
+            text = item_data.get("text_content", " ")
+            family = item_data.get("font_family", DEFAULT_OLED_FONT_FAMILY)
+            size = item_data.get("font_size_px", DEFAULT_OLED_FONT_SIZE_PX)
+            anim_style = item_data.get("animation_style", "scroll_left") # TODO: OLEDManager needs to support this
+            anim_params = item_data.get("animation_params", {})
+
+            # OLEDDisplayManager needs a method to display arbitrary item content temporarily
+            # For now, we'll use a modified set_display_text or show_temporary_knob_value approach
+            # This is a temporary display, so it should revert.
+            # Let's assume OLEDDisplayManager.set_display_text with a duration,
+            # or a new method `show_custom_item_temporarily(item_data, duration_ms)`
+
+            # Simplified for now:
+            # This will use the current 'default' font settings in OLEDDisplayManager
+            # but with the item's text. We need to enhance OLEDDisplayManager to take
+            # full item data.
+            print(f"MW INFO: BROWSER - Displaying item: {item_data.get('item_name')}")
+
+            # Option 1: Reuse show_temporary_knob_value if it can take arbitrary font (it can't easily yet)
+            # Option 2: A more complex solution in OLEDDisplayManager (preferred for future)
+            # For now, let's make it show the text using existing mechanisms, assuming it's short.
+            # The proper way is for OLEDDisplayManager to understand the full item_data.
+            self.oled_display_manager.stop_scrolling() # Stop any current normal scroll
+            max_chars_for_preview = oled_renderer.OLED_WIDTH // 6 # Assuming avg char width of 6 pixels
+            self.oled_display_manager.show_temporary_knob_value(text[:max_chars_for_preview]) # Show start of text
+            # This is a placeholder. OLEDDisplayManager.py needs to be enhanced to show an entire custom item.
+            # A proper implementation would be:
+            # self.oled_display_manager.display_item_temporarily(item_data, duration_ms=3000)
+            QTimer.singleShot(3000, self.oled_display_manager.revert_after_knob_feedback) # Revert after 3s
+
+        # Add handling for "image_animation" 
+        elif item_data and item_data.get("item_type") == "image_animation":
+            self.oled_display_manager.play_animation_item_temporarily(item_data, duration_ms=5000)
+
+        else:
+            self.oled_display_manager.show_temporary_knob_value("Invalid Item")
+            QTimer.singleShot(1500, self.oled_display_manager.revert_after_knob_feedback)
 
     def _on_request_toggle_screen_sampler(self):
         """Handles hardware button press to toggle screen sampler ON/OFF."""

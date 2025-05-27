@@ -77,3 +77,8 @@ Thumbs.db
 .pytest_cache/
 .coverage
 minimal_qt_test.py
+.specstory/history/2025-05-14_16-37-file-akai-fire-rgb-controller-gui-main-window-py.md
+.specstory/
+.gitignore
+.spec_chat_5-26-25.md
+test_qfontdatabase.py
