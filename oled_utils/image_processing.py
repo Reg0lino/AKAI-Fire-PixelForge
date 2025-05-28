@@ -1,6 +1,6 @@
 # utils/image_processing.py
 import os
-from PIL import Image, ImageOps, ImageSequence, ImageFont, ImageDraw
+from PIL import Image, ImageOps, ImageSequence, ImageFont, ImageDraw, ImageEnhance
 import numpy as np # For Bayer matrix and efficient operations
 
 TARGET_SIZE = (128, 64) # OLED dimensions
@@ -30,81 +30,101 @@ def logical_frame_to_string_list(pil_image_1bit: Image.Image) -> list[str]:
         string_list_frame.append(row_string)
     return string_list_frame
 
-def process_single_frame(frame: Image.Image, 
-                         resize_mode: str, 
-                         mono_conversion_mode: str, 
-                         threshold_value: int, 
-                         invert_colors: bool) -> Image.Image | None:
-    """Processes a single PIL Image frame to a 128x64 1-bit PIL Image."""
+# In oled_utils/image_processing.py
+
+
+def process_single_frame(frame: Image.Image,
+                         resize_mode: str,
+                         mono_conversion_mode: str,
+                         threshold_value: int,
+                         invert_colors: bool,
+                         contrast_factor: float) -> Image.Image | None:  # <<< ADDED contrast_factor
+    """Processes a single PIL Image frame to a 128x64 1-bit PIL Image, with contrast adjustment."""
     try:
-        # 1. Ensure RGBA for consistent transparency handling (if any) before grayscale
+        # 1. Ensure RGBA for consistent transparency handling
         if frame.mode != 'RGBA':
             frame = frame.convert("RGBA")
 
-        # 2. Resize
+        # 2. Resize (Your existing resize logic)
         processed_frame = frame
         if resize_mode == "Stretch to Fit":
-            processed_frame = frame.resize(TARGET_SIZE, Image.Resampling.LANCZOS) # Lanczos is good for downscaling
+            processed_frame = frame.resize(
+                TARGET_SIZE, Image.Resampling.LANCZOS)
         elif resize_mode == "Fit (Keep Aspect, Pad)":
             img_copy = frame.copy()
             img_copy.thumbnail(TARGET_SIZE, Image.Resampling.LANCZOS)
-            # Create a new black background image of target size
-            processed_frame = Image.new("RGBA", TARGET_SIZE, (0, 0, 0, 255)) # Black background
-            # Calculate position to paste the thumbnail centered
+            processed_frame = Image.new(
+                "RGBA", TARGET_SIZE, (0, 0, 0, 255))  # Black background
             paste_x = (TARGET_SIZE[0] - img_copy.width) // 2
             paste_y = (TARGET_SIZE[1] - img_copy.height) // 2
-            processed_frame.paste(img_copy, (paste_x, paste_y))
+            # Ensure alpha channel is used for pasting if source has it
+            processed_frame.paste(
+                img_copy, (paste_x, paste_y), img_copy if img_copy.mode == 'RGBA' else None)
         elif resize_mode == "Crop to Center":
-            # Resize maintaining aspect so the smaller new dimension matches target, then crop
             original_width, original_height = frame.size
             target_aspect = TARGET_SIZE[0] / TARGET_SIZE[1]
             original_aspect = original_width / original_height
-
-            if original_aspect > target_aspect: # Original is wider than target aspect: fit height, crop width
+            if original_aspect > target_aspect:
                 new_height = TARGET_SIZE[1]
                 new_width = int(new_height * original_aspect)
-            else: # Original is taller or same aspect: fit width, crop height
+            else:
                 new_width = TARGET_SIZE[0]
                 new_height = int(new_width / original_aspect)
-            
-            resized_temp = frame.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Calculate crop box
+            resized_temp = frame.resize(
+                (new_width, new_height), Image.Resampling.LANCZOS)
             crop_x = (new_width - TARGET_SIZE[0]) / 2
             crop_y = (new_height - TARGET_SIZE[1]) / 2
-            crop_box = (crop_x, crop_y, crop_x + TARGET_SIZE[0], crop_y + TARGET_SIZE[1])
+            crop_box = (crop_x, crop_y, crop_x +
+                        TARGET_SIZE[0], crop_y + TARGET_SIZE[1])
             processed_frame = resized_temp.crop(crop_box)
-        else: # Default to Stretch if unknown mode
-            processed_frame = frame.resize(TARGET_SIZE, Image.Resampling.LANCZOS)
+        else:  # Default to Stretch if unknown mode
+            processed_frame = frame.resize(
+                TARGET_SIZE, Image.Resampling.LANCZOS)
 
         # 3. Convert to Grayscale
         grayscale_frame = processed_frame.convert("L")
 
-        # 4. Invert Colors (if checked) - applied BEFORE monochrome conversion
+        # --- NEW: 3.5. Apply Contrast Adjustment ---
+        # Apply contrast if factor is not 1.0 (no change)
+        if contrast_factor != 1.0:
+            try:
+                enhancer = ImageEnhance.Contrast(grayscale_frame)
+                grayscale_frame = enhancer.enhance(contrast_factor)
+                # print(f"IPROC DEBUG: Applied contrast factor: {contrast_factor:.2f} to frame.") # Optional
+            except Exception as e_contrast:
+                print(
+                    f"IPROC WARNING: Failed to apply contrast (factor: {contrast_factor:.2f}): {e_contrast}")
+        # --- END NEW ---
+
+        # 4. Invert Colors (if checked) - applied AFTER contrast, BEFORE monochrome conversion
         if invert_colors:
             grayscale_frame = ImageOps.invert(grayscale_frame)
 
-        # 5. Monochrome Conversion
+        # 5. Monochrome Conversion (Your existing dithering logic)
         monochrome_frame: Image.Image
         if mono_conversion_mode == "Floyd-Steinberg Dither":
-            monochrome_frame = grayscale_frame.convert('1', dither=Image.Dither.FLOYDSTEINBERG)
+            monochrome_frame = grayscale_frame.convert(
+                '1', dither=Image.Dither.FLOYDSTEINBERG)
         elif mono_conversion_mode == "Simple Threshold":
-            monochrome_frame = grayscale_frame.point(lambda p: 255 if p > threshold_value else 0, '1')
+            monochrome_frame = grayscale_frame.point(
+                lambda p: 255 if p > threshold_value else 0, '1')
         elif mono_conversion_mode == "Ordered Dither (Bayer 4x4)":
-            gray_np = np.array(grayscale_frame, dtype=np.float32) / 255.0 # Normalize to 0-1
+            gray_np = np.array(grayscale_frame, dtype=np.float32) / 255.0
             output_np = np.zeros_like(gray_np, dtype=np.uint8)
             bayer_rows, bayer_cols = NORMALIZED_BAYER_MATRIX_4X4.shape
             for r_idx in range(gray_np.shape[0]):
                 for c_idx in range(gray_np.shape[1]):
                     if gray_np[r_idx, c_idx] > NORMALIZED_BAYER_MATRIX_4X4[r_idx % bayer_rows, c_idx % bayer_cols]:
                         output_np[r_idx, c_idx] = 255
-                    else:
-                        output_np[r_idx, c_idx] = 0
-            monochrome_frame = Image.fromarray(output_np, mode='L').convert('1')
-        else: # Default to Floyd-Steinberg
-            print(f"Warning: Unknown mono_conversion_mode '{mono_conversion_mode}', defaulting to Floyd-Steinberg.")
-            monochrome_frame = grayscale_frame.convert('1', dither=Image.Dither.FLOYDSTEINBERG)
-        
+                    # else: output_np[r_idx, c_idx] = 0 # Already initialized to 0
+            monochrome_frame = Image.fromarray(
+                output_np, mode='L').convert('1')
+        # Add other dithering methods here as elif blocks in the future
+        else:  # Default to Floyd-Steinberg
+            # print(f"IPROC Warning: Unknown mono_conversion_mode '{mono_conversion_mode}', defaulting to Floyd-Steinberg.")
+            monochrome_frame = grayscale_frame.convert(
+                '1', dither=Image.Dither.FLOYDSTEINBERG)
+
         return monochrome_frame
 
     except Exception as e:
@@ -113,101 +133,104 @@ def process_single_frame(frame: Image.Image,
         traceback.print_exc()
         return None
 
+# In oled_utils/image_processing.py
 
-def process_image_to_oled_data(filepath: str, 
-                               resize_mode: str, 
-                               mono_conversion_mode: str, 
-                               threshold_value: int, 
+
+def process_image_to_oled_data(filepath: str,
+                               resize_mode: str,
+                               mono_conversion_mode: str,
+                               threshold_value: int,
                                invert_colors: bool,
-                               max_frames_to_import: int = 0 # 0 for all
+                               contrast_factor: float,        # <<< ADDED contrast_factor
+                               max_frames_to_import: int = 0
                                ) -> tuple[list[list[str]] | None, float | None, int | None]:
     """
     Processes an image or GIF into a list of logical OLED frames.
+    Includes contrast adjustment before monochrome conversion.
 
     Args:
         filepath: Path to the image or GIF.
         resize_mode: "Stretch to Fit", "Fit (Keep Aspect, Pad)", "Crop to Center".
-        mono_conversion_mode: "Floyd-Steinberg Dither", "Simple Threshold".
+        mono_conversion_mode: Dithering/thresholding mode.
         threshold_value: Value for simple thresholding (0-255).
         invert_colors: Boolean, whether to invert black/white.
+        contrast_factor: Float, e.g., 1.0 for no change, >1 for more, <1 for less.
         max_frames_to_import: Max number of frames to process from a GIF (0 for all).
 
     Returns:
         A tuple: (list_of_logical_frames, source_fps, source_loop_count)
-        list_of_logical_frames: Each frame is a list of 64 strings (128 '0'/'1's).
-                                Returns None if processing fails.
-        source_fps: Detected FPS from GIF, or None for static images/if not detectable.
-        source_loop_count: Detected loop count from GIF (0 for infinite), or None.
     """
     if not os.path.exists(filepath):
-        print(f"Error: File not found at {filepath}")
+        print(f"IPROC Error: File not found at {filepath}")
         return None, None, None
 
     logical_frames_output = []
     source_fps = None
-    source_loop_count = None # 0 often means infinite loop in GIF standard
+    source_loop_count = None
 
     try:
         img = Image.open(filepath)
         is_animated = hasattr(img, "is_animated") and img.is_animated
         num_frames = img.n_frames if is_animated else 1
-
-        print(f"Processing '{os.path.basename(filepath)}'. Animated: {is_animated}, Total Source Frames: {num_frames}")
+        # print(f"IPROC Processing '{os.path.basename(filepath)}'. Animated: {is_animated}, Frames: {num_frames}, Contrast: {contrast_factor:.2f}") # Optional
 
         frames_to_process = num_frames
         if is_animated and max_frames_to_import > 0:
             frames_to_process = min(num_frames, max_frames_to_import)
-            print(f"Limiting import to {frames_to_process} frames.")
 
         if is_animated:
-            # Try to get GIF specific info
             try:
-                duration_ms = img.info.get('duration', 100) # Default to 100ms (10 FPS) if not found
+                duration_ms = img.info.get('duration', 100)
                 if duration_ms > 0:
                     source_fps = 1000.0 / duration_ms
-                source_loop_count = img.info.get('loop', 0) # 0 usually means infinite
-                print(f"Source GIF Info: Duration={duration_ms}ms (FPS ~{source_fps:.2f}), Loop Count={source_loop_count}")
+                source_loop_count = img.info.get('loop', 0)
             except Exception as e_info:
-                print(f"Could not read detailed GIF info (duration/loop): {e_info}")
-
+                print(
+                    f"IPROC Warning: Could not read GIF duration/loop: {e_info}")
 
         for i in range(frames_to_process):
             if is_animated:
-                img.seek(i) # Move to the i-th frame
-                # print(f"Processing frame {i+1}/{frames_to_process}...")
-            
-            # Create a copy of the current frame to process, especially for GIFs
-            current_frame_pil = img.copy() 
+                img.seek(i)
+            current_frame_pil = img.copy()
 
             monochrome_pil_frame = process_single_frame(
-                current_frame_pil, 
-                resize_mode, 
-                mono_conversion_mode, 
-                threshold_value, 
-                invert_colors
+                current_frame_pil,
+                resize_mode,
+                mono_conversion_mode,
+                threshold_value,
+                invert_colors,
+                contrast_factor  # <<< PASS contrast_factor HERE
             )
 
             if monochrome_pil_frame:
-                logical_frames_output.append(logical_frame_to_string_list(monochrome_pil_frame))
+                logical_frames_output.append(
+                    logical_frame_to_string_list(monochrome_pil_frame))
             else:
-                print(f"Skipping frame {i} due to processing error.")
-        
-        if not logical_frames_output: # If all frames failed
+                print(
+                    f"IPROC Warning: Skipping frame {i} due to processing error.")
+
+        if not logical_frames_output:
+            print(
+                f"IPROC Error: No frames successfully processed for '{filepath}'.")
             return None, source_fps, source_loop_count
 
         return logical_frames_output, source_fps, source_loop_count
 
-    except FileNotFoundError:
-        print(f"Error: File not found at {filepath}")
+    except FileNotFoundError:  # Should be caught by os.path.exists, but good defense
+        print(
+            f"IPROC Error: File not found at {filepath} (during Image.open).")
         return None, None, None
-    except IOError: # Catches more general PIL errors like "cannot identify image file"
-        print(f"Error: PIL cannot open or read file at {filepath}. It might be unsupported or corrupt.")
+    except IOError as e_io:
+        print(
+            f"IPROC Error: PIL cannot open/read file '{filepath}'. Unsupported or corrupt? Error: {e_io}")
         return None, None, None
     except Exception as e:
-        print(f"An unexpected error occurred during image processing: {e}")
+        print(
+            f"IPROC Error: Unexpected error processing image '{filepath}': {e}")
         import traceback
         traceback.print_exc()
         return None, None, None
+
 
 if __name__ == '__main__':
     from PIL import ImageDraw, ImageFont # Add ImageDraw, ImageFont here for dummy asset creation

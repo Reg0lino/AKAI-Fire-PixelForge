@@ -1,7 +1,7 @@
 # AKAI_Fire_RGB_Controller/managers/oled_display_manager.py
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer, Qt, QBuffer, QIODevice
 # Keep QFont for fallback text items
-from PyQt6.QtGui import QImage, QPainter, QColor, QFont, QFontMetrics
+from PyQt6.QtGui import QImage, QPainter, QColor, QFont, QFontMetrics, QFontDatabase, QFontInfo
 from PIL import Image, ImageFont  # Crucial for PIL font objects
 import os
 import sys
@@ -70,31 +70,33 @@ class OLEDDisplayManager(QObject):
 # In class OLEDDisplayManager(QObject):
     # In managers/oled_display_manager.py
 
-    def __init__(self, 
-                 akai_fire_controller_ref, 
-                 available_app_fonts: list[str], # <<< ARGUMENT ADDED HERE
+    def __init__(self,
+                 akai_fire_controller_ref,
+                 available_app_fonts: list[str],
                  parent: QObject | None = None):
         super().__init__(parent)
-        
+
         self.akai_fire_controller = akai_fire_controller_ref
-        self._app_font_files: list[str] = available_app_fonts # <<< STORED HERE
+        self._app_font_files: list[str] = available_app_fonts
 
         # --- Core State Attributes ---
         self._active_graphic_item_data: dict | None = None
-        self._active_graphic_item_type: str | None = None # "text" or "image_animation"
-        
-        # For text-based Active Graphics specifically
-        self._active_graphic_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
+        self._active_graphic_item_type: str | None = None
+
+        # For text-based Active Graphics or the Hardcoded Default Message
+        self._active_graphic_text_font_family: str | None = None
+        self._active_graphic_text_font_size_px: int | None = None
         self._active_graphic_text_content: str | None = None
-        self._active_graphic_text_scroll_if_needed: bool = True # Default, will be set by item
+        self._active_graphic_text_scroll_if_needed: bool = True
         self._active_graphic_text_is_scrolling: bool = False
         self._active_graphic_text_current_scroll_offset: int = 0
         self._active_graphic_text_pixel_width: int = 0
         self._active_graphic_text_scroll_timer = QTimer(self)
-        self._active_graphic_text_scroll_timer.timeout.connect(self._scroll_active_graphic_text_step)
+        self._active_graphic_text_scroll_timer.timeout.connect(
+            self._scroll_active_graphic_text_step)
         self._active_graphic_text_step_delay_ms: int = self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS
         self._active_graphic_text_restart_delay_ms: int = self.DEFAULT_TEXT_ITEM_SCROLL_RESTART_DELAY_MS
-        self._active_graphic_text_alignment: str = "center" # Default if item doesn't specify
+        self._active_graphic_text_alignment: str = "center"
 
         # For image_animation-based Active Graphics
         self._custom_animation_logical_frames: list[list[str]] | None = None
@@ -102,7 +104,8 @@ class OLEDDisplayManager(QObject):
         self._custom_animation_playback_fps: float = 15.0
         self._custom_animation_loop_behavior: str = "Loop Infinitely"
         self._custom_animation_timer = QTimer(self)
-        self._custom_animation_timer.timeout.connect(self._play_next_custom_animation_frame)
+        self._custom_animation_timer.timeout.connect(
+            self._play_next_custom_animation_frame)
         self._is_custom_animation_playing: bool = False
 
         # For built-in visual startup animation
@@ -111,77 +114,47 @@ class OLEDDisplayManager(QObject):
         self._current_builtin_startup_animation_frame_index: int = 0
         self._builtin_startup_animation_frame_duration: int = 60
 
-        # For temporary system messages
-        self.feedback_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None # This is TomThumb 60pt
-        self._app_default_message_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None # For "Fire CTRL" style messages
+        # For temporary system messages (uses TomThumb 60pt)
+        self.feedback_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
+        # self._app_default_message_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None # <<< REMOVE THIS
 
         self._temporary_message_timer = QTimer(self)
         self._temporary_message_timer.setSingleShot(True)
-        self._temporary_message_timer.timeout.connect(self._revert_from_temporary_display)
+        self._temporary_message_timer.timeout.connect(
+            self._revert_from_temporary_display)
         self._is_temporary_message_active = False
         self._current_temporary_message_text: str | None = None
         self._temporary_message_text_scroll_timer = QTimer(self)
-        self._temporary_message_text_scroll_timer.timeout.connect(self._scroll_temporary_message_step)
+        self._temporary_message_text_scroll_timer.timeout.connect(
+            self._scroll_temporary_message_step)
         self._temporary_message_is_scrolling: bool = False
         self._temporary_message_current_scroll_offset: int = 0
         self._temporary_message_text_pixel_width: int = 0
-        self._temporary_message_total_duration_ms: int = 0 
+        self._temporary_message_total_duration_ms: int = 0
         self._temporary_message_has_scrolled_once: bool = False
 
-        # For persistent overrides (e.g., "SAMPLING")
+        # For persistent overrides
         self.persistent_override_text: str | None = None
         self.persistent_override_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
         # --- End Core State Attributes ---
-        
+
         self.oled_width = oled_renderer.OLED_WIDTH if OLED_RENDERER_AVAILABLE else 128
         self.oled_height = oled_renderer.OLED_HEIGHT if OLED_RENDERER_AVAILABLE else 64
-        
-        # Load fonts
-        self._load_feedback_font() # Loads TomThumb 60pt into self.feedback_pil_font
-        self._load_persistent_override_font() # Loads Arial 10px (or fallback) into self.persistent_override_pil_font
-        self._load_app_default_message_font() # Loads a font for "Fire CTRL" style messages
 
-        # Global scroll delay for text items (can be overridden by item's settings)
+        # Load fonts
+        self._load_feedback_font()  # Loads TomThumb 60pt into self.feedback_pil_font
+        self._load_persistent_override_font()
+        # self._load_app_default_message_font() # <<< REMOVE THIS CALL
+
         self.global_text_item_scroll_delay_ms: int = self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS
-        
-        print(f"OLEDDisplayManager: Initialized. FeedbackFont: {self.feedback_pil_font is not None}, AppDefaultFont: {self._app_default_message_pil_font is not None}")
-       
-    # In class OLEDDisplayManager(QObject):
+
+        print(
+            f"OLEDDisplayManager: Initialized. FeedbackFont loaded: {self.feedback_pil_font is not None}")
 
     # Or a bundled small pixel font if you have one
     APP_DEFAULT_MSG_FONT_FAMILY = "Impact"
     APP_DEFAULT_MSG_FONT_SIZE_PX = 24
 
-    def _load_app_default_message_font(self):
-        """Loads a font for the application's hardcoded default message."""
-        self._app_default_message_pil_font = None
-        try:
-            # Try to load a common system font directly with Pillow
-            self._app_default_message_pil_font = ImageFont.truetype(
-                self.APP_DEFAULT_MSG_FONT_FAMILY,
-                self.APP_DEFAULT_MSG_FONT_SIZE_PX
-            )
-            print(
-                f"OLED Mgr INFO: Loaded App Default Message Font '{self.APP_DEFAULT_MSG_FONT_FAMILY}' @ {self.APP_DEFAULT_MSG_FONT_SIZE_PX}px.")
-        except IOError:
-            print(
-                f"OLED Mgr WARNING: System font '{self.APP_DEFAULT_MSG_FONT_FAMILY}' for app default message not found. Using Pillow default.")
-            try:
-                self._app_default_message_pil_font = ImageFont.load_default()
-            except:
-                pass  # Remains None if Pillow default also fails
-        except Exception as e:
-            print(
-                f"OLED Mgr WARNING: Error loading app default message font: {e}. Using Pillow default.")
-            try:
-                self._app_default_message_pil_font = ImageFont.load_default()
-            except:
-                pass
-
-        if not self._app_default_message_pil_font:  # Ultimate fallback if all else failed
-            print("OLED Mgr WARNING: No App Default Message font loaded; will use Feedback Font as last resort for app default message.")
-            # Fallback to TomThumb if app default fails badly
-            self._app_default_message_pil_font = self.feedback_pil_font
 
     def _load_feedback_font(self):
         """Loads TomThumb.ttf 60pt for system feedback messages."""
@@ -237,22 +210,24 @@ class OLEDDisplayManager(QObject):
 
         if not self.persistent_override_pil_font:
             print("OLED Mgr CRITICAL: No font loaded for persistent override messages.")
-# In class OLEDDisplayManager(QObject):
 
     def _load_pil_font_for_text_item(self, font_family: str, font_size_px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont | None:
         """
         Attempts to load a PIL ImageFont object for a given text item's font settings.
-        Priority: Bundled app fonts (using self._app_font_files), 
-                  specified system font, common system fallback, Pillow default.
+        Priority: 
+        1. Bundled app fonts (using self._app_font_files).
+        2. Specified system font by name (via Pillow).
+        3. Specified system font by path (via Qt's QFontDatabase helping Pillow).
+        4. Common system fallback fonts by name (via Pillow).
+        5. Pillow's default.
         """
         loaded_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
-        font_family_lower_no_ext = os.path.splitext(font_family.lower())[
-            0]  # Compare base names
+        font_family_lower_no_ext = os.path.splitext(font_family.lower())[0]
 
-        print(
-            f"OLED Mgr DEBUG: Attempting to load font for text item: Family='{font_family}', Size={font_size_px}px")
+        # print(
+        #     f"OLED Mgr DEBUG: Attempting to load font for text item: Family='{font_family}', Size={font_size_px}px")
 
-        # 1. Check Bundled Application Fonts (self._app_font_files was populated from MainWindow's cache)
+        # 1. Check Bundled Application Fonts
         if hasattr(self, '_app_font_files') and self._app_font_files:
             for app_font_filename in self._app_font_files:
                 app_font_filename_lower_no_ext = os.path.splitext(
@@ -266,37 +241,82 @@ class OLEDDisplayManager(QObject):
                                 loaded_font = ImageFont.truetype(
                                     font_path, font_size_px)
                                 print(
-                                    f"OLED Mgr INFO: Loaded BUNDLED font '{app_font_filename}' (matched '{font_family}') @{font_size_px}px for text item.")
+                                    f"OLED Mgr INFO: Loaded BUNDLED font '{app_font_filename}' (matched '{font_family}') @{font_size_px}px.")
                                 return loaded_font
-                            # else: # Font file listed in cache but not found at path (should not happen if cache is from valid scan)
-                                # print(f"OLED Mgr WARNING: Bundled font '{app_font_filename}' for '{font_family}' in cache but not found at '{font_path}'.")
-                        # else: # UTILS_AVAILABLE is False, cannot load by path
-                            # print(f"OLED Mgr WARNING: Cannot load bundled font '{app_font_filename}', utils not available.")
+                        # else: print(f"OLED Mgr WARNING: Cannot load bundled font '{app_font_filename}', utils not available.") # Already logged in method
                     except Exception as e_res:
                         print(
                             f"OLED Mgr WARNING: Exception loading BUNDLED font '{app_font_filename}' for '{font_family}': {e_res}")
                     if loaded_font:
                         break
 
-        # 2. Attempt to Load Specified System Font by Name
+        # 2. Attempt to Load Specified System Font by Name (Pillow direct)
         if not loaded_font:
             try:
-                # font_family can be "Arial" or "algerian.ttf"
                 loaded_font = ImageFont.truetype(font_family, font_size_px)
                 print(
-                    f"OLED Mgr INFO: Successfully loaded SYSTEM font '{font_family}' @{font_size_px}px for text item.")
+                    f"OLED Mgr INFO: Pillow directly loaded SYSTEM font '{font_family}' @{font_size_px}px.")
                 return loaded_font
             except IOError:
                 print(
-                    f"OLED Mgr WARNING: System font '{font_family}' not found by Pillow directly or IOError.")
-            except Exception as e_sys_target:
+                    f"OLED Mgr INFO: Pillow could not load system font '{font_family}' by name directly.")
+            except Exception as e_sys_target_name:
                 print(
-                    f"OLED Mgr WARNING: Other error loading target system font '{font_family}': {e_sys_target}")
+                    f"OLED Mgr WARNING: Error during Pillow's attempt to load system font '{font_family}' by name: {e_sys_target_name}")
 
-        # 3. Try Common Fallback System Fonts
+        # 3. NEW: Attempt to Load System Font by Path (using QFontDatabase to find path for Pillow)
+        if not loaded_font:
+            print(
+                f"OLED Mgr DEBUG: Attempting to find font path for '{font_family}' using QFontDatabase...")
+            try:
+                # QFontDatabase needs to be instantiated if not already globally available in this class
+                # It's usually fine to create it on the fly.
+                font_db = QFontDatabase()
+                # Find a font that matches the family name.
+                # QFontDatabase.font() returns a QFont. We need its QFontInfo.
+                # We might need to iterate through styles if family name isn't exact match for a specific style.
+
+                # Try to find an exact match first
+                # Size doesn't matter for path finding
+                test_qfont = QFont(font_family, pointSize=10)
+                font_info = QFontInfo(test_qfont)
+
+                actual_family_found = font_info.family()
+
+                if actual_family_found.lower() == font_family.lower():  # Good match
+                    # This method to get file path is not directly available on QFontInfo or QFont.
+                    # This is the tricky part. QFontDatabase doesn't easily expose file paths.
+                    # However, for common scenarios, if QFont can use it, Pillow *might* also find it if the name is canonical.
+                    # The main issue is usually with non-canonical names or fonts not in typical system paths Pillow checks.
+
+                    # A more involved approach would be needed to truly get the file path from Qt,
+                    # which might involve platform-specific APIs or iterating QFontDatabase.families()
+                    # and then trying to guess paths, which is unreliable.
+
+                    # For now, let's simplify: If Qt thinks it has the font (font_info.exactMatch() or family matches),
+                    # we can re-try with Pillow, hoping the canonical name helps.
+                    # The previous attempt already did this. This step might be redundant without deeper path finding.
+
+                    # Let's log what Qt found:
+                    print(
+                        f"OLED Mgr DEBUG: QFontDatabase check for '{font_family}': Matched family '{actual_family_found}'. ExactMatch: {font_info.exactMatch()}")
+
+                    # If Qt found a good match, and Pillow didn't find it by the original name,
+                    # it's unlikely Pillow will find it by actual_family_found if it's the same.
+                    # This step might not add much value without actual path retrieval.
+                    # We will keep the structure for future enhancement if path retrieval is implemented.
+
+                else:
+                    print(
+                        f"OLED Mgr DEBUG: QFontDatabase check for '{font_family}': Did not find exact match (found '{actual_family_found}').")
+
+            except Exception as e_qt_db:
+                print(
+                    f"OLED Mgr WARNING: Error during QFontDatabase check for '{font_family}': {e_qt_db}")
+
+        # 4. Try Common Fallback System Fonts by Name (Pillow direct)
         if not loaded_font:
             common_fallbacks = ["Arial", "Verdana", "DejaVu Sans"]
-            # Avoid retrying original if it was a common one
             fallbacks_to_try = [
                 f for f in common_fallbacks if f.lower() != font_family.lower()]
 
@@ -313,21 +333,21 @@ class OLEDDisplayManager(QObject):
                     print(
                         f"OLED Mgr WARNING: Error loading fallback system font '{fallback_name}': {e_sys_fallback}")
 
-        # 4. Pillow's Default (Last Resort)
+        # 5. Pillow's Default (Last Resort)
         if not loaded_font:
             try:
                 loaded_font = ImageFont.load_default()
                 print(
-                    f"OLED Mgr WARNING: Using Pillow's load_default() font for text item originally requesting '{font_family}' @{font_size_px}px.")
+                    f"OLED Mgr WARNING: Using Pillow's load_default() font for text item (requested '{font_family}' @{font_size_px}px).")
             except Exception as e_def:
                 print(
                     f"OLED Mgr CRITICAL: Failed to load Pillow's default font: {e_def}")
 
         if not loaded_font:
             print(
-                f"OLED Mgr CRITICAL: NO FONT LOADED for text item '{font_family}' @{font_size_px}px. Display will likely be blank.")
+                f"OLED Mgr CRITICAL: NO FONT LOADED for text item '{font_family}' @{font_size_px}px.")
         return loaded_font
-    
+
     
     def update_global_text_item_scroll_delay(self, new_delay_ms: int):
         """Called by MainWindow to set the global default scroll speed for text items."""
@@ -416,9 +436,8 @@ class OLEDDisplayManager(QObject):
                           self._play_next_builtin_startup_frame)
 
 # In class OLEDDisplayManager(QObject):
-
     def set_active_graphic(self, item_data: dict | None):
-        # print(f"OLED Mgr INFO: set_active_graphic called. Item Name: '{item_data.get('item_name', 'None') if item_data else 'None'}'") # Log item name
+        # print(f"OLED Mgr INFO: set_active_graphic called. Item Name: '{item_data.get('item_name', 'None') if item_data else 'None'}'")
 
         self.stop_all_activity()
         self._active_graphic_item_data = item_data
@@ -426,22 +445,19 @@ class OLEDDisplayManager(QObject):
         if item_data:
             self._active_graphic_item_type = item_data.get("item_type")
             item_name_log = item_data.get("item_name", "Unnamed Item")
-            # print(f"OLED Mgr INFO: Processing Active Graphic '{item_name_log}' (Type: {self._active_graphic_item_type})") # Already printed
+            # print(f"OLED Mgr INFO: Processing Active Graphic '{item_name_log}' (Type: {self._active_graphic_item_type})")
 
             if self._active_graphic_item_type == "text":
                 self._active_graphic_text_content = item_data.get(
                     "text_content", " ")
-                font_family = item_data.get("font_family", "Arial")
-                font_size_px = item_data.get("font_size_px", 10)
+                # Store font family and size directly from item data
+                self._active_graphic_text_font_family = item_data.get(
+                    "font_family", "Arial")
+                self._active_graphic_text_font_size_px = item_data.get(
+                    "font_size_px", 10)
 
-                self._active_graphic_pil_font = self._load_pil_font_for_text_item(
-                    font_family, font_size_px)
-                if not self._active_graphic_pil_font:
-                    print(
-                        f"OLED Mgr CRITICAL: Failed to load any font for text item '{item_name_log}'. Text display will likely use a basic fallback or be blank.")
-                    # If _load_pil_font_for_text_item returns None, rendering might use a placeholder or fail.
-                    # For robustness, ensure _load_pil_font_for_text_item *always* returns some font, even if basic.
-                    # My provided _load_pil_font_for_text_item does attempt to always return ImageFont.load_default()
+                # We no longer load a PIL font here for active graphic text. QFont will be created on-the-fly.
+                # self._active_graphic_pil_font = self._load_pil_font_for_text_item(font_family, font_size_px)
 
                 self._active_graphic_text_alignment = item_data.get(
                     "alignment", "center").lower()
@@ -456,9 +472,10 @@ class OLEDDisplayManager(QObject):
                 self._active_graphic_text_restart_delay_ms = anim_params.get(
                     "pause_at_ends_ms", self.DEFAULT_TEXT_ITEM_SCROLL_RESTART_DELAY_MS
                 )
-                # print(f"OLED Mgr DEBUG: Text item '{item_name_log}' params parsed: scroll={self._active_graphic_text_scroll_if_needed}, align='{self._active_graphic_text_alignment}', step_delay={self._active_graphic_text_step_delay_ms}ms") # Optional
+                # print(f"OLED Mgr DEBUG: Text item '{item_name_log}' params parsed: scroll={self._active_graphic_text_scroll_if_needed}, align='{self._active_graphic_text_alignment}', step_delay={self._active_graphic_text_step_delay_ms}ms")
 
             elif self._active_graphic_item_type == "image_animation":
+                # ... (this part remains the same, loading logical_frames, fps, loop_behavior) ...
                 self._custom_animation_logical_frames = item_data.get(
                     "frames_logical")
                 import_options = item_data.get("import_options_used", {})
@@ -468,12 +485,12 @@ class OLEDDisplayManager(QObject):
                     self._custom_animation_playback_fps = 15.0
                 self._custom_animation_loop_behavior = import_options.get(
                     "loop_behavior", "Loop Infinitely")
-
                 if not self._custom_animation_logical_frames:
                     print(
-                        f"OLED Mgr WARNING: Animation item '{item_name_log}' has no logical frames. Will likely display blank.")
+                        f"OLED Mgr WARNING: Animation item '{item_name_log}' has no logical frames.")
 
             else:
+                # ... (unknown item type handling) ...
                 print(
                     f"OLED Mgr WARNING: Unknown Active Graphic type '{self._active_graphic_item_type}' for item '{item_name_log}'. Clearing.")
                 self._active_graphic_item_type = None
@@ -482,14 +499,14 @@ class OLEDDisplayManager(QObject):
         if not self._active_graphic_item_data:
             self._active_graphic_item_type = None
             self._active_graphic_text_content = None
-            self._active_graphic_pil_font = None
+            self._active_graphic_text_font_family = None  # Clear stored font details
+            self._active_graphic_text_font_size_px = None
             self._custom_animation_logical_frames = None
-            # print("OLED Mgr INFO: Active Graphic is effectively None or cleared.") # Optional
+            # print("OLED Mgr INFO: Active Graphic is effectively None or cleared.")
 
         if not self._is_builtin_startup_animation_playing and \
            not self._is_temporary_message_active:
             self._apply_current_oled_state()
-            
             
     def _apply_current_oled_state(self, called_by_revert: bool = False):
         """
@@ -516,24 +533,24 @@ class OLEDDisplayManager(QObject):
         # play_animation_item and _start_or_display_active_graphic_text_internal should handle their own setup.
 
         if self.persistent_override_text is not None:
-            print(
-                f"OLED Mgr INFO: Applying persistent override: '{self.persistent_override_text}'")
+            # print(
+            #     f"OLED Mgr INFO: Applying persistent override: '{self.persistent_override_text}'")
             self.stop_all_activity()  # Ensure active graphic is stopped
             self._display_persistent_override_text()
         elif self._active_graphic_item_data:
             if self._active_graphic_item_type == "image_animation":
-                print(
-                    f"OLED Mgr INFO: Applying Active Graphic (Animation): '{self._active_graphic_item_data.get('item_name')}'")
+            #     print(
+            #         f"OLED Mgr INFO: Applying Active Graphic (Animation): '{self._active_graphic_item_data.get('item_name')}'")
                 self.stop_all_activity()  # Stop other active graphic types
                 self._play_active_graphic_animation()
             elif self._active_graphic_item_type == "text":
-                print(
-                    f"OLED Mgr INFO: Applying Active Graphic (Text): '{self._active_graphic_item_data.get('item_name')}'")
+            #     print(
+            #         f"OLED Mgr INFO: Applying Active Graphic (Text): '{self._active_graphic_item_data.get('item_name')}'")
                 self.stop_all_activity()  # Stop other active graphic types
                 self._start_or_display_active_graphic_text_internal()
             else:
-                print(
-                    f"OLED Mgr WARNING: Unknown Active Graphic type: {self._active_graphic_item_type}. Applying app default.")
+            #     print(
+            #         f"OLED Mgr WARNING: Unknown Active Graphic type: {self._active_graphic_item_type}. Applying app default.")
                 self.stop_all_activity()
                 self._display_hardcoded_app_default_message()
         else:
@@ -664,145 +681,242 @@ class OLEDDisplayManager(QObject):
         
         self._custom_animation_current_frame_index += 1
         
+
 # In class OLEDDisplayManager(QObject):
+    # In managers/oled_display_manager.py
+
     def _start_or_display_active_graphic_text_internal(self):
+        # ... (initial checks for data, font details, renderer availability remain the same) ...
         if not self._active_graphic_item_data or \
            self._active_graphic_item_type != "text" or \
            self._active_graphic_text_content is None or \
-           not OLED_RENDERER_AVAILABLE: # Check renderer availability
-            # print("OLED Mgr DEBUG: Conditions not met for _start_or_display_active_graphic_text_internal (missing data/renderer).")
-            if not self._active_graphic_pil_font: # Specifically if font failed to load
-                 print("OLED Mgr WARNING: Active graphic PIL font is None. Cannot display text item.")
-            # No active text graphic to display, so ODM should fall to its own default or be blank.
-            # This might happen if _load_pil_font_for_text_item returned None.
-            # We should trigger _apply_current_oled_state to ensure it shows *something* (app default or blank).
-            # However, to avoid recursion if this method is called *from* _apply_current_oled_state,
-            # simply send a blank frame for now. _apply_current_oled_state handles the main logic.
+           not self._active_graphic_text_font_family or \
+           not self._active_graphic_text_font_size_px:
             if OLED_RENDERER_AVAILABLE:
-                self.request_send_bitmap_to_fire.emit(oled_renderer.get_blank_packed_bitmap())
+                self.request_send_bitmap_to_fire.emit(
+                    oled_renderer.get_blank_packed_bitmap())
             return
 
         text_to_display = self._active_graphic_text_content
-        font_to_use = self._active_graphic_pil_font # This should now be correctly loaded or a fallback
 
-        if not font_to_use: # Double check if font loading failed and resulted in None
-            print("OLED Mgr CRITICAL: No PIL font available for Active Graphic text. Sending blank.")
-            if OLED_RENDERER_AVAILABLE:
-                self.request_send_bitmap_to_fire.emit(oled_renderer.get_blank_packed_bitmap())
-            return
-            
-        self._active_graphic_text_pixel_width = oled_renderer.get_text_actual_width(text_to_display, font_to_use)
-        
-        # Determine if scrolling is needed based on stored item property
+        q_font_for_metrics = QFont(
+            self._active_graphic_text_font_family, pointSize=-1)
+        q_font_for_metrics.setPixelSize(self._active_graphic_text_font_size_px)
+        fm = QFontMetrics(q_font_for_metrics)
+        self._active_graphic_text_pixel_width = fm.horizontalAdvance(
+            text_to_display)
+
         needs_scroll = self._active_graphic_text_scroll_if_needed and \
-                       self._active_graphic_text_pixel_width > self.oled_width and \
-                       text_to_display.strip() != ""
-
-        # print(f"OLED Mgr DEBUG Text Display: Content='{text_to_display[:20]}...', Width={self._active_graphic_text_pixel_width}, NeedsScroll={needs_scroll}, ScrollIfNedAttr={self._active_graphic_text_scroll_if_needed}")
+            self._active_graphic_text_pixel_width > self.oled_width and \
+            text_to_display.strip() != ""
 
         if needs_scroll:
             self._active_graphic_text_is_scrolling = True
-            # For text scrolling left, offset_x in render_text_to_packed_buffer should be positive and increasing.
-            # To start off-screen right, the initial content rendering point is to the right of the screen.
-            # If render_text_to_packed_buffer draws at (-offset_x), and text starts at 0,
-            # an initial offset_x of -self.oled_width makes the text start at self.oled_width (off-screen right).
-            self._active_graphic_text_current_scroll_offset = -self.oled_width 
-            self._render_and_send_active_graphic_text_frame() 
-            self._active_graphic_text_scroll_timer.start(self._active_graphic_text_step_delay_ms)
+            # To scroll RIGHT TO LEFT, text starts with its left edge off-screen to the RIGHT.
+            self._active_graphic_text_current_scroll_offset = self.oled_width  # <<< CHANGE HERE
+            self._render_and_send_active_graphic_text_frame()
+            self._active_graphic_text_scroll_timer.start(
+                self._active_graphic_text_step_delay_ms)
         else:
             self._active_graphic_text_is_scrolling = False
-            self._active_graphic_text_current_scroll_offset = 0 
+            self._active_graphic_text_current_scroll_offset = 0
             self._render_and_send_active_graphic_text_frame()
-            
-            
+
+
+
     def _render_and_send_active_graphic_text_frame(self):
         if not self._active_graphic_text_content or \
-           not self._active_graphic_pil_font or \
+           not self._active_graphic_text_font_family or \
+           not self._active_graphic_text_font_size_px or \
            not OLED_RENDERER_AVAILABLE:
+            # print("ODM DEBUG: Conditions not met for _render_and_send_active_graphic_text_frame (missing data/renderer).")
+            if OLED_RENDERER_AVAILABLE:
+                self.request_send_bitmap_to_fire.emit(
+                    oled_renderer.get_blank_packed_bitmap())
             return
 
-        text_to_render = self._active_graphic_text_content
-        font_override = self._active_graphic_pil_font
-        offset_x = self._active_graphic_text_current_scroll_offset
+        # 1. Create QFont based on stored active graphic text properties
+        # pointSize -1 allows pixelSize to dominate
+        q_font = QFont(self._active_graphic_text_font_family, pointSize=-1)
+        q_font.setPixelSize(self._active_graphic_text_font_size_px)
+        # You might want to add font.setHintingPreference(QFont.HintingPreference.PreferNoHinting) for pixel fonts
 
-        center_statically = False
-        if not self._active_graphic_text_is_scrolling:
+        # 2. Render text to a QImage using QPainter
+        # Create a 1-bit monochrome QImage. Black background (0).
+        q_image = QImage(self.oled_width, self.oled_height,
+                         QImage.Format.Format_Mono)
+        q_image.fill(0)
+
+        painter = QPainter(q_image)
+        painter.setFont(q_font)
+        # Draw white text (pixel value 1 in Format_Mono)
+        painter.setPen(QColor(Qt.GlobalColor.white))
+
+        fm = QFontMetrics(q_font)
+        # self._active_graphic_text_pixel_width is now calculated in _start_or_display_active_graphic_text_internal
+        # If it's not set, recalculate (should be set by the caller)
+        if self._active_graphic_text_pixel_width == 0:
+            self._active_graphic_text_pixel_width = fm.horizontalAdvance(
+                self._active_graphic_text_content)
+
+        text_draw_x = 0
+        # For vertical centering:
+        # QFontMetrics.height() is usually total height including leading/descent.
+        # QFontMetrics.ascent() is from baseline up. QFontMetrics.descent() is from baseline down.
+        # A common way for single line vertical centering:
+        text_draw_y = fm.ascent() + (self.oled_height - fm.height()) // 2
+        # If text can be multiline or have significant descenders, text_draw_y might need adjustment
+        # or use boundingBox. For simple single line text, this is usually okay.
+
+        if self._active_graphic_text_is_scrolling:
+            text_draw_x = self._active_graphic_text_current_scroll_offset
+        else:  # Static text alignment
             if self._active_graphic_text_alignment == "center":
-                center_statically = True
-            # Note: oled_renderer.render_text_to_packed_buffer handles left/right alignment for static text based on offset_x=0 if not centered.
-            # If explicitly right-aligned static text is needed, renderer might need adjustment or pre-calc offset_x.
-            # For now, if not scrolling and not center, it's effectively left-aligned.
-            # If alignment is "right", we'd need: offset_x = self.oled_width - self._active_graphic_text_pixel_width
-            if self._active_graphic_text_alignment == "right":
-                # Negative offset means text starts further right
-                offset_x = -(self.oled_width -
-                             self._active_graphic_text_pixel_width)
+                if self._active_graphic_text_pixel_width < self.oled_width:
+                    text_draw_x = (self.oled_width -
+                                   self._active_graphic_text_pixel_width) // 2
+            elif self._active_graphic_text_alignment == "right":
+                text_draw_x = self.oled_width - self._active_graphic_text_pixel_width
+            # Default is left alignment (text_draw_x = 0)
 
-        bitmap = oled_renderer.render_text_to_packed_buffer(
-            text=text_to_render,
-            font_override=font_override,
-            # Positive for scrolling left (text's start moves more left)
-            offset_x=offset_x,
-            center_if_not_scrolling=center_statically
-        )
-        if bitmap:
-            self.request_send_bitmap_to_fire.emit(bitmap)
+        painter.drawText(text_draw_x, text_draw_y,
+                         self._active_graphic_text_content)
+        painter.end()
+
+        # 3. Convert QImage to PIL Image (1-bit)
+        pil_image_from_qimage: Image.Image | None = None
+        try:
+            buffer = QBuffer()
+            # For PyQt6 v6.2+ QIODevice.OpenModeFlag, older just QIODevice
+            open_mode = QIODevice.OpenModeFlag.ReadWrite if hasattr(
+                QIODevice, 'OpenModeFlag') else QBuffer.OpenMode.ReadWrite  # type: ignore
+
+            buffer.open(open_mode)
+            # Save QImage to buffer as BMP (good for monochrome)
+            q_image.save(buffer, "BMP")
+            buffer.seek(0)  # Go to the beginning of the buffer to read
+
+            # Open the image from the BytesIO buffer
+            pil_image_from_qimage_temp = Image.open(io.BytesIO(buffer.data()))
+            buffer.close()
+
+            # Ensure it's 1-bit mode for the packer
+            if pil_image_from_qimage_temp.mode == '1':
+                pil_image_from_qimage = pil_image_from_qimage_temp
+            else:
+                # If BMP saved as 'L' or 'RGB', convert to '1' with dithering or threshold
+                # For text, a simple threshold usually works best to keep it crisp
+                pil_image_from_qimage = pil_image_from_qimage_temp.convert(
+                    '1', dither=Image.Dither.NONE)
+
+            # print(f"ODM DEBUG: QImage converted to PIL. Mode: {pil_image_from_qimage.mode if pil_image_from_qimage else 'Failed'}") # Optional
+
+        except Exception as e_conv:
+            print(
+                f"OLED Mgr ERROR: QImage to PIL conversion failed for Active Graphic text: {e_conv}")
+            import traceback
+            traceback.print_exc()
+            pil_image_from_qimage = None  # Ensure it's None on failure
+
+        # 4. Pack PIL Image and send
+        if pil_image_from_qimage:
+            bitmap = oled_renderer.pack_pil_image_to_7bit_stream(
+                pil_image_from_qimage)
+            if bitmap:
+                self.request_send_bitmap_to_fire.emit(bitmap)
+            else:
+                print(
+                    "OLED Mgr WARNING: Failed to pack Qt-rendered PIL image for Active Graphic text.")
+                self.request_send_bitmap_to_fire.emit(
+                    oled_renderer.get_blank_packed_bitmap())
+        else:
+            print(
+                "OLED Mgr WARNING: PIL image from QImage was None. Sending blank for Active Graphic text.")
+            self.request_send_bitmap_to_fire.emit(
+                oled_renderer.get_blank_packed_bitmap())
 
     def _scroll_active_graphic_text_step(self):
         if not self._active_graphic_text_is_scrolling or \
-           not self._active_graphic_text_content or \
-           not self._active_graphic_pil_font:
-            self._active_graphic_text_scroll_timer.stop()
+           self._active_graphic_text_content is None:
+            if self._active_graphic_text_scroll_timer.isActive():
+                self._active_graphic_text_scroll_timer.stop()
             self._active_graphic_text_is_scrolling = False
             return
 
-        self._active_graphic_text_current_scroll_offset += 2  # Scroll left
+        # To scroll RIGHT TO LEFT, the X drawing coordinate decreases.
+        self._active_graphic_text_current_scroll_offset -= 2  # <<< CHANGE HERE (decrement)
 
-        if self._active_graphic_text_current_scroll_offset > self._active_graphic_text_pixel_width:
-            self._active_graphic_text_current_scroll_offset = - \
-                self.oled_width  # Reset to off-screen right
-            self._active_graphic_text_scroll_timer.setInterval(
-                self._active_graphic_text_restart_delay_ms)
+        if self._active_graphic_text_pixel_width == 0: # Recalculate if needed
+            q_font_for_metrics = QFont(self._active_graphic_text_font_family, pointSize=-1)
+            q_font_for_metrics.setPixelSize(self._active_graphic_text_font_size_px or 10)
+            fm = QFontMetrics(q_font_for_metrics)
+            self._active_graphic_text_pixel_width = fm.horizontalAdvance(self._active_graphic_text_content)
+
+        # Loop condition: when the RIGHT edge of the text has passed the LEFT edge of the screen.
+        # Text is drawn starting at self._active_graphic_text_current_scroll_offset.
+        # Its right edge is at self._active_graphic_text_current_scroll_offset + self._active_graphic_text_pixel_width.
+        # This should be < 0 for it to be fully off-screen left.
+        if (self._active_graphic_text_current_scroll_offset + self._active_graphic_text_pixel_width) < 0: # <<< CHANGE HERE
+            self._active_graphic_text_current_scroll_offset = self.oled_width # Reset to off-screen right
+            self._active_graphic_text_scroll_timer.setInterval(self._active_graphic_text_restart_delay_ms) 
         else:
-            self._active_graphic_text_scroll_timer.setInterval(
-                self._active_graphic_text_step_delay_ms)
-
+            self._active_graphic_text_scroll_timer.setInterval(self._active_graphic_text_step_delay_ms)
+        
         self._render_and_send_active_graphic_text_frame()
 
-# In class OLEDDisplayManager(QObject):
+    # Define the default message text as a class constant or instance attribute
+    APP_DEFAULT_OLED_MESSAGE_TEXT = "Fire RGB Customizer by Reg0lino =^.^="
+    # Define the TARGET FONT FAMILY NAME for TomThumb (as reported by QFontDatabase)
+    # This might be "Tom Thumb", "TomThumb", etc. Check your console output after registering.
+    # <<< ADJUST THIS based on QFontDatabase output for TomThumb.ttf
+    TOMTHUMB_FAMILY_NAME = "Tom Thumb"
 
     def _display_hardcoded_app_default_message(self):
-        default_text = "Fire CTRL"  # Or load from a constant
+        """
+        Sets up and displays the application's hardcoded default message 
+        using the registered TomThumb font at 60px, scrolling if necessary.
+        """
+        print(
+            f"OLED Mgr INFO: Displaying hardcoded app default message using '{self.TOMTHUMB_FAMILY_NAME}' @ {self.FEEDBACK_FONT_SIZE_PX}px.")
 
-        # Use the dedicated font for app default messages
-        font_to_use = self._app_default_message_pil_font
+        # Construct item_data as if it were a user-defined text item
+        default_item_data_simulated = {
+            "item_name": "AppDefaultMessage",
+            "item_type": "text",
+            "text_content": self.APP_DEFAULT_OLED_MESSAGE_TEXT,
+            # <<< USE THE REGISTERED FAMILY NAME
+            "font_family": self.TOMTHUMB_FAMILY_NAME,
+            "font_size_px": self.FEEDBACK_FONT_SIZE_PX,     # This is 60px
+            # Always scroll this long message
+            "animation_style": "scroll_left",
+            "alignment": "left",                            # Good for scrolling
+            "animation_params": {
+                "speed_override_ms": None,
+                "pause_at_ends_ms": self.DEFAULT_TEXT_ITEM_SCROLL_RESTART_DELAY_MS
+            }
+        }
 
-        if not font_to_use:  # Fallback if _app_default_message_pil_font failed to load
-            print("OLED Mgr WARNING: App default message font not loaded, using feedback font as fallback for app default.")
-            # TomThumb 60pt as last resort if other default fails
-            font_to_use = self.feedback_pil_font
+        # Populate the internal attributes as if this were a loaded text item
+        self._active_graphic_item_data = default_item_data_simulated
+        self._active_graphic_item_type = "text"
+        self._active_graphic_text_content = default_item_data_simulated["text_content"]
+        self._active_graphic_text_font_family = default_item_data_simulated["font_family"]
+        self._active_graphic_text_font_size_px = default_item_data_simulated["font_size_px"]
 
-        if not font_to_use or not OLED_RENDERER_AVAILABLE:
-            if OLED_RENDERER_AVAILABLE:
-                self.request_send_bitmap_to_fire.emit(
-                    oled_renderer.get_blank_packed_bitmap())
-            print(
-                "OLED Mgr WARNING: Cannot display hardcoded app default message, no suitable font or renderer.")
-            return
+        self._active_graphic_text_alignment = default_item_data_simulated["alignment"]
+        self._active_graphic_text_scroll_if_needed = (
+            default_item_data_simulated["animation_style"] == "scroll_left")
 
-        bitmap = oled_renderer.render_text_to_packed_buffer(
-            text=default_text,
-            font_override=font_to_use,
-            offset_x=0,
-            center_if_not_scrolling=True  # Typically centered
+        anim_params = default_item_data_simulated["animation_params"]
+        self._active_graphic_text_step_delay_ms = anim_params.get("speed_override_ms") \
+            if anim_params.get("speed_override_ms") is not None \
+            else self.global_text_item_scroll_delay_ms
+        self._active_graphic_text_restart_delay_ms = anim_params.get(
+            "pause_at_ends_ms", self.DEFAULT_TEXT_ITEM_SCROLL_RESTART_DELAY_MS
         )
-        if bitmap:
-            self.request_send_bitmap_to_fire.emit(bitmap)
-        else:
-            if OLED_RENDERER_AVAILABLE:
-                self.request_send_bitmap_to_fire.emit(
-                    oled_renderer.get_blank_packed_bitmap())
-                
+
+        # Now call the internal method that handles text display/scrolling using QFont
+        self._start_or_display_active_graphic_text_internal()
 
     def show_system_message(self, text: str, duration_ms: int, scroll_if_needed: bool = True):
         print(
@@ -841,8 +955,8 @@ class OLEDDisplayManager(QObject):
             self._current_temporary_message_text.strip() != ""
 
         if self._temporary_message_is_scrolling:
-            print(
-                f"OLED Mgr DEBUG: System message '{text}' needs scrolling (width: {self._temporary_message_text_pixel_width}px).")
+            # print(
+            #     f"OLED Mgr DEBUG: System message '{text}' needs scrolling (width: {self._temporary_message_text_pixel_width}px).")
             self._temporary_message_current_scroll_offset = - \
                 self.oled_width  # Start off-screen right
             # Display first (off-screen) frame
@@ -853,8 +967,8 @@ class OLEDDisplayManager(QObject):
             # The _temporary_message_timer (for overall duration) will be started by _scroll_temporary_message_step
             # once scrolling completes.
         else:  # Not scrolling
-            print(
-                f"OLED Mgr DEBUG: System message '{text}' is static (width: {self._temporary_message_text_pixel_width}px).")
+            # print(
+            #     f"OLED Mgr DEBUG: System message '{text}' is static (width: {self._temporary_message_text_pixel_width}px).")
             self._temporary_message_is_scrolling = False  # Ensure flag is correct
             self._temporary_message_current_scroll_offset = 0
             self._render_and_send_temporary_message_frame()  # Display static centered text
@@ -962,7 +1076,7 @@ class OLEDDisplayManager(QObject):
     def set_persistent_override(self, text: str | None, scroll_if_needed: bool = True):
         # `scroll_if_needed` for persistent override is tricky with current simple display.
         # Assuming persistent overrides are short and centered for now.
-        print(f"OLED Mgr INFO: set_persistent_override: '{text}'")
+        # print(f"OLED Mgr INFO: set_persistent_override: '{text}'")
         self.stop_all_activity()  # Stop Active Graphic before setting override
 
         self.persistent_override_text = text
@@ -972,7 +1086,7 @@ class OLEDDisplayManager(QObject):
             self._apply_current_oled_state()
 
     def clear_persistent_override(self):
-        print("OLED Mgr INFO: clear_persistent_override called.")
+        # print("OLED Mgr INFO: clear_persistent_override called.")
         if self.persistent_override_text is not None:
             self.persistent_override_text = None
             # Re-apply current state, which will now be Active Graphic or app default

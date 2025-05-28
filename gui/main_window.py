@@ -444,6 +444,7 @@ class MainWindow(QMainWindow):
         """
         Creates a QGroupBox containing replicas of the Akai Fire's top control strip elements.
         PHASE 1.I: Increase triangle font size for clarity.
+        Adds a small label above the OLED mirror: "Click To Customize".
         """
         print("MW TRACE: _create_hardware_top_strip - PHASE 1.I: INCREASE TRIANGLE FONT - START")
         top_strip_group = QGroupBox("Device Controls")
@@ -452,8 +453,6 @@ class MainWindow(QMainWindow):
         top_strip_main_layout.setSpacing(10)
 
         knob_size = 45
-        # --- CHANGE: Increase font size for all triangle labels ---
-        # Was 9pt, try 11pt
         triangle_label_style = "font-size: 11pt; color: #E0E0E0; font-weight: bold;"
 
         flat_button_width = 40
@@ -461,7 +460,6 @@ class MainWindow(QMainWindow):
         flat_button_size = QSize(flat_button_width, flat_button_height)
 
         # --- Section 1: Four Main Knobs (No changes) ---
-        # ... (code for section 1 as before) ...
         section1_knobs_widget = QWidget()
         section1_knobs_layout = QHBoxLayout(section1_knobs_widget)
         section1_knobs_layout.setContentsMargins(0, 0, 0, 0)
@@ -513,8 +511,20 @@ class MainWindow(QMainWindow):
         top_strip_main_layout.addWidget(
             pattern_buttons_widget, 0, Qt.AlignmentFlag.AlignCenter)
 
-        # --- Section 3: OLED Display (No changes) ---
-        # ... (code for section 3 as before) ...
+        # --- Section 3: OLED Display with "Click To Customize" label above ---
+        # Create a vertical layout to stack the label and the OLED mirror
+        oled_container_widget = QWidget()
+        oled_container_layout = QVBoxLayout(oled_container_widget)
+        oled_container_layout.setContentsMargins(0, 0, 0, 0)
+        oled_container_layout.setSpacing(2)
+        oled_container_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Small label above the OLED mirror
+        customize_label = QLabel("Click To Customize")
+        customize_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        customize_label.setStyleSheet("font-size: 8pt; color: #AAAAAA;")
+        oled_container_layout.addWidget(customize_label)
+
         self.oled_display_mirror_widget = QLabel()
         oled_w, oled_h = OLED_MIRROR_WIDTH, OLED_MIRROR_HEIGHT
         display_scale = OLED_MIRROR_SCALE
@@ -525,16 +535,19 @@ class MainWindow(QMainWindow):
             "QLabel#OLEDMirror { background-color: black; border: 1px solid #444444; }")
         self.oled_display_mirror_widget.setAlignment(
             Qt.AlignmentFlag.AlignCenter)
+        # Tooltip for OLED mirror
+        self.oled_display_mirror_widget.setToolTip("Click to open Customizer")
         self._setup_oled_mirror_clickable()
 
         blank_pixmap = QPixmap(self.oled_display_mirror_widget.size())
         blank_pixmap.fill(Qt.GlobalColor.black)
         self.oled_display_mirror_widget.setPixmap(blank_pixmap)
+        oled_container_layout.addWidget(self.oled_display_mirror_widget)
+
         top_strip_main_layout.addWidget(
-            self.oled_display_mirror_widget, 0, Qt.AlignmentFlag.AlignCenter)
+            oled_container_widget, 0, Qt.AlignmentFlag.AlignCenter)
 
         # --- Section 4: BROWSER Button (No changes) ---
-        # ... (code for section 4 as before) ...
         self.button_browser_top_right = QPushButton("")
         self.button_browser_top_right.setObjectName("BrowserButton")
         self.button_browser_top_right.setFixedSize(QSize(30, 30))
@@ -543,7 +556,6 @@ class MainWindow(QMainWindow):
             self.button_browser_top_right, 0, Qt.AlignmentFlag.AlignCenter)
 
         # --- Section 5: SELECT Knob (No changes) ---
-        # ... (code for section 5 as before) ...
         select_knob_container_vbox = QVBoxLayout()
         select_knob_container_vbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.knob_select_top_right = QDial()
@@ -566,8 +578,7 @@ class MainWindow(QMainWindow):
         triangle_left_label = QLabel("◀")
         triangle_left_label.setStyleSheet(triangle_label_style)
         triangle_left_label.setObjectName("TriangleGridLeft")
-        # --- CHANGE: Adjust fixed width if needed for new font size ---
-        triangle_left_label.setFixedWidth(20)  # Was 18, try 20 for 11pt font
+        triangle_left_label.setFixedWidth(20)
         triangle_left_label.setAlignment(
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
         grid_buttons_layout.addWidget(
@@ -598,8 +609,7 @@ class MainWindow(QMainWindow):
         triangle_right_label = QLabel("▶")
         triangle_right_label.setStyleSheet(triangle_label_style)
         triangle_right_label.setObjectName("TriangleGridRight")
-        # --- CHANGE: Adjust fixed width if needed for new font size ---
-        triangle_right_label.setFixedWidth(20)  # Was 18, try 20 for 11pt font
+        triangle_right_label.setFixedWidth(20)
         triangle_right_label.setAlignment(
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         grid_buttons_layout.addWidget(

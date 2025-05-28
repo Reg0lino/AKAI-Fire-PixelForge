@@ -82,3 +82,4 @@ minimal_qt_test.py
 .gitignore
 .spec_chat_5-26-25.md
 test_qfontdatabase.py
+debug_mirror_pil_frame.png

@@ -16,7 +16,7 @@ if project_root_for_path not in sys.path:
 # ------------------------------------------
 
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QFontDatabase
 # MainWindow import is deferred to main() to allow MIDO_BACKEND to be set first
 # and to ensure QApplication exists before Qt modules are heavily used.
 
@@ -36,6 +36,40 @@ def get_resource_path(relative_path):
     return resource_full_path
 # --- End Resource Path Function ---
 
+# In fire_control_app.py
+
+# --- NEW: Function to Register Application Fonts ---
+
+
+def register_application_fonts():
+    """Scans the resources/fonts directory and registers .ttf/.otf files with QFontDatabase."""
+    print("APP INFO: Attempting to register application fonts...")
+    # Ensure get_resource_path is defined above
+    fonts_dir = get_resource_path(os.path.join("resources", "fonts"))
+    if os.path.isdir(fonts_dir):
+        # No need to create an instance: font_db = QFontDatabase()
+        for filename in os.listdir(fonts_dir):
+            if filename.lower().endswith((".ttf", ".otf")):
+                font_path = os.path.join(fonts_dir, filename)
+                # Call addApplicationFont statically on the QFontDatabase class
+                font_id = QFontDatabase.addApplicationFont(font_path)
+                if font_id != -1:
+                    # Call applicationFontFamilies statically on the QFontDatabase class
+                    families = QFontDatabase.applicationFontFamilies(font_id)
+                    if families:
+                        print(
+                            f"APP INFO: Registered '{filename}' with families: {families}. Use first family name for QFont.")
+                    else:
+                        print(
+                            f"APP WARNING: Registered '{filename}' but no font families reported by QFontDatabase.")
+                else:
+                    print(
+                        f"APP WARNING: Failed to register application font: '{font_path}' (font_id was -1). Check font validity.")
+    else:
+        print(
+            f"APP WARNING: Application fonts directory not found: '{fonts_dir}'")
+# --- END NEW Function ---
+
 def get_project_root_for_config(): # Renamed to avoid confusion with path for imports
     """Gets the absolute path to the project's root directory for config/data loading."""
     try:
@@ -46,6 +80,8 @@ def get_project_root_for_config(): # Renamed to avoid confusion with path for im
 def main():
     # Create QApplication instance FIRST
     app = QApplication(sys.argv)
+    
+    register_application_fonts()  # <<< ADD THIS CALL
 
     # --- Import MainWindow and AkaiFireController AFTER QApplication is created ---
     # This is also after MIDO_BACKEND is set.
@@ -62,39 +98,41 @@ def main():
         print(f"FATAL: An unexpected error occurred during core imports: {e_gen}")
         sys.exit(1)
 
-
-    # Set Application Icon (uses get_resource_path)
-    # For the application icon shown in taskbar etc., set on QApplication
-    app_icon_path_runtime = get_resource_path(os.path.join("resources", "icons", "app_icon.ico"))
+# Set Application Icon (uses get_resource_path)
+    app_icon_path_runtime = get_resource_path(os.path.join(
+        "resources", "icons", "app_icon.ico"))  # or .png
     if os.path.exists(app_icon_path_runtime):
         app.setWindowIcon(QIcon(app_icon_path_runtime))
-        # print(f"INFO: Application icon set from '{app_icon_path_runtime}'")
     else:
-        print(f"WARNING: Application icon for runtime not found at '{app_icon_path_runtime}' (used by QApplication.setWindowIcon)")
+        print(
+            f"WARNING: Application icon for runtime not found at '{app_icon_path_runtime}'")
 
-    # Load the global stylesheet (uses get_resource_path)
-    style_sheet_path_runtime = get_resource_path(os.path.join("resources", "styles", "style.qss"))
+    style_sheet_path_runtime = get_resource_path(
+        os.path.join("resources", "styles", "style.qss"))
     try:
         if os.path.exists(style_sheet_path_runtime):
             with open(style_sheet_path_runtime, "r") as f:
                 app.setStyleSheet(f.read())
-                # print(f"INFO: Stylesheet loaded successfully from '{style_sheet_path_runtime}'.")
         else:
-            print(f"WARNING: Main stylesheet not found at '{style_sheet_path_runtime}'. Using default styles.")
+            print(
+                f"WARNING: Main stylesheet not found at '{style_sheet_path_runtime}'.")
     except Exception as e:
-        print(f"ERROR: Could not load stylesheet from '{style_sheet_path_runtime}': {e}")
+        print(
+            f"ERROR: Could not load stylesheet from '{style_sheet_path_runtime}': {e}")
 
-    # Create and show the main window
+    main_window = None
     try:
-        main_window = MainWindow() # MainWindow will use get_resource_path for its *own* icon if needed
+        print("INFO: Attempting to initialize MainWindow...")
+        main_window = MainWindow()
+        print("INFO: MainWindow initialized. Attempting to show...")
         main_window.show()
+        print("INFO: MainWindow shown. Starting application event loop.")
+        sys.exit(app.exec())
     except Exception as e:
-        print(f"FATAL: Could not initialize or show MainWindow: {e}")
+        print("FATAL: Could not initialize or show MainWindow. Original error below:")
         import traceback
         traceback.print_exc()
-        sys.exit(1) 
-
-    sys.exit(app.exec())
+        sys.exit(1)
 
 if __name__ == '__main__':
     try:
@@ -103,5 +141,4 @@ if __name__ == '__main__':
         print(f"FATAL ERROR in top-level main execution: {e}")
         import traceback
         traceback.print_exc()
-        # input("Press Enter to exit...") # Optional: to keep console open on error
         sys.exit(1)
