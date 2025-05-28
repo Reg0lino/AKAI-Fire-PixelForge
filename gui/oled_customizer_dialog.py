@@ -342,7 +342,7 @@ class OLEDCustomizerDialog(QDialog):
         # Global Settings Group (remains the same)
         global_settings_group = QGroupBox("Global OLED Settings")
         global_settings_layout = QHBoxLayout(global_settings_group)
-        global_settings_layout.addWidget(QLabel("Default Startup Item:"))
+        global_settings_layout.addWidget(QLabel("Active Graphic:"))
         self.default_startup_item_combo = QComboBox()
         self.default_startup_item_combo.setMinimumWidth(200)
         self.default_startup_item_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
