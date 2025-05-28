@@ -2999,40 +2999,6 @@ class MainWindow(QMainWindow):
         self._save_oled_config()
         print(f"MW INFO: PATTERN DOWN - Cued OLED Text Item: {self.current_cued_text_item_path}")
 
-    def _open_oled_customizer_dialog(self):
-        """Opens the OLEDCustomizerDialog."""
-        self._scan_available_oled_items() # Refresh item list before opening
-        # print(f"MW DEBUG _open_oled_customizer_dialog: Passing user_oled_presets_base_path: {self.user_oled_presets_base_path}") # Optional
-
-        dialog = OLEDCustomizerDialog(
-            # Pass the relative path of the current Active Graphic
-            current_default_startup_item_path=self.active_graphic_item_relative_path, # Use correct attribute
-            current_global_scroll_delay_ms=self.oled_global_scroll_delay_ms,
-            available_oled_items=self.available_oled_items_cache, 
-            user_oled_presets_base_path=self.user_oled_presets_base_path, 
-            available_app_fonts=self.available_app_fonts_cache,
-            parent=self
-        )
-
-        # Ensure connection to the correctly named slot
-        try: 
-            # Attempt to disconnect any previous connection to avoid duplicates
-            dialog.global_settings_changed.disconnect(self._on_oled_global_settings_changed)
-        except TypeError: 
-            pass # No connection existed or already disconnected
-        
-        # Connect to the slot that is actually defined in MainWindow
-        dialog.global_settings_changed.connect(self._on_oled_global_settings_changed) 
-    
-        if dialog.exec(): # Show dialog modally and check if accepted
-            # print("MW DEBUG: OLEDCustomizerDialog accepted.") # Optional
-            pass # Settings are applied via the _on_oled_global_settings_changed slot
-        else:
-            # print("MW DEBUG: OLEDCustomizerDialog cancelled.") # Optional
-            pass
-        
-        dialog.deleteLater() # Clean up dialog resources
-
     def _handle_oled_browser_activate(self):
         """Handles BROWSER button press to set the currently cued item as the Active Graphic."""
         if not self.oled_display_manager or not (self.akai_controller and self.akai_controller.is_connected()):
