@@ -373,9 +373,6 @@ class MainWindow(QMainWindow):
 
 # --- GROUP 2: UI BUILDING HELPER METHODS ---
     # (Methods that create and return QWidgets/QLayouts, or populate them)
-    
-# In class MainWindow(QMainWindow):
-    # Ensure this method is defined before __init__ calls it.
 
     def _init_ui_layout(self):
         """
@@ -1766,28 +1763,23 @@ class MainWindow(QMainWindow):
 
     def _open_oled_customizer_dialog(self):
         self._scan_available_oled_items()
-        print(
-            f"MW DEBUG _open_oled_customizer_dialog: Passing available_app_fonts: {self.available_app_fonts_cache} to dialog.")
-        # <<< ADD THIS DEBUG PRINT >>>
-        print(
-            f"MW DEBUG _open_oled_customizer_dialog: Passing user_oled_presets_base_path: {self.user_oled_presets_base_path} to dialog.")
-
         dialog = OLEDCustomizerDialog(
-            current_default_startup_item_path=self.oled_startup_text,  # This is relative path
+            current_active_graphic_path=self.active_graphic_item_relative_path,  # <<< CHANGED KEYWORD
             current_global_scroll_delay_ms=self.oled_global_scroll_delay_ms,
-            # List of dicts with full_path and relative_path
             available_oled_items=self.available_oled_items_cache,
-            # This should be the Documents one
             user_oled_presets_base_path=self.user_oled_presets_base_path,
             available_app_fonts=self.available_app_fonts_cache,
             parent=self
         )
-
-        try: dialog.global_settings_changed.disconnect(self._on_oled_global_settings_changed)
-        except TypeError: pass 
+        try:
+            dialog.global_settings_changed.disconnect(self._on_oled_global_settings_changed)
+        except TypeError:
+            pass
         dialog.global_settings_changed.connect(self._on_oled_global_settings_changed)
-    
-        dialog.exec() 
+        if dialog.exec():
+            pass
+        else:
+            pass
         dialog.deleteLater()
 
     
@@ -2969,86 +2961,6 @@ class MainWindow(QMainWindow):
         else:
             self.oled_display_manager.show_system_message("Invalid Cue", 1500, scroll_if_needed=False)
 
-    def _handle_oled_pattern_down(self):
-        """Handles PATTERN DOWN button press for cycling cued OLED items (e.g., animations in future)."""
-        if not self.oled_display_manager or not self.akai_controller.is_connected(): return
-        # For now, make it cycle text items backwards, or implement animation cycling later
-    
-        if not self.available_oled_items_cache:
-            self.oled_display_manager.show_temporary_knob_value("No Items")
-            QTimer.singleShot(1500, self.oled_display_manager.revert_after_knob_feedback)
-            return
-
-        text_items = [item for item in self.available_oled_items_cache if item['type'] == 'text']
-        if not text_items:
-            self.oled_display_manager.show_temporary_knob_value("No Text Items")
-            QTimer.singleShot(1500, self.oled_display_manager.revert_after_knob_feedback)
-            return
-
-        current_idx = 0 # Default to first if no cued item
-        if self.current_cued_text_item_path:
-            try:
-                current_idx = [item['path'] for item in text_items].index(self.current_cued_text_item_path)
-            except ValueError:
-                current_idx = 0 
-
-        new_idx = (current_idx - 1 + len(text_items)) % len(text_items) # Cycle backwards
-        self.current_cued_text_item_path = text_items[new_idx]['path']
-        item_name_to_show = text_items[new_idx]['name']
-        self.oled_display_manager.show_temporary_knob_value(f"Cue: {item_name_to_show[:12]}")
-        self._save_oled_config()
-        print(f"MW INFO: PATTERN DOWN - Cued OLED Text Item: {self.current_cued_text_item_path}")
-
-    def _handle_oled_browser_activate(self):
-        """Handles BROWSER button press to set the currently cued item as the Active Graphic."""
-        if not self.oled_display_manager or not (self.akai_controller and self.akai_controller.is_connected()):
-            # print("MW DEBUG: OLED Manager or controller not ready for BROWSER activate.") # Optional
-            return
-
-        # Determine which item is cued (prioritize animation, then text, or single cued path)
-        item_path_to_activate = None
-        if hasattr(self, 'current_cued_anim_item_path') and self.current_cued_anim_item_path:
-            item_path_to_activate = self.current_cued_anim_item_path
-        elif hasattr(self, 'current_cued_text_item_path') and self.current_cued_text_item_path:
-            item_path_to_activate = self.current_cued_text_item_path
-        # If you have a single self.current_cued_item_path, use that:
-        # item_path_to_activate = getattr(self, 'current_cued_item_path', None)
-
-        if not item_path_to_activate:
-            self.oled_display_manager.show_system_message(
-                "Nothing Cued", 1500, scroll_if_needed=False)
-            return
-
-        item_data = self._load_oled_item_data(
-            item_path_to_activate)  # Loads full JSON data
-
-        if item_data:
-            item_name = item_data.get("item_name", "Selected Item")
-            item_type_label = item_data.get('type', 'Item').capitalize()
-            print(
-                f"MW INFO: BROWSER - Activating cued item as Active Graphic: '{item_name}' ({item_type_label})")
-
-            # Set this item as the new "Active Graphic"
-            # Update MainWindow's record
-            self.active_graphic_item_relative_path = item_path_to_activate
-            self.oled_display_manager.set_active_graphic(
-                item_data)  # Tell ODM to use this data
-            self._save_oled_config()  # Save the new choice as the default Active Graphic
-
-            # Show a brief confirmation that it's now the active display.
-            # This will briefly override the just-set active graphic, then ODM will revert to it.
-            self.oled_display_manager.show_system_message(
-                # Keep it short, type can be omitted for brevity
-                text=f"Active: {item_name}",
-                duration_ms=1500,
-                scroll_if_needed=True  # Scroll if combined "Active: Name" is too long
-            )
-        else:
-            self.oled_display_manager.show_system_message(
-                "Invalid Cue", 1500, scroll_if_needed=False)
-            print(
-                f"MW WARNING: BROWSER - Could not load data for cued item path: {item_path_to_activate}")
-       
     def _on_request_toggle_screen_sampler(self):
         """Handles hardware button press to toggle screen sampler ON/OFF."""
         if not self.screen_sampler_manager or not self.akai_controller.is_connected():
@@ -3110,77 +3022,6 @@ class MainWindow(QMainWindow):
 
     def _handle_grid_right_pressed(self):
         self._cycle_oled_nav_target(-1)
-
-    def _handle_select_encoder_turned(self, delta: int):
-        if not self.current_oled_nav_target_widget or not self.akai_controller.is_connected() or \
-           not hasattr(self.current_oled_nav_target_widget, 'set_navigation_current_item_by_logical_index') or \
-           not hasattr(self.current_oled_nav_target_widget, 'get_navigation_item_text_at_logical_index'):
-            return
-        if self._oled_nav_item_count == 0:
-             nav_target_display_name = "Sequences" if self.current_oled_nav_target_name == "animator" else "Layouts"
-             if self.oled_display_manager:
-                 self.oled_display_manager.set_display_text(f"{nav_target_display_name}: (empty)", scroll_if_needed=False)
-             return
-        self._oled_nav_interaction_active = True        
-        new_logical_index = (self.current_oled_nav_item_logical_index + delta)
-        if new_logical_index < 0:
-            new_logical_index = self._oled_nav_item_count - 1 
-        elif new_logical_index >= self._oled_nav_item_count:
-            new_logical_index = 0 
-        self.current_oled_nav_item_logical_index = new_logical_index            
-        selected_item_text_with_prefix = self.current_oled_nav_target_widget.set_navigation_current_item_by_logical_index(
-            self.current_oled_nav_item_logical_index
-        )
-        if selected_item_text_with_prefix and self.oled_display_manager:
-            # --- MODIFICATION FOR CLEAN TITLE, NO TRUNCATION ---
-            clean_item_text = selected_item_text_with_prefix
-            prefixes_to_strip = ["[Prefab] ", "[Sampler] ", "[User] "] 
-            for prefix in prefixes_to_strip:
-                if clean_item_text.startswith(prefix):
-                    clean_item_text = clean_item_text[len(prefix):]
-                    break             
-            # Display only the cleaned item text, allow it to scroll if long.
-            oled_text = clean_item_text 
-            self.oled_display_manager.set_display_text(oled_text, scroll_if_needed=True)
-        # print(f"MW TRACE: Select encoder turned. New logical index: {self.current_oled_nav_item_logical_index}, OLED Text: {oled_text}") # Optional
-
-    def _handle_select_encoder_pressed(self):
-        # print("MW TRACE: Select encoder pressed.") # Optional
-        if self.akai_controller and self.akai_controller.is_connected():
-            self.akai_controller.set_play_led(False)
-            self.akai_controller.set_stop_led(False)
-        # --- SET NAVIGATION ACTION FLAG ---
-        self._is_hardware_nav_action_in_progress = True
-        item_text_to_apply_raw = self.current_oled_nav_target_widget.get_navigation_item_text_at_logical_index(
-            self.current_oled_nav_item_logical_index
-        ) or "Selected Item"       
-        item_text_to_apply = item_text_to_apply_raw
-        prefixes = ["[Prefab] ", "[Sampler] ", "[User] "] 
-        for prefix in prefixes:
-            if item_text_to_apply.startswith(prefix):
-                item_text_to_apply = item_text_to_apply[len(prefix):]
-                break
-        action_verb = "Loading" if self.current_oled_nav_target_name == "animator" else "Applying"        
-        if self.oled_display_manager:
-            confirm_item_name_part = item_text_to_apply[:15] + "..." if len(item_text_to_apply) > 15 else item_text_to_apply
-            full_confirmation_message = f"{action_verb}: {confirm_item_name_part}"
-            if hasattr(self.oled_display_manager, 'show_temporary_message'):
-                self.oled_display_manager.show_temporary_message(
-                    text=full_confirmation_message, 
-                    duration_ms=1800, 
-                    scroll_if_needed=True 
-                )
-            else: 
-                 self.oled_display_manager.set_display_text(full_confirmation_message, scroll_if_needed=True)
-        # Explicitly turn off transport LEDs before triggering action
-        if self.akai_controller and self.akai_controller.is_connected():
-            self.akai_controller.set_play_led(False)
-            self.akai_controller.set_stop_led(False)
-        # Trigger the action (load/apply)
-        self.current_oled_nav_target_widget.trigger_navigation_current_item_action()        
-        self._oled_nav_interaction_active = False        
-        # Schedule final UI feedback (which will reset flag and then update LEDs)
-        QTimer.singleShot(2000, self._finalize_navigation_action_ui_feedback)
 
     def _finalize_navigation_action_ui_feedback(self):
         # print("MW TRACE: _finalize_navigation_action_ui_feedback called.") # Optional-
