@@ -867,7 +867,6 @@ class AnimatorManagerWidget(QWidget):
     def action_new_sequence(self, prompt_save=True):
         self.request_sampler_disable.emit()
         if prompt_save and self.active_sequence_model.is_modified:
-            # TODO: Signal MainWindow to prompt
             pass # Assume MainWindow handled it or we proceed
 
         self.stop_current_animation_playback()
@@ -889,10 +888,6 @@ class AnimatorManagerWidget(QWidget):
         self.stop_current_animation_playback()
         suggested_name = self.active_sequence_model.name if self.active_sequence_model.name != "New Sequence" else ""
         
-        # QFileDialog should be shown by MainWindow
-        # This manager can suggest a path/name
-        # For now, we'll simulate the dialog part and proceed
-        # TODO: Refactor to have MainWindow show QFileDialog
         
         text, ok = QInputDialog.getText(self, "Save Sequence As...", "Sequence Name:", text=suggested_name) # Problematic: self is not QMainWindow
         if not (ok and text and text.strip()):
