@@ -1,4 +1,4 @@
-# How to Unblock AkaiFireControllerApp.exe on Windows
+# How to Unblock Akai_Fire_PixelForge.exe on Windows
 
 If you see a "Windows protected your PC" (SmartScreen) popup when trying to run the application, or if the application doesn't start correctly, you might need to "unblock" the downloaded executable file. This is a common security measure by Windows for files downloaded from the internet.
 

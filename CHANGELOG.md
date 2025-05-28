@@ -1,4 +1,4 @@
-# Changelog - AKAI Fire RGB Customizer
+# Changelog - Akai Fire PixelForge by Reg0lino & Gemini 2.5 Pro
 
 ## [Version 0.9.0] - 2025-05-28
 
@@ -141,4 +141,4 @@ This major update focuses on a comprehensive overhaul of the Akai Fire's OLED di
 *   **Initial Development Phase** (Project Setup, Basic Hardware Control, GUI Foundation)
 
 ---
-*AKAI Fire RGB Customizer - Developed by Reg0lino with extensive AI assistance from Gemini models.*
+*Akai Fire PixelForge - Developed by Reg0lino with extensive AI assistance from Gemini models.*

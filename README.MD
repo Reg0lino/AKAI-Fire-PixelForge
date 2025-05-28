@@ -1,4 +1,4 @@
-# AKAI Fire RGB Customizer
+# Akai Fire PixelForge by Reg0lino & Gemini 2.5 Pro
 
 ## 🚀 Download Latest Release!
 
@@ -7,7 +7,7 @@
 
 ## 🎛️ Overview
 
-The "AKAI Fire RGB Customizer" is a Python desktop application designed to provide comprehensive control over an Akai Fire MIDI controller. It allows users to customize its 4x16 RGB pad matrix with static color layouts and frame-by-frame animations, and dynamically reflect desktop colors onto the pads using a screen sampler. Critically, it now offers advanced customization of the Akai Fire's 128x64 monochrome OLED display. The application features a modern, dark-themed, and intuitive user interface built with PyQt6.
+The "Akai Fire PixelForge by Reg0lino & Gemini 2.5 Pro" is a Python desktop application designed to provide comprehensive control over an Akai Fire MIDI controller. It allows users to customize its 4x16 RGB pad matrix with static color layouts and frame-by-frame animations, and dynamically reflect desktop colors onto the pads using a screen sampler. Critically, it now offers advanced customization of the Akai Fire's 128x64 monochrome OLED display. The application features a modern, dark-themed, and intuitive user interface built with PyQt6.
 
 This project aims to unlock the full visual potential of the Akai Fire, transforming it from just a MIDI controller into a versatile lighting instrument and a rich visual feedback tool, especially through its newly enhanced OLED capabilities.
 
