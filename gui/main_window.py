@@ -2385,9 +2385,9 @@ class MainWindow(QMainWindow):
             if pil_image_logical:
                 # <<< ADD                print( f"MW DEBUG: _update_oled_mirror - Unpacked to PIL Image: Mode={pil_image_logical.mode}, Size={pil_image_logical.size}")
                 # Optional: Save the intermediate PIL image for one frame to inspect it
-                if not hasattr(self, '_debug_mirror_saved'):
-                    pil_image_logical.save("debug_mirror_pil_frame.png")
-                    self._debug_mirror_saved = True
+                # if not hasattr(self, '_debug_mirror_saved'):
+                #     pil_image_logical.save("debug_mirror_pil_frame.png")
+                #     self._debug_mirror_saved = True
 
                 pil_image_rgb = pil_image_logical.convert("RGB")
                 data = pil_image_rgb.tobytes("raw", "RGB")
