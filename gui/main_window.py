@@ -433,14 +433,12 @@ class MainWindow(QMainWindow):
 
     def _create_hardware_top_strip(self) -> QGroupBox:
         top_strip_group = QGroupBox("Device Controls")
-        # Make the QGroupBox visually flat if desired for a cleaner top bar
-        top_strip_group.setTitle("")  # Remove title text
+        top_strip_group.setTitle("")
         top_strip_group.setStyleSheet(
             "QGroupBox { border: none; margin: 0px; padding: 0px; background-color: transparent; }"
-            # In case title is re-added
-            "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top center; }"
         )
-        # Ensure the group box can expand horizontally
+        # Make the GroupBox itself expand horizontally to fill the space given by left_panel_layout
+        # Fixed height, but expanding width
         top_strip_group.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
@@ -451,11 +449,13 @@ class MainWindow(QMainWindow):
         # --- Common Sizes ---
         knob_size = 42
         flat_button_size = QSize(36, 10)
-        icon_button_size = QSize(28, 28)  # For Browser button
-        # For the Play/Pause icon label - determined by scaled pixmap later
-        # Initial estimate, will be overridden
-        play_pause_icon_label_size = QSize(20, 20)
+        icon_button_size = QSize(28, 28)
+        play_pause_icon_label_size = QSize(20, 20)  # Will be refined by pixmap
         triangle_label_style = "font-size: 9pt; color: #B0B0B0; font-weight: bold;"
+
+        # <<< NEW: Add initial stretch to center the content block >>>
+        top_strip_main_layout.addStretch(1)
+        # --- END NEW ---
 
         # --- Section 1: Four Main Knobs ---
         section1_knobs_widget = QWidget()
@@ -514,7 +514,6 @@ class MainWindow(QMainWindow):
         top_strip_main_layout.addSpacing(4)
 
         # --- Section 3: OLED Display Container ---
-        # This oled_container_widget just holds the "Click to Customize" and the mirror
         self.oled_container_widget_ref = QWidget()
         oled_container_layout = QVBoxLayout(self.oled_container_widget_ref)
         oled_container_layout.setContentsMargins(0, 0, 0, 0)
@@ -537,7 +536,6 @@ class MainWindow(QMainWindow):
             Qt.AlignmentFlag.AlignCenter)
         self.oled_display_mirror_widget.setToolTip(
             "Click to open OLED Customizer")
-        # Installs event filter on oled_display_mirror_widget
         self._setup_oled_mirror_clickable()
         blank_pixmap = QPixmap(self.oled_display_mirror_widget.size())
         blank_pixmap.fill(Qt.GlobalColor.black)
@@ -545,67 +543,43 @@ class MainWindow(QMainWindow):
         oled_container_layout.addWidget(self.oled_display_mirror_widget)
         top_strip_main_layout.addWidget(
             self.oled_container_widget_ref, 0, Qt.AlignmentFlag.AlignVCenter)
-        # No spacing here, Play/Pause icon comes next
-        
 
-        # For Play/Pause Icon:
-        self.oled_play_pause_icon_label = QLabel(self.oled_container_widget_ref)
-
-        self.oled_play_pause_icon_label.installEventFilter(self)  # <<< ENSURE THIS LINE IS PRESENT AND CORRECT
-
-        # --- NEW Section 3.5: OLED Play/Pause Icon Label ---
-        # Parent will be MainWindow or top_strip_group
+        # --- Section 3.5: OLED Play/Pause Icon Label ---
         self.oled_play_pause_icon_label = QLabel()
         self.oled_play_pause_icon_label.setObjectName("OLEDPlayPauseIconLabel")
         self.oled_play_pause_icon_label.setToolTip(
             "Toggle OLED Active Graphic Pause/Play")
-
         try:
-            # Use your single 'play-pause.png' icon. Let's call it 'oled_toggle_icon.png' for clarity here.
-            # Make sure this file exists in resources/icons/
-            # Adjusted to your filename
             icon_path = get_resource_path("resources/icons/play-pause.png")
             if os.path.exists(icon_path):
                 base_pixmap = QPixmap(icon_path)
                 if not base_pixmap.isNull():
-                    # Scale it to 50% of its original size
                     scaled_width = int(base_pixmap.width() * 0.5)
                     scaled_height = int(base_pixmap.height() * 0.5)
-                    # Ensure a minimum clickable size
                     min_icon_dim = 16
                     scaled_width = max(min_icon_dim, scaled_width)
                     scaled_height = max(min_icon_dim, scaled_height)
-
-                    scaled_pixmap = base_pixmap.scaled(scaled_width, scaled_height,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
+                    scaled_pixmap = base_pixmap.scaled(
+                        scaled_width, scaled_height, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                     self.oled_play_pause_icon_label.setPixmap(scaled_pixmap)
                     self.oled_play_pause_icon_label.setFixedSize(
                         scaled_pixmap.size())
                 else:
                     self.oled_play_pause_icon_label.setText("P/P")
-                    self.oled_play_pause_icon_label.setFixedSize(
-                        20, 20)  # Fallback text
-                    print("MW WARNING: oled_toggle_icon.png loaded but isNull.")
+                    self.oled_play_pause_icon_label.setFixedSize(20, 20)
             else:
                 self.oled_play_pause_icon_label.setText("P/P")
                 self.oled_play_pause_icon_label.setFixedSize(20, 20)
-                print(
-                    f"MW WARNING: OLED Toggle icon not found at {icon_path}. Using text fallback.")
         except Exception as e_icon:
             self.oled_play_pause_icon_label.setText("P/P")
             self.oled_play_pause_icon_label.setFixedSize(20, 20)
-            print(f"MW ERROR: Loading OLED toggle icon: {e_icon}")
-
         self.oled_play_pause_icon_label.setCursor(
-            Qt.CursorShape.PointingHandCursor)  # Make it look clickable
+            Qt.CursorShape.PointingHandCursor)
         self.oled_play_pause_icon_label.setEnabled(False)
-        self.oled_play_pause_icon_label.installEventFilter(
-            self)  # For click handling
-        # Add it to the main horizontal layout, aligned to the BOTTOM of its cell
+        self.oled_play_pause_icon_label.installEventFilter(self)
         top_strip_main_layout.addWidget(
             self.oled_play_pause_icon_label, 0, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
-        top_strip_main_layout.addSpacing(5)  # Spacing after Play/Pause icon
+        top_strip_main_layout.addSpacing(5)
 
         # --- Section 4: Browser Button ---
         self.button_browser_top_right = QPushButton("")
@@ -681,11 +655,10 @@ class MainWindow(QMainWindow):
         top_strip_main_layout.addWidget(
             grid_buttons_widget, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        # Main stretch to push all content to the left
+        # <<< ENSURE: Final stretch to center the content block >>>
         top_strip_main_layout.addStretch(1)
 
         return top_strip_group
-
 
     def _position_oled_toggle_icon(self):
         if not self.oled_play_pause_icon_label or \
