@@ -4,7 +4,7 @@
 
 **Get the latest standalone executable for Windows from the [GitHub Releases Page](https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/releases/latest)!** 
 *(See "Getting Started (Standalone Executable)" below for installation instructions.)*
-
+![Image](https://github.com/user-attachments/assets/16759301-d11a-4260-aab8-803e2cc5c84f)
 ## 🎛️ Overview
 
 The "Akai Fire PixelForge by Reg0lino & Gemini 2.5 Pro" is a Python desktop application designed to provide comprehensive control over an Akai Fire MIDI controller. It allows users to customize its 4x16 RGB pad matrix with static color layouts and frame-by-frame animations, and dynamically reflect desktop colors onto the pads using a screen sampler. Critically, it now offers advanced customization of the Akai Fire's 128x64 monochrome OLED display. The application features a modern, dark-themed, and intuitive user interface built with PyQt6.
