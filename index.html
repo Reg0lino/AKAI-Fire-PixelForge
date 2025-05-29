@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akai Fire PixelForge - Unleash Your Controller's Visual Potential</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000000; /* Even darker background */
+            color: #e2e8f0; /* Light text */
+        }
+        .gradient-button {
+            background-image: linear-gradient(to right, #6366f1, #8b5cf6, #ec4899);
+            transition: all 0.3s ease;
+        }
+        .gradient-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.4);
+        }
+        .feature-icon {
+            display: inline-block;
+            width: 2rem;
+            height: 2rem;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+
+        /* Glitch Effect */
+        @keyframes glitch {
+            0% {
+                text-shadow: 0.05em 0 0 #ff00ff, -0.03em -0.04em 0 #00ffff, 0.02em 0.05em 0 #ff0000;
+                transform: translate(-0.01em, -0.02em);
+            }
+            14% {
+                text-shadow: 0.05em 0 0 #ff00ff, -0.03em -0.04em 0 #00ffff, 0.02em 0.05em 0 #ff0000;
+                transform: translate(-0.01em, -0.02em);
+            }
+            15% {
+                text-shadow: -0.05em -0.02em 0 #ff00ff, 0.04em 0.03em 0 #00ffff, -0.03em -0.05em 0 #ff0000;
+                transform: translate(0.02em, 0.01em);
+            }
+            29% {
+                text-shadow: -0.05em -0.02em 0 #ff00ff, 0.04em 0.03em 0 #00ffff, -0.03em -0.05em 0 #ff0000;
+                transform: translate(0.02em, 0.01em);
+            }
+            30% {
+                text-shadow: 0.03em 0.03em 0 #ff00ff, -0.04em -0.05em 0 #00ffff, 0.05em 0.01em 0 #ff0000;
+                transform: translate(-0.03em, 0.03em);
+            }
+            44% {
+                text-shadow: 0.03em 0.03em 0 #ff00ff, -0.04em -0.05em 0 #00ffff, 0.05em 0.01em 0 #ff0000;
+                transform: translate(-0.03em, 0.03em);
+            }
+            45% {
+                text-shadow: -0.02em -0.03em 0 #ff00ff, 0.05em 0.01em 0 #00ffff, -0.04em -0.02em 0 #ff0000;
+                transform: translate(0.01em, -0.03em);
+            }
+            59% {
+                text-shadow: -0.02em -0.03em 0 #ff00ff, 0.05em 0.01em 0 #00ffff, -0.04em -0.02em 0 #ff0000;
+                transform: translate(0.01em, -0.03em);
+            }
+            60% {
+                text-shadow: 0.04em 0.02em 0 #ff00ff, -0.02em -0.03em 0 #00ffff, 0.03em 0.04em 0 #ff0000;
+                transform: translate(-0.02em, 0.04em);
+            }
+            74% {
+                text-shadow: 0.04em 0.02em 0 #ff00ff, -0.02em -0.03em 0 #00ffff, 0.03em 0.04em 0 #ff0000;
+                transform: translate(-0.02em, 0.04em);
+            }
+            75% {
+                text-shadow: -0.03em -0.05em 0 #ff00ff, 0.01em 0.02em 0 #00ffff, -0.05em -0.01em 0 #ff0000;
+                transform: translate(0.03em, -0.01em);
+            }
+            89% {
+                text-shadow: -0.03em -0.05em 0 #ff00ff, 0.01em 0.02em 0 #00ffff, -0.05em -0.01em 0 #ff0000;
+                transform: translate(0.03em, -0.01em);
+            }
+            90% {
+                text-shadow: 0.02em 0.04em 0 #ff00ff, -0.05em -0.01em 0 #00ffff, 0.01em 0.03em 0 #ff0000;
+                transform: translate(-0.04em, 0.02em);
+            }
+            100% {
+                text-shadow: none;
+                transform: translate(0, 0);
+            }
+        }
+
+        .glitch-text {
+            animation: glitch 2s infinite alternate linear;
+        }
+
+        .ascii-font {
+            font-family: 'Press Start 2P', monospace;
+            text-shadow: 1px 1px #8b5cf6; /* Subtle shadow for blocky feel */
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-black text-white py-4 shadow-lg">
+        <div class="container mx-auto px-4 flex flex-col md:flex-row md:justify-between md:items-center text-center">
+            <a href="#" class="text-xl font-bold tracking-tight ascii-font text-purple-400 mb-4 md:mb-0">AKAI FIRE PIXELFORGE</a>
+            <nav class="w-full md:w-auto">
+                <ul class="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-6 items-center">
+                    <li><a href="#features" class="hover:text-purple-400 transition-colors">Features</a></li>
+                    <li><a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller" target="_blank" class="hover:text-purple-400 transition-colors">GitHub</a></li>
+                    <li><a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/releases/latest" target="_blank" class="hover:text-purple-400 transition-colors">Download</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <section class="relative bg-gray-950 py-20 md:py-32 overflow-hidden">
+        <div class="container mx-auto px-4 text-center relative z-10">
+            <h1 class="text-3xl md:text-5xl font-extrabold leading-tight mb-6 text-white ascii-font glitch-text">
+                UNLEASH YOUR AKAI FIRE'S FULL VISUAL POTENTIAL
+            </h1>
+            <p class="text-lg md:text-xl text-gray-300 mb-10 max-w-3xl mx-auto">
+                Transform your Akai Fire MIDI controller into a dynamic lighting instrument and a rich visual feedback tool with <span class="font-semibold text-purple-300">Akai Fire PixelForge</span>. Customize RGB pads and its monochrome OLED display like never before.
+            </p>
+            <a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/releases/latest" target="_blank"
+               class="gradient-button inline-block text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
+                🚀 DOWNLOAD LATEST RELEASE FOR WINDOWS
+            </a>
+            <p class="text-sm text-gray-400 mt-4 ascii-font">
+                (STANDALONE EXECUTABLE)
+            </p>
+        </div>
+        <div class="absolute inset-0 flex items-center justify-center opacity-10">
+            <img src="https://placehold.co/1200x600/1a202c/6366f1?text=YOUR+APP+SCREENSHOT+HERE" alt="Main Application Interface Placeholder" class="w-full h-full object-cover">
+        </div>
+    </section>
+
+    <section id="features" class="py-16 md:py-24 bg-black">
+        <div class="container mx-auto px-4">
+            <h2 class="text-3xl md:text-5xl font-extrabold text-center mb-16 text-white ascii-font">
+                POWERFUL FEATURES AT YOUR FINGERTIPS
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                    <div class="text-purple-400 mb-4">
+                        <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2h1v-.08c-1.1-.23-2-1.2-2-2.32v-1.58l-6.38-6.38C5.23 6.16 8.27 4 12 4c4.07 0 7.42 3.05 7.93 7h-6.93v-1c0-1.1-.9-2-2-2H9V8l-2.45-2.45C6.73 5.27 7.34 5 8 5c2.21 0 4 1.79 4 4v1h6.93c.49 3.95-2.85 7-7.93 7z"/></svg>
+                        <h3 class="text-2xl font-semibold inline-block ascii-font">RGB PAD CONTROL</h3>
+                    </div>
+                    <p class="text-gray-300">
+                        Directly paint individual pads, save static color layouts, and create dynamic frame-by-frame animations with a visual sequencer.
+                    </p>
+                </div>
+
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                    <div class="text-purple-400 mb-4">
+                        <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM4 20V4h16l.01 16H4zM9 8h6v2H9zm0 4h6v2H9zm0 4h6v2H9z"/></svg>
+                        <h3 class="text-2xl font-semibold inline-block ascii-font">OLED DISPLAY CUSTOMIZATION</h3>
+                    </div>
+                    <p class="text-gray-300">
+                        Manage a library of custom text items and import GIFs/images for stunning 128x64 monochrome animations on your Akai Fire's OLED.
+                    </p>
+                </div>
+
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                    <div class="text-purple-400 mb-4">
+                        <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zM11 7h2v4h-2zm0 6h2v2h-2z"/></svg>
+                        <h3 class="text-2xl font-semibold inline-block ascii-font">AMBIENT SCREEN SAMPLER</h3>
+                    </div>
+                    <p class="text-gray-300">
+                        Visually select a region on your monitor and have its colors dynamically reflected onto the Akai Fire pads. Record sampler output as animations.
+                    </p>
+                </div>
+
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                    <div class="text-purple-400 mb-4">
+                        <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                        <h3 class="text-2xl font-semibold inline-block ascii-font">SMART HARDWARE INTEGRATION</h3>
+                    </div>
+                    <p class="text-gray-300">
+                        Top knobs intelligently adapt to control global brightness, sampler settings, or animation speed. OLED provides real-time feedback for actions.
+                    </p>
+                </div>
+
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                    <div class="text-purple-400 mb-4">
+                        <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                        <h3 class="text-2xl font-semibold inline-block ascii-font">INTUITIVE UI & PERSISTENCE</h3>
+                    </div>
+                    <p class="text-gray-300">
+                        Enjoy a dark-themed, user-friendly interface with PyQt6. Your color swatches, sampler configs, and OLED settings are persistently saved.
+                    </p>
+                </div>
+
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                    <div class="text-purple-400 mb-4">
+                        <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                        <h3 class="text-2xl font-semibold inline-block ascii-font">ANIMATOR STUDIO</h3>
+                    </div>
+                    <p class="text-gray-300">
+                        Craft intricate pad animations with a visual timeline. Add, delete, duplicate frames, control FPS, and manage animation sequences with ease.
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <section class="bg-gray-950 py-16 md:py-24 text-center">
+        <div class="container mx-auto px-4">
+            <h2 class="text-3xl md:text-5xl font-extrabold mb-8 text-white ascii-font">
+                READY TO EXPERIENCE PIXELFORGE?
+            </h2>
+            <p class="text-lg md:text-xl text-gray-300 mb-10 max-w-3xl mx-auto">
+                Download the latest release and unlock a new dimension of control and visual flair for your Akai Fire.
+            </p>
+            <a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/releases/latest" target="_blank"
+               class="gradient-button inline-block text-white font-bold py-4 px-10 rounded-full text-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
+                GET PIXELFORGE NOW!
+            </a>
+            <p class="text-sm text-gray-400 mt-4 ascii-font">
+                (WINDOWS STANDALONE EXECUTABLE)
+            </p>
+        </div>
+    </section>
+
+    <footer class="bg-black py-10 text-center text-gray-400 text-sm">
+        <div class="container mx-auto px-4">
+            <p class="mb-2">Open source project by <a href="https://github.com/Reg0lino" target="_blank" class="text-purple-400 hover:underline ascii-font">Reg0lino</a> & Gemini 2.5</p>
+            <div class="mt-4 flex justify-center space-x-6">
+                <a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/blob/main/LICENSE" target="_blank" class="hover:text-purple-400 transition-colors">LICENSE (MIT)</a>
+                <a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/issues" target="_blank" class="hover:text-purple-400 transition-colors">REPORT ISSUES</a>
+                <a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller" target="_blank" class="hover:text-purple-400 transition-colors">GITHUB REPOSITORY</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>
+
