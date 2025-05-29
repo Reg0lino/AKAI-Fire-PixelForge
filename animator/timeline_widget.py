@@ -230,6 +230,39 @@ class SequenceTimelineWidget(QWidget):
         # Preferred starting height for 2 rows
         # self.setFixedHeight( (THUMBNAIL_ITEM_HEIGHT * 2) + 20 if THUMBNAIL_ITEM_HEIGHT > 0 else 100)
 
+# In class SequenceTimelineWidget(QWidget):
+    # ... (other methods like set_wrapping_enabled) ...
+
+    def update_single_frame_thumbnail_data(self, frame_index: int, new_frame_colors: list[str]):
+        """
+        Updates the color data for a single frame in the cache and schedules
+        only that item for repaint in the QListWidget.
+        """
+        if not (0 <= frame_index < len(self._all_frames_data) and
+                0 <= frame_index < self.frame_list_widget.count()):
+            # print(f"Timeline WARNING: update_single_frame_thumbnail_data - index {frame_index} out of bounds. Data cache size: {len(self._all_frames_data)}, ListWidget count: {self.frame_list_widget.count()}")
+            return
+
+        if not isinstance(new_frame_colors, list) or len(new_frame_colors) != (THUMBNAIL_ROWS * THUMBNAIL_COLS):
+            # print(f"Timeline WARNING: update_single_frame_thumbnail_data - Invalid new_frame_colors for index {frame_index}.")
+            return
+
+        # Update the cached data that the delegate uses
+        self._all_frames_data[frame_index] = new_frame_colors
+
+        # Get the QModelIndex for the specific item in the QListWidget's model
+        # QListWidget uses a simple list model, so row is frame_index, column is 0.
+        model_idx = self.frame_list_widget.model().index(frame_index, 0)
+
+        if model_idx.isValid():
+            # Tell the QListWidget to update (repaint) the view for this specific model index.
+            # This will cause the delegate's paint method to be called for just this item.
+            self.frame_list_widget.update(model_idx)
+            # print(f"Timeline DEBUG: Requested update for thumbnail at model_idx (row {model_idx.row()}) due to single frame data change.") # Optional
+        # else:
+            # print(f"Timeline WARNING: update_single_frame_thumbnail_data - Could not get valid QModelIndex for frame_index {frame_index}.")
+
+
 
     def _on_current_item_changed(self, current: QListWidgetItem, previous: QListWidgetItem):
         if current:

@@ -59,6 +59,8 @@ class SequenceModel(QObject):
 
         self.loaded_filepath = None # Path if loaded from/saved to a file
         self.is_modified = False # Flag to track unsaved changes
+        # <<< NEW ATTRIBUTE for managing paint stroke undo >>>
+        self._paint_action_in_progress = False
 
     def _mark_modified(self):
         """Sets the modified flag to True."""
@@ -106,7 +108,22 @@ class SequenceModel(QObject):
         self.properties_changed.emit() # If name/delay changed
         self.current_edit_frame_changed.emit(self._current_edit_frame_index)
         self._mark_modified() # Applying an undo/redo state means it's now different from saved (or its previous state)
+        
+        
+    def begin_paint_stroke(self):
+        print(f"MODEL DEBUG: begin_paint_stroke() called. Current _paint_action_in_progress: {self._paint_action_in_progress}") # <<< ADD DEBUG
+        if not self._paint_action_in_progress:
+            print("MODEL DEBUG: ---> Pushing undo state because stroke is starting.") # <<< ADD DEBUG
+            self._push_undo_state()
+            self._paint_action_in_progress = True
+        else:
+            print("MODEL DEBUG: ---> Stroke already in progress, NOT pushing undo state.") # <<< ADD DEBUG
 
+    def end_paint_stroke(self):
+        print(f"MODEL DEBUG: end_paint_stroke() called. Setting _paint_action_in_progress to False.") # <<< ADD DEBUG
+        self._paint_action_in_progress = False
+        
+        
     def undo(self):
         if not self._undo_stack:
             return False
@@ -362,21 +379,23 @@ class SequenceModel(QObject):
     def get_current_edit_frame_index(self) -> int:
         return self._current_edit_frame_index
 
+
     def update_pad_in_current_edit_frame(self, pad_index_0_63: int, color_hex: str) -> bool:
         current_frame_obj = self.get_current_edit_frame_object()
         if current_frame_obj:
-            q_color = QColor(color_hex) # Validate and normalize hex
+            q_color = QColor(color_hex) 
             valid_hex = q_color.name() if q_color.isValid() else QColor("black").name()
             
-            # Only push undo and mark modified if an actual change occurs
             if current_frame_obj.get_pad_color(pad_index_0_63) != valid_hex:
-                self._push_undo_state()
+                # <<< MODIFIED: _push_undo_state() is NO LONGER CALLED HERE DIRECTLY >>>
+                # It's now called by begin_paint_stroke() at the start of a stroke.
+                
                 current_frame_obj.set_pad_color(pad_index_0_63, valid_hex)
                 self.frame_content_updated.emit(self._current_edit_frame_index)
-                self._mark_modified()
+                self._mark_modified() # Still mark sequence as modified
             return True
         return False
-
+    
     def set_name(self, name: str):
         if self.name != name:
             # self._push_undo_state() # Decide if name/property changes are on main undo stack or separate

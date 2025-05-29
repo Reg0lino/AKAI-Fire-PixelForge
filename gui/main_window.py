@@ -853,16 +853,36 @@ class MainWindow(QMainWindow):
         """Connects signals from various UI components and managers to their handlers in MainWindow."""
         # print("MW TRACE: _connect_signals CALLED.") # Keep for debugging signal issues
         # InteractivePadGridFrame signals
-        if self.pad_grid_frame:  # <<<< THIS LINE AND THE NEXT THREE
+        if self.pad_grid_frame:
            self.pad_grid_frame.pad_action_requested.connect(
                self._handle_grid_pad_action)
            self.pad_grid_frame.pad_context_menu_requested_from_button.connect(
                self.show_pad_context_menu)
            self.pad_grid_frame.pad_single_left_click_action_requested.connect(
                self._handle_grid_pad_single_left_click)
+           
+           # <<< CORRECTED CONNECTIONS for paint strokes >>>
+           if self.animator_manager: 
+               try: 
+                   self.pad_grid_frame.paint_stroke_started.disconnect(self.animator_manager.on_paint_stroke_started) # Use actual method name
+                   self.pad_grid_frame.paint_stroke_ended.disconnect(self.animator_manager.on_paint_stroke_ended)     # Use actual method name
+               except TypeError:
+                   pass 
+               
+               self.pad_grid_frame.paint_stroke_started.connect(
+                   self.animator_manager.on_paint_stroke_started 
+               )
+               self.pad_grid_frame.paint_stroke_ended.connect(
+                   self.animator_manager.on_paint_stroke_ended
+               )
+               print("MW TRACE: Connected pad_grid_frame paint_stroke signals to AnimatorManagerWidget.")
+           else:
+               print("MW WARNING: AnimatorManager not available to connect paint stroke signals.")
+           # --- END CORRECTED CONNECTIONS ---
         else:
-            print(
-                "MW TRACE WARNING: self.pad_grid_frame is None during _connect_signals.")
+            print("MW TRACE WARNING: self.pad_grid_frame is None during _connect_signals.")
+            
+            
         # Color Picker Manager signals
         if self.color_picker_manager:
            self.color_picker_manager.final_color_selected.connect(

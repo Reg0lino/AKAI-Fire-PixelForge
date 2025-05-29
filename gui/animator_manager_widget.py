@@ -50,15 +50,18 @@ class AnimatorManagerWidget(QWidget):
     # Signal to MainWindow if sampler needs to be disabled due to animator interaction
     request_sampler_disable = pyqtSignal()
 
-    def __init__(self, 
-                 user_sequences_base_path: str, # Changed from user_sequences_base_path
-                 sampler_recordings_path: str,  # New for sampler recordings
-                 prefab_sequences_base_path: str, # Changed from prefab_sequences_base_path
+# In class AnimatorManagerWidget(QWidget):
+    # In gui/animator_manager_widget.py
+
+    def __init__(self,
+                 user_sequences_base_path: str,
+                 sampler_recordings_path: str,
+                 prefab_sequences_base_path: str,
                  parent: QWidget | None = None):
         super().__init__(parent)
-        self.user_sequences_path = user_sequences_base_path # Corrected
-        self.sampler_recordings_path = sampler_recordings_path # Corrected
-        self.prefab_sequences_path = prefab_sequences_base_path # Corrected
+        self.user_sequences_path = user_sequences_base_path
+        self.sampler_recordings_path = sampler_recordings_path
+        self.prefab_sequences_path = prefab_sequences_base_path
 
         self.active_sequence_model = SequenceModel()
         self._connect_signals_for_active_sequence_model()
@@ -66,11 +69,9 @@ class AnimatorManagerWidget(QWidget):
         self.playback_timer = QTimer(self)
         self.playback_timer.timeout.connect(self.advance_and_play_next_frame)
 
-        self.frame_clipboard: list[AnimationFrame] = [] # Ensure AnimationFrame is imported
-        
-        # self.frame_clipboard: list[AnimationFrame] = [] # <<<< THIS WAS LIKELY THE LINE I PROVIDED BEFORE
+        self.frame_clipboard: list[AnimationFrame] = []
 
-        # UI Elements
+        # UI Elements (will be initialized in _init_ui)
         self.animator_studio_group_box: QGroupBox | None = None
         self.sequence_selection_combo: QComboBox | None = None
         self.load_sequence_button: QPushButton | None = None
@@ -78,16 +79,25 @@ class AnimatorManagerWidget(QWidget):
         self.save_sequence_as_button: QPushButton | None = None
         self.delete_sequence_button: QPushButton | None = None
         self.sequence_timeline_widget: SequenceTimelineWidget | None = None
-        self.sequence_controls_widget: SequenceControlsWidget | None = None        
+        self.sequence_controls_widget: SequenceControlsWidget | None = None
+
+        # <<< NEW: Attributes to track last emitted status for sequence_modified_status_changed
+        self._last_emitted_is_modified: bool | None = None
+        self._last_emitted_sequence_name: str | None = None
+        # --- END NEW ---
+
         self._init_ui()
         self._connect_ui_signals()
-        
 
-         # Initial state updates
+        # Initial state updates
+        # Defer refresh_sequences_list_and_select to ensure UI elements it might affect are fully constructed.
         QTimer.singleShot(0, self.refresh_sequences_list_and_select)
-        self._update_ui_for_current_sequence() # <<< CALLS _emit_state_updates
-        self._emit_state_updates() # <<< CALLS _emit_state_updates AGAIN
 
+        # _update_ui_for_current_sequence also calls _emit_state_updates.
+        # Call it once after _init_ui ensures UI elements are ready for state updates.
+        # _emit_state_updates will now be smarter.
+        # Ensure this is called after UI is built
+        QTimer.singleShot(0, self._update_ui_for_current_sequence)
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -214,13 +224,57 @@ class AnimatorManagerWidget(QWidget):
         self.active_sequence_model.properties_changed.connect(self._update_ui_for_current_sequence_properties)
         self.active_sequence_model.playback_state_changed.connect(self.on_model_playback_state_changed)
 
+# In class AnimatorManagerWidget(QWidget):
+
     def _emit_state_updates(self):
-        """Emits signals to MainWindow to update its state based on current model."""
-        self.sequence_modified_status_changed.emit(self.active_sequence_model.is_modified, self.active_sequence_model.name)
+        """Emits signals to MainWindow to update its state based on current model,
+           but only emits sequence_modified_status_changed if there's an actual change
+           in the sequence's name or modified status since the last emission.
+        """
+        current_is_modified = self.active_sequence_model.is_modified
+        current_sequence_name = self.active_sequence_model.name
+
+        # <<< MODIFIED: Conditional emission for sequence_modified_status_changed
+        if (current_is_modified != self._last_emitted_is_modified) or \
+           (current_sequence_name != self._last_emitted_sequence_name):
+            # print(f"AMW DEBUG: Emitting sequence_modified_status_changed. PrevMod: {self._last_emitted_is_modified}, CurrMod: {current_is_modified}, PrevName: '{self._last_emitted_sequence_name}', CurrName: '{current_sequence_name}'") # Optional debug
+            self.sequence_modified_status_changed.emit(current_is_modified, current_sequence_name)
+            self._last_emitted_is_modified = current_is_modified
+            self._last_emitted_sequence_name = current_sequence_name
+        # else: # Optional debug
+            # print(f"AMW DEBUG: SKIPPING sequence_modified_status_changed. PrevMod: {self._last_emitted_is_modified}, CurrMod: {current_is_modified}, PrevName: '{self._last_emitted_sequence_name}', CurrName: '{current_sequence_name}'")
+        # --- END MODIFIED ---
+            
         self.undo_redo_state_changed.emit(bool(self.active_sequence_model._undo_stack), bool(self.active_sequence_model._redo_stack))
         self.clipboard_state_changed.emit(bool(self.frame_clipboard))
         self._update_animator_controls_enabled_state() # Local UI update
+        
+        
+# In class AnimatorManagerWidget(QWidget):
+    # ... (after __init__ or other methods) ...
 
+    def on_paint_stroke_started(self, row: int, col: int, mouse_button: Qt.MouseButton):
+        """
+        Called when a paint stroke starts on the main pad grid.
+        Relays this information to the active sequence model.
+        """
+        if self.active_sequence_model and hasattr(self.active_sequence_model, 'begin_paint_stroke'):
+            # print(f"AMW DEBUG: Paint stroke started on pad ({row},{col}), button: {mouse_button}. Relaying to model.") # Optional
+            self.active_sequence_model.begin_paint_stroke()
+        # else:
+            # print("AMW WARNING: on_paint_stroke_started - No active model or model missing begin_paint_stroke.")
+
+    def on_paint_stroke_ended(self, mouse_button: Qt.MouseButton):
+        """
+        Called when a paint stroke ends on the main pad grid.
+        Relays this information to the active sequence model.
+        """
+        if self.active_sequence_model and hasattr(self.active_sequence_model, 'end_paint_stroke'):
+            # print(f"AMW DEBUG: Paint stroke ended with button: {mouse_button}. Relaying to model.") # Optional
+            self.active_sequence_model.end_paint_stroke()
+        # else:
+            # print("AMW WARNING: on_paint_stroke_ended - No active model or model missing end_paint_stroke.")
+        
     def get_current_sequence_fps(self) -> float:
         """
         Calculates and returns the current sequence's playback speed in FPS.
@@ -540,31 +594,70 @@ class AnimatorManagerWidget(QWidget):
         self.save_sequence_as_button.setEnabled(has_frames)
 
     # --- Model Signal Handlers ---
+# In class AnimatorManagerWidget(QWidget):
+    # ... (other methods) ...
+
     def on_model_frame_content_updated(self, frame_index: int):
-        if frame_index == self.active_sequence_model.get_current_edit_frame_index():
-            colors_hex = self.active_sequence_model.get_frame_colors(frame_index)
-            if colors_hex:
-                self.active_frame_data_for_display.emit(colors_hex)
-        self._update_ui_for_current_sequence() # Refresh timeline thumbnails
-
-    def on_model_edit_frame_changed(self, frame_index: int):
-        print(f"DEBUG AMW: on_model_edit_frame_changed CALLED with NEW model_frame_index: {frame_index}") # ADD THIS
-        self.stop_current_animation_playback()
-        print(f"DEBUG AMW: on_model_edit_frame_changed - Calling timeline_widget.set_selected_frame_by_index({frame_index})") # ADD THIS
-        self.sequence_timeline_widget.set_selected_frame_by_index(frame_index)
-        colors_hex = None
-        if frame_index != -1:
-            print(f"DEBUG AMW: on_model_edit_frame_changed - Attempting to get colors for frame_index: {frame_index}") # ADD THIS
-            colors_hex = self.active_sequence_model.get_frame_colors(frame_index) 
-            print(f"DEBUG AMW: on_model_edit_frame_changed - Fetched colors: {str(colors_hex)[:100]}...") # ADD THIS (log sample)
-        else:
-            print("DEBUG AMW: on_model_edit_frame_changed - frame_index is -1, no colors to fetch.") # ADD THIS
+        # This slot is called when SequenceModel emits frame_content_updated,
+        # typically after a pad color changes in the current edit frame.
         
-        final_data_to_emit = colors_hex if colors_hex else [QColor("black").name()] * 64 # Ensure QColor imported
-        print(f"DEBUG AMW: on_model_edit_frame_changed - Emitting active_frame_data_for_display with sample: {str(final_data_to_emit)[:100]}...") # ADD THIS
-        self.active_frame_data_for_display.emit(final_data_to_emit)
-        self._emit_state_updates() 
+        current_edit_idx = self.active_sequence_model.get_current_edit_frame_index()
 
+        # 1. Update the main hardware/GUI pad grid IF the updated frame IS the current edit frame.
+        #    This ensures live painting is reflected on the main grid.
+        if frame_index == current_edit_idx:
+            colors_hex_for_main_grid = self.active_sequence_model.get_frame_colors(frame_index)
+            if colors_hex_for_main_grid:
+                self.active_frame_data_for_display.emit(colors_hex_for_main_grid)
+            # else: # Optional: handle case where getting colors failed, maybe emit blank
+                # self.active_frame_data_for_display.emit([QColor("black").name()] * 64)
+        
+        # <<< MODIFIED BEHAVIOR: Update ONLY the specific thumbnail in the timeline. >>>
+        # Do NOT call self._update_ui_for_current_sequence() here, as that rebuilds the entire timeline.
+        if self.sequence_timeline_widget: # Check if timeline widget exists
+            frame_colors_for_thumbnail = self.active_sequence_model.get_frame_colors(frame_index)
+            if frame_colors_for_thumbnail:
+                # Call the new method in SequenceTimelineWidget
+                self.sequence_timeline_widget.update_single_frame_thumbnail_data(frame_index, frame_colors_for_thumbnail)
+            # else:
+                # print(f"AMW WARNING: on_model_frame_content_updated - Could not get colors for frame {frame_index} to update thumbnail.")
+        # else:
+            # print("AMW WARNING: on_model_frame_content_updated - sequence_timeline_widget is None, cannot update thumbnail.")
+        
+        # 3. Emit general state updates (undo/redo, modified status for title/OLED, animator controls).
+        #    This is still necessary because painting a pad does change the modified state (once)
+        #    and can affect undo/redo availability.
+        self._emit_state_updates()
+        
+# In class AnimatorManagerWidget(QWidget):
+
+    def on_model_edit_frame_changed(self, frame_index: int): # frame_index is the model's new current_edit_frame_index
+        print(f"DEBUG AMW: on_model_edit_frame_changed CALLED with NEW model_frame_index: {frame_index}")
+        
+        # 1. Update the timeline's visual selection to match the model's new edit frame.
+        #    This will trigger timeline signals, but our on_timeline_frame_selected will be smarter.
+        if self.sequence_timeline_widget:
+            print(f"DEBUG AMW: on_model_edit_frame_changed - Calling timeline_widget.set_selected_frame_by_index({frame_index})")
+            self.sequence_timeline_widget.set_selected_frame_by_index(frame_index) # Ensure UI reflects model
+
+        # 2. Fetch and display the colors for this new edit frame on the main grid.
+        current_colors_hex = None
+        if frame_index != -1 and self.active_sequence_model:
+            # print(f"DEBUG AMW: on_model_edit_frame_changed - Attempting to get colors for frame_index: {frame_index}")
+            current_colors_hex = self.active_sequence_model.get_frame_colors(frame_index) 
+            # print(f"DEBUG AMW: on_model_edit_frame_changed - Fetched colors (sample): {str(current_colors_hex)[:100]}...")
+        # else:
+            # print(f"DEBUG AMW: on_model_edit_frame_changed - frame_index is -1 or no model, using blank.")
+            
+        final_data_to_emit = current_colors_hex if current_colors_hex else [QColor("black").name()] * 64
+        
+        # print(f"DEBUG AMW: on_model_edit_frame_changed - Emitting active_frame_data_for_display (sample): {str(final_data_to_emit)[:100]}...")
+        self.active_frame_data_for_display.emit(final_data_to_emit)
+        
+        # 3. Emit other general state updates.
+        self._emit_state_updates()
+        
+        
     def on_model_playback_state_changed(self, is_playing: bool):
         self.sequence_controls_widget.update_playback_button_state(is_playing)
         if is_playing:
@@ -593,44 +686,39 @@ class AnimatorManagerWidget(QWidget):
         if self.playback_timer.isActive(): self.playback_timer.stop()
         if self.active_sequence_model.get_is_playing(): self.active_sequence_model.stop_playback()
 
+# In class AnimatorManagerWidget(QWidget):
+
+    # frame_index is from the timeline widget UI
     def on_timeline_frame_selected(self, frame_index: int):
-        # This slot is called when the timeline's selection (often single item focus) changes.
-        print(f"DEBUG AMW: on_timeline_frame_selected CALLED with frame_index from timeline: {frame_index}")
-        
-        self.request_sampler_disable.emit() # Good: ensure sampler is off if user interacts with timeline
+        print(
+            f"DEBUG AMW: on_timeline_frame_selected CALLED with frame_index from timeline: {frame_index}")
 
-        # Step 1: Tell the model about the new intended edit frame.
-        # The model will only emit current_edit_frame_changed if the index *actually* differs from its current one.
-        print(f"DEBUG AMW: on_timeline_frame_selected - Calling model.set_current_edit_frame_index({frame_index})")
-        self.active_sequence_model.set_current_edit_frame_index(frame_index)
+        self.request_sampler_disable.emit()
 
-        # Step 2: Proactively fetch and display the content of this frame_index.
-        # This ensures the canvas updates even if the model's current_edit_frame_index didn't change
-        # (e.g., re-clicking the same frame to refresh its view on the canvas).
-        # This also decouples this specific UI action (timeline click wants to see frame X)
-        # from relying solely on the on_model_edit_frame_changed slot for this particular update path.
-        
-        current_colors_hex = None
-        if frame_index != -1 and self.active_sequence_model: # Check model exists
-            print(f"DEBUG AMW: on_timeline_frame_selected - Proactively fetching colors for frame_index: {frame_index}")
-            current_colors_hex = self.active_sequence_model.get_frame_colors(frame_index)
-            print(f"DEBUG AMW: on_timeline_frame_selected - Proactively fetched colors (sample): {str(current_colors_hex)[:100]}...")
-        else:
-            print(f"DEBUG AMW: on_timeline_frame_selected - frame_index is -1 or no model, using blank.")
-            
-        # Ensure QColor is imported at the top of this file if not already
-        # from PyQt6.QtGui import QColor
-        final_data_to_emit = current_colors_hex if current_colors_hex else [QColor("black").name()] * 64
-        
-        print(f"DEBUG AMW: on_timeline_frame_selected - Emitting active_frame_data_for_display (sample): {str(final_data_to_emit)[:100]}...")
-        self.active_frame_data_for_display.emit(final_data_to_emit)
-        
-        # Note: self.on_model_edit_frame_changed will still be called if the model *did* change its index
-        # and emit current_edit_frame_changed. This might lead to a double emit of active_frame_data_for_display
-        # if the index changed. This is usually harmless but could be optimized later if it causes issues
-        # (e.g., by having on_model_edit_frame_changed check if the data is already what it's about to send).
-        # For now, this direct update from timeline click is the priority.
+        # Tell the model about the new intended edit frame from the UI selection.
+        if self.active_sequence_model:
+            # Only proceed if the timeline's selection is different from the model's current edit frame,
+            # or if the model currently has no selection (-1) and the timeline selects a valid one.
+            # This helps prevent re-processing if the model already knows this is the edit frame.
+            current_model_edit_idx = self.active_sequence_model.get_current_edit_frame_index()
+            if current_model_edit_idx != frame_index:
+                print(
+                    f"DEBUG AMW: on_timeline_frame_selected - Model's edit_idx ({current_model_edit_idx}) differs from timeline's ({frame_index}). Updating model.")
+                self.active_sequence_model.set_current_edit_frame_index(
+                    frame_index)
+                # When set_current_edit_frame_index is called and it *actually changes* the index in the model,
+                # the model will emit current_edit_frame_changed.
+                # Our slot on_model_edit_frame_changed will then handle updating the main display
+                # and ensuring the timeline's selection is synced.
+            # else: # Optional Debug
+                # print(f"DEBUG AMW: on_timeline_frame_selected - Model's edit_idx ({current_model_edit_idx}) already matches timeline's ({frame_index}). No model update needed from here.")
+        # else: # Optional Debug
+            # print("DEBUG AMW: on_timeline_frame_selected - No active sequence model.")
 
+        # No direct emission of active_frame_data_for_display here.
+        # Let on_model_edit_frame_changed handle that when the model confirms the change.
+        # We still need to emit general state updates as selection can affect enabled states of controls.
+        self._emit_state_updates()
 
     def on_timeline_add_frame_action(self, frame_type: str): # frame_type will now only be "blank" from timeline menu
         # print(f"DEBUG AMW.on_timeline_add_frame_action: type='{frame_type}'") # Optional debug
