@@ -11,10 +11,8 @@ The "Akai Fire PixelForge by Reg0lino & Gemini 2.5 Pro" is a Python desktop appl
 
 This project aims to unlock the full visual potential of the Akai Fire, transforming it from just a MIDI controller into a versatile lighting instrument and a rich visual feedback tool, especially through its newly enhanced OLED capabilities.
 
-<!-- Placeholder for a general app screenshot -->
-<!-- Suggested: ![Main Application Interface](link_to_main_interface_screenshot.png) -->
-<!-- Placeholder for a photo of the Akai Fire displaying a custom OLED animation -->
-<!-- Suggested: ![Akai Fire with Custom OLED](link_to_fire_with_oled_custom_content.jpg) -->
+ ![Main Application Interface](https://github.com/user-attachments/assets/fcec95de-555b-4066-87a9-aa0419526ef4) 
+ ![Akai Fire with Custom OLED](https://github.com/user-attachments/assets/f3bbcca6-abad-454e-b441-ec2d4533f6b0)
 
 ## ✨ Features
 
