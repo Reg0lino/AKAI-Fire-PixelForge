@@ -20,6 +20,7 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
 *   **Sophisticated Color Picker:** Includes SV (Saturation/Value) map, Hue slider, RGB/Hex inputs, and "My Colors" swatches for saving favorite colors (right-click swatches for options).
 *   **Static Color Layouts:** Create, save, load, and manage static color presets for the entire 4x16 pad grid.
 *   **Frame-by-Frame Pad Animation Sequencer ("Animator Studio"):**
+![Image](https://github.com/user-attachments/assets/bd3e8232-df5d-4a1d-ba4b-05975b16d59b)
     *   Visual timeline for arranging frames (supports multi-selection).
     *   Add (snapshot/blank), delete, duplicate, copy, cut, and paste frames.
     *   Undo/Redo functionality for frame edits and sequence property changes.
@@ -174,6 +175,7 @@ User-generated presets (Static Layouts, Animator Sequences, OLED Text Items, OLE
     *   Apply **Static Pad Layouts**.
     *   Use the **Animator Studio** to create and manage frame-by-frame animations.
 5.  **Screen Sampler (Ambient Mode):**
+![Image](https://github.com/user-attachments/assets/0fc30392-e115-4352-b988-a7b7965f5215)
     *   Toggle ON/OFF using the UI button or hardware PERFORM/BROWSER buttons.
     *   Configure the sampling region and color adjustments. Hardware knobs control adjustments when active.
     *   Use the **Record** feature to save sampler output as an animation.
