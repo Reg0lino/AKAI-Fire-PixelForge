@@ -36,6 +36,7 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
     *   Record the output of the screen sampler over a sequence of frames.
     *   Automatically save the recording as a new animation sequence into a dedicated user folder.
 *   **Advanced OLED Display Customization (New & Enhanced!):**
+![Image](https://github.com/user-attachments/assets/bd4aa2e4-a4fb-47e6-909b-2d501bb30c99)
     *   **OLED Content Library Manager:**
         *   Create, edit, and manage a library of custom OLED content items.
         *   Supports two main item types: "Text Items" and "Image Animation Items."
