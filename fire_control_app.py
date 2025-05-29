@@ -1,6 +1,7 @@
 # AKAI_Fire_RGB_Controller/fire_control_app.py
 import sys
 import os
+import time
 from utils import get_resource_path 
 os.environ['MIDO_BACKEND'] = 'mido.backends.rtmidi'
 
@@ -122,10 +123,46 @@ def main():
         sys.exit(1)
 
 if __name__ == '__main__':
+    # Log in same dir as EXE for bundled app
+    log_file_path = os.path.join(os.path.abspath("."), "app_crash_log.txt")
     try:
+        # Clear previous log file if it exists, to ensure we only see the latest crash
+        if os.path.exists(log_file_path):
+            os.remove(log_file_path)
+
+        # Will go to console if visible
+        print("APP_LAUNCH: fire_control_app.py __main__ block entered.")
         main()
-    except Exception as e:
-        print(f"FATAL ERROR in top-level main execution: {e}")
+
+    except Exception as e_top:
+        # This block will catch any unhandled exception from main()
+        # To console if visible
+        print(
+            f"APP_CRASH: A fatal error occurred in top-level main execution: {e_top}")
         import traceback
-        traceback.print_exc()
-        sys.exit(1)
+
+        error_message = f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        error_message += f"Error Type: {type(e_top).__name__}\n"
+        error_message += f"Error Message: {str(e_top)}\n"
+        error_message += "Traceback:\n"
+        error_message += traceback.format_exc()
+        error_message += "\n\nSys.Path:\n" + "\n".join(sys.path)
+        error_message += "\n\nEnvironment Variables (selected):\n"
+        selected_env_vars = ['PATH', 'PYTHONHOME',
+                             'PYTHONPATH', 'MIDO_BACKEND', 'QT_PLUGIN_PATH']
+        for var in selected_env_vars:
+            error_message += f"  {var}: {os.environ.get(var)}\n"
+
+        try:
+            with open(log_file_path, "w", encoding="utf-8") as f_log:
+                f_log.write(error_message)
+            print(
+                f"APP_CRASH: Detailed error information written to: {log_file_path}")
+        except Exception as e_log:
+            print(
+                f"APP_CRASH_LOGGING_ERROR: Could not write crash log to file: {e_log}")
+            # Print original error to console as fallback
+            print(f"Original error was: {e_top}")
+            traceback.print_exc()  # Print original traceback to console as fallback
+
+        sys.exit(1)  # Ensure the process exits with an error code
