@@ -66,8 +66,12 @@ class OLEDDisplayManager(QObject):
     PERSISTENT_OVERRIDE_FONT_FAMILY = "Arial"  # Or another small, clear system font
     PERSISTENT_OVERRIDE_FONT_SIZE_PX = 10
 
+    # Define the default message text as a class constant or instance attribute
+    APP_DEFAULT_OLED_MESSAGE_TEXT = "AKAI  Fire  PixelForge  by  Reg0lino  =^.^= "
+    # <<< ADJUST THIS based on QFontDatabase output for TomThumb.ttf
+    TOMTHUMB_FAMILY_NAME = "Tom Thumb"
+
 # In class OLEDDisplayManager(QObject):
-    # In managers/oled_display_manager.py
 
     def __init__(self,
                  akai_fire_controller_ref,
@@ -81,8 +85,6 @@ class OLEDDisplayManager(QObject):
         # --- Core State Attributes ---
         self._active_graphic_item_data: dict | None = None
         self._active_graphic_item_type: str | None = None
-
-        # For text-based Active Graphics or the Hardcoded Default Message
         self._active_graphic_text_font_family: str | None = None
         self._active_graphic_text_font_size_px: int | None = None
         self._active_graphic_text_content: str | None = None
@@ -93,11 +95,11 @@ class OLEDDisplayManager(QObject):
         self._active_graphic_text_scroll_timer = QTimer(self)
         self._active_graphic_text_scroll_timer.timeout.connect(
             self._scroll_active_graphic_text_step)
+        # Initialized here, value confirmed by print below
         self._active_graphic_text_step_delay_ms: int = self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS
         self._active_graphic_text_restart_delay_ms: int = self.DEFAULT_TEXT_ITEM_SCROLL_RESTART_DELAY_MS
         self._active_graphic_text_alignment: str = "center"
 
-        # For image_animation-based Active Graphics
         self._custom_animation_logical_frames: list[list[str]] | None = None
         self._custom_animation_current_frame_index: int = 0
         self._custom_animation_playback_fps: float = 15.0
@@ -107,16 +109,12 @@ class OLEDDisplayManager(QObject):
             self._play_next_custom_animation_frame)
         self._is_custom_animation_playing: bool = False
 
-        # For built-in visual startup animation
         self._is_builtin_startup_animation_playing = False
         self._builtin_startup_animation_frames: list[bytearray] = []
         self._current_builtin_startup_animation_frame_index: int = 0
         self._builtin_startup_animation_frame_duration: int = 60
 
-        # For temporary system messages (uses TomThumb 60pt)
         self.feedback_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
-        # self._app_default_message_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None # <<< REMOVE THIS
-
         self._temporary_message_timer = QTimer(self)
         self._temporary_message_timer.setSingleShot(True)
         self._temporary_message_timer.timeout.connect(
@@ -132,31 +130,25 @@ class OLEDDisplayManager(QObject):
         self._temporary_message_total_duration_ms: int = 0
         self._temporary_message_has_scrolled_once: bool = False
 
-        # For persistent overrides
         self.persistent_override_text: str | None = None
         self.persistent_override_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
-        # --- End Core State Attributes ---
-
-        # <<< NEW: State for managing Active Graphic pause/resume >>>
-        # User/app explicitly paused it
-        self._active_graphic_is_manually_paused: bool = False
-        self._active_graphic_was_playing_before_pause: bool = False  # To know what to resume
-        # --- END NEW ---
-
-
+        
+        self._active_graphic_is_manually_paused: bool = False 
+        self._active_graphic_was_playing_before_pause: bool = False
+        
         self.oled_width = oled_renderer.OLED_WIDTH if OLED_RENDERER_AVAILABLE else 128
         self.oled_height = oled_renderer.OLED_HEIGHT if OLED_RENDERER_AVAILABLE else 64
 
-        # Load fonts
-        self._load_feedback_font()  # Loads TomThumb 60pt into self.feedback_pil_font
+        self._load_feedback_font()
         self._load_persistent_override_font()
-        # self._load_app_default_message_font() # <<< REMOVE THIS CALL
 
         self.global_text_item_scroll_delay_ms: int = self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS
+        # <<< ADD DEBUG PRINT for initial global_text_item_scroll_delay_ms >>>
+        print(f"ODM INFO __init__: Initial self.global_text_item_scroll_delay_ms = {self.global_text_item_scroll_delay_ms}")
 
-        print(
-            f"OLEDDisplayManager: Initialized. FeedbackFont loaded: {self.feedback_pil_font is not None}")
-
+        print(f"OLEDDisplayManager: Initialized. FeedbackFont loaded: {self.feedback_pil_font is not None}")
+        
+        
     # Or a bundled small pixel font if you have one
     APP_DEFAULT_MSG_FONT_FAMILY = "Impact"
     APP_DEFAULT_MSG_FONT_SIZE_PX = 24
@@ -355,22 +347,29 @@ class OLEDDisplayManager(QObject):
         return loaded_font
 
     def update_global_text_item_scroll_delay(self, new_delay_ms: int):
-        """Called by MainWindow to set the global default scroll speed for text items."""
-        self.global_text_item_scroll_delay_ms = max(
-            20, new_delay_ms)  # Ensure a minimum
-        # If an active graphic text item is currently scrolling AND not using an override, update its timer
+        # <<< ADD DEBUG PRINT for incoming new_delay_ms >>>
+        print(f"ODM INFO update_global_text_item_scroll_delay: Received new_delay_ms = {new_delay_ms} (type: {type(new_delay_ms)})")
+        
+        # Ensure new_delay_ms is not None before max()
+        if new_delay_ms is None:
+            print("ODM WARNING update_global_text_item_scroll_delay: new_delay_ms is None! Using default.")
+            # Fallback to a known good default if None is passed
+            current_value_to_set = self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS 
+        else:
+            current_value_to_set = int(new_delay_ms) # Ensure it's an int
+
+        self.global_text_item_scroll_delay_ms = max(20, current_value_to_set)
+        print(f"ODM INFO update_global_text_item_scroll_delay: Set self.global_text_item_scroll_delay_ms = {self.global_text_item_scroll_delay_ms}")
+
         if self._active_graphic_text_is_scrolling and \
            self._active_graphic_item_data and \
            self._active_graphic_item_data.get("item_type") == "text":
-
-            item_anim_params = self._active_graphic_item_data.get(
-                "animation_params", {})
-            if item_anim_params.get("speed_override_ms") is None:  # Not using override
+            item_anim_params = self._active_graphic_item_data.get("animation_params", {})
+            if item_anim_params.get("speed_override_ms") is None:
                 self._active_graphic_text_step_delay_ms = self.global_text_item_scroll_delay_ms
                 if self._active_graphic_text_scroll_timer.isActive() and \
                    self._active_graphic_text_scroll_timer.interval() != self._active_graphic_text_restart_delay_ms:
-                    self._active_graphic_text_scroll_timer.setInterval(
-                        self._active_graphic_text_step_delay_ms)
+                    self._active_graphic_text_scroll_timer.setInterval(self._active_graphic_text_step_delay_ms)
 
     def stop_all_activity(self):
         """Stops all current OLED activities (scrolling, animations)."""
@@ -684,7 +683,27 @@ class OLEDDisplayManager(QObject):
         self._custom_animation_current_frame_index += 1
 
     def _start_or_display_active_graphic_text_internal(self):
-        # ... (initial checks for data, font details, renderer availability remain the same) ...
+        if self._active_graphic_is_manually_paused:
+            # ... (existing pause logic) ...
+            if not self._active_graphic_item_data or self._active_graphic_text_content is None or \
+               not self._active_graphic_text_font_family or not self._active_graphic_text_font_size_px:
+                return
+            text_to_display_pause = self._active_graphic_text_content
+            q_font_for_metrics_pause = QFont(
+                self._active_graphic_text_font_family, pointSize=-1)
+            q_font_for_metrics_pause.setPixelSize(
+                self._active_graphic_text_font_size_px)
+            fm_pause = QFontMetrics(q_font_for_metrics_pause)
+            temp_text_pixel_width_pause = fm_pause.horizontalAdvance(
+                text_to_display_pause)
+            if self._active_graphic_text_scroll_if_needed and temp_text_pixel_width_pause > self.oled_width and text_to_display_pause.strip() != "":
+                self._active_graphic_was_playing_before_pause = True
+            else:
+                self._active_graphic_was_playing_before_pause = False
+            self._active_graphic_text_is_scrolling = False
+            self._render_and_send_active_graphic_text_frame()
+            return
+
         if not self._active_graphic_item_data or \
            self._active_graphic_item_type != "text" or \
            self._active_graphic_text_content is None or \
@@ -696,7 +715,6 @@ class OLEDDisplayManager(QObject):
             return
 
         text_to_display = self._active_graphic_text_content
-
         q_font_for_metrics = QFont(
             self._active_graphic_text_font_family, pointSize=-1)
         q_font_for_metrics.setPixelSize(self._active_graphic_text_font_size_px)
@@ -710,11 +728,23 @@ class OLEDDisplayManager(QObject):
 
         if needs_scroll:
             self._active_graphic_text_is_scrolling = True
-            # To scroll RIGHT TO LEFT, text starts with its left edge off-screen to the RIGHT.
-            self._active_graphic_text_current_scroll_offset = self.oled_width  # <<< CHANGE HERE
+            self._active_graphic_text_current_scroll_offset = self.oled_width
             self._render_and_send_active_graphic_text_frame()
+
+            # <<< ADD DEBUG PRINT HERE >>>
+            print(
+                f"ODM DEBUG: Starting scroll timer with _active_graphic_text_step_delay_ms = {self._active_graphic_text_step_delay_ms} (type: {type(self._active_graphic_text_step_delay_ms)})")
+            # --- END DEBUG PRINT ---
+
+            # Ensure the value is an int before passing to timer
+            delay_value_for_timer = self._active_graphic_text_step_delay_ms
+            if delay_value_for_timer is None:  # Should not happen based on logic, but defensive
+                print(
+                    "ODM WARNING: _active_graphic_text_step_delay_ms is None! Defaulting timer to 50ms.")
+                delay_value_for_timer = 50
+
             self._active_graphic_text_scroll_timer.start(
-                self._active_graphic_text_step_delay_ms)
+                int(delay_value_for_timer))  # Ensure it's int
         else:
             self._active_graphic_text_is_scrolling = False
             self._active_graphic_text_current_scroll_offset = 0
@@ -860,60 +890,48 @@ class OLEDDisplayManager(QObject):
         
         self._render_and_send_active_graphic_text_frame()
 
-    # Define the default message text as a class constant or instance attribute
-    APP_DEFAULT_OLED_MESSAGE_TEXT = "Fire  RGB  Customizer  by  Reg0lino  =^.^="
-    # Define the TARGET FONT FAMILY NAME for TomThumb (as reported by QFontDatabase)
-    # This might be "Tom Thumb", "TomThumb", etc. Check your console output after registering.
-    # <<< ADJUST THIS based on QFontDatabase output for TomThumb.ttf
-    TOMTHUMB_FAMILY_NAME = "Tom Thumb"
-
     def _display_hardcoded_app_default_message(self):
-        """
-        Sets up and displays the application's hardcoded default message 
-        using the registered TomThumb font at 60px, scrolling if necessary.
-        """
-        print(
-            f"OLED Mgr INFO: Displaying hardcoded app default message using '{self.TOMTHUMB_FAMILY_NAME}' @ {self.FEEDBACK_FONT_SIZE_PX}px.")
+        print(f"OLED Mgr INFO: Displaying hardcoded app default message using '{self.TOMTHUMB_FAMILY_NAME}' @ {self.FEEDBACK_FONT_SIZE_PX}px.")
+        print(f"  Current self.global_text_item_scroll_delay_ms BEFORE setting _active_graphic_text_step_delay_ms: {self.global_text_item_scroll_delay_ms}") #<<< DEBUG
 
-        # Construct item_data as if it were a user-defined text item
         default_item_data_simulated = {
-            "item_name": "AppDefaultMessage",
-            "item_type": "text",
+            "item_name": "AppDefaultMessage", "item_type": "text",
             "text_content": self.APP_DEFAULT_OLED_MESSAGE_TEXT,
-            # <<< USE THE REGISTERED FAMILY NAME
-            "font_family": self.TOMTHUMB_FAMILY_NAME,
-            "font_size_px": self.FEEDBACK_FONT_SIZE_PX,     # This is 60px
-            # Always scroll this long message
-            "animation_style": "scroll_left",
-            "alignment": "left",                            # Good for scrolling
+            "font_family": self.TOMTHUMB_FAMILY_NAME, 
+            "font_size_px": self.FEEDBACK_FONT_SIZE_PX,
+            "animation_style": "scroll_left", "alignment": "left",
             "animation_params": {
-                "speed_override_ms": None,
+                "speed_override_ms": None, # This means it should use global
                 "pause_at_ends_ms": self.DEFAULT_TEXT_ITEM_SCROLL_RESTART_DELAY_MS
             }
         }
-
-        # Populate the internal attributes as if this were a loaded text item
         self._active_graphic_item_data = default_item_data_simulated
         self._active_graphic_item_type = "text"
         self._active_graphic_text_content = default_item_data_simulated["text_content"]
         self._active_graphic_text_font_family = default_item_data_simulated["font_family"]
         self._active_graphic_text_font_size_px = default_item_data_simulated["font_size_px"]
-
         self._active_graphic_text_alignment = default_item_data_simulated["alignment"]
-        self._active_graphic_text_scroll_if_needed = (
-            default_item_data_simulated["animation_style"] == "scroll_left")
+        self._active_graphic_text_scroll_if_needed = (default_item_data_simulated["animation_style"] == "scroll_left")
 
         anim_params = default_item_data_simulated["animation_params"]
+        
+        # Explicitly check global_text_item_scroll_delay_ms
+        delay_to_use_for_default_msg = self.global_text_item_scroll_delay_ms
+        if delay_to_use_for_default_msg is None:
+            print("ODM WARNING (_display_hardcoded_app_default_message): self.global_text_item_scroll_delay_ms is None! Using fallback.")
+            delay_to_use_for_default_msg = self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS # Fallback
+
         self._active_graphic_text_step_delay_ms = anim_params.get("speed_override_ms") \
             if anim_params.get("speed_override_ms") is not None \
-            else self.global_text_item_scroll_delay_ms
+            else delay_to_use_for_default_msg # Use the checked/fallback value
+
+        print(f"  Set _active_graphic_text_step_delay_ms FOR DEFAULT MSG to: {self._active_graphic_text_step_delay_ms}") #<<< DEBUG
+
         self._active_graphic_text_restart_delay_ms = anim_params.get(
             "pause_at_ends_ms", self.DEFAULT_TEXT_ITEM_SCROLL_RESTART_DELAY_MS
         )
-
-        # Now call the internal method that handles text display/scrolling using QFont
         self._start_or_display_active_graphic_text_internal()
-
+        
     def show_system_message(self, text: str, duration_ms: int, scroll_if_needed: bool = True):
         # print(
             # f"OLED Mgr INFO: show_system_message: '{text}', Duration: {duration_ms}ms, Scroll: {scroll_if_needed}")
@@ -1089,10 +1107,6 @@ class OLEDDisplayManager(QObject):
             if blank_bitmap:
                 self.request_send_bitmap_to_fire.emit(blank_bitmap)
 
-
-# In class OLEDDisplayManager(QObject):
-
-
     def pause_active_graphic(self):
         if self._active_graphic_is_manually_paused:
             return
@@ -1177,30 +1191,23 @@ class OLEDDisplayManager(QObject):
         self._play_next_custom_animation_frame()
 
     def _start_or_display_active_graphic_text_internal(self):
-        if self._active_graphic_is_manually_paused:  # <<< ADD CHECK
-            # print("ODM DEBUG: _start_or_display_active_graphic_text_internal - Paused, not starting timer.")
-            # Determine if it *would* be scrolling to set _active_graphic_was_playing_before_pause
+        if self._active_graphic_is_manually_paused: 
             if not self._active_graphic_item_data or self._active_graphic_text_content is None or \
                not self._active_graphic_text_font_family or not self._active_graphic_text_font_size_px:
-                return  # Not enough data to determine if it would scroll
-
-            text_to_display = self._active_graphic_text_content
-            q_font_for_metrics = QFont(
-                self._active_graphic_text_font_family, pointSize=-1)
-            q_font_for_metrics.setPixelSize(
-                self._active_graphic_text_font_size_px)
-            fm = QFontMetrics(q_font_for_metrics)
-            temp_text_pixel_width = fm.horizontalAdvance(text_to_display)
-            if self._active_graphic_text_scroll_if_needed and temp_text_pixel_width > self.oled_width and text_to_display.strip() != "":
+                return 
+            text_to_display_pause = self._active_graphic_text_content
+            q_font_for_metrics_pause = QFont(self._active_graphic_text_font_family, pointSize=-1)
+            q_font_for_metrics_pause.setPixelSize(self._active_graphic_text_font_size_px)
+            fm_pause = QFontMetrics(q_font_for_metrics_pause)
+            temp_text_pixel_width_pause = fm_pause.horizontalAdvance(text_to_display_pause)
+            if self._active_graphic_text_scroll_if_needed and temp_text_pixel_width_pause > self.oled_width and text_to_display_pause.strip() != "":
                 self._active_graphic_was_playing_before_pause = True
             else:
                 self._active_graphic_was_playing_before_pause = False
-            # Render one static frame even if paused
-            self._active_graphic_text_is_scrolling = False  # Temporarily ensure static render
+            self._active_graphic_text_is_scrolling = False 
             self._render_and_send_active_graphic_text_frame()
             return
 
-        # ... (rest of the existing _start_or_display_active_graphic_text_internal method from here) ...
         if not self._active_graphic_item_data or \
            self._active_graphic_item_type != "text" or \
            self._active_graphic_text_content is None or \
@@ -1212,12 +1219,10 @@ class OLEDDisplayManager(QObject):
             return
 
         text_to_display = self._active_graphic_text_content
-        q_font_for_metrics = QFont(
-            self._active_graphic_text_font_family, pointSize=-1)
+        q_font_for_metrics = QFont(self._active_graphic_text_font_family, pointSize=-1)
         q_font_for_metrics.setPixelSize(self._active_graphic_text_font_size_px)
         fm = QFontMetrics(q_font_for_metrics)
-        self._active_graphic_text_pixel_width = fm.horizontalAdvance(
-            text_to_display)
+        self._active_graphic_text_pixel_width = fm.horizontalAdvance(text_to_display)
 
         needs_scroll = self._active_graphic_text_scroll_if_needed and \
             self._active_graphic_text_pixel_width > self.oled_width and \
@@ -1225,19 +1230,23 @@ class OLEDDisplayManager(QObject):
 
         if needs_scroll:
             self._active_graphic_text_is_scrolling = True
-            self._active_graphic_text_current_scroll_offset = self.oled_width
-            # Initial render (might be off-screen)
+            self._active_graphic_text_current_scroll_offset = self.oled_width 
             self._render_and_send_active_graphic_text_frame()
-            # Use the correct step delay when starting
-            item_anim_params = self._active_graphic_item_data.get(
-                "animation_params", {})
-            current_step_delay = item_anim_params.get(
-                "speed_override_ms", self.global_text_item_scroll_delay_ms)
-            self._active_graphic_text_scroll_timer.start(current_step_delay)
+            
+            # --- MORE DEFENSIVE HANDLING AND LOGGING ---
+            delay_value_for_timer = self._active_graphic_text_step_delay_ms
+            print(f"ODM DEBUG _start_or_display_active_graphic_text_internal: Current _active_graphic_text_step_delay_ms = {delay_value_for_timer} (type: {type(delay_value_for_timer)})")
+            
+            if not isinstance(delay_value_for_timer, int) or delay_value_for_timer <= 0:
+                print(f"ODM WARNING: Invalid delay_value_for_timer ({delay_value_for_timer}). Falling back to default {self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS}ms.")
+                delay_value_for_timer = self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS
+            # --- END DEFENSIVE HANDLING ---
+            
+            self._active_graphic_text_scroll_timer.start(delay_value_for_timer) # Already an int after check
         else:
             self._active_graphic_text_is_scrolling = False
             self._active_graphic_text_current_scroll_offset = 0
-            self._render_and_send_active_graphic_text_frame()  # Static render
+            self._render_and_send_active_graphic_text_frame()
 
     def stop_all_activity(self):
         # ... (existing stop_all_activity logic) ...
