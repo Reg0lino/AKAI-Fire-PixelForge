@@ -52,10 +52,9 @@ except ImportError as e:
 
 class OLEDDisplayManager(QObject):
     request_send_bitmap_to_fire = pyqtSignal(bytearray)
-    # startup_animation_finished signal is now primarily for internal transition,
-    # MainWindow might not need to connect if ODM handles the next step.
-    # We can keep it if other parts of MW rely on knowing when built-in visual is done.
     builtin_startup_animation_finished = pyqtSignal()
+    active_graphic_pause_state_changed = pyqtSignal(
+        bool)  # True if paused, False if resumed/playing
 
     # Default scroll delays for user-defined TEXT Active Graphics
     DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS = 50
@@ -137,6 +136,13 @@ class OLEDDisplayManager(QObject):
         self.persistent_override_text: str | None = None
         self.persistent_override_pil_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
         # --- End Core State Attributes ---
+
+        # <<< NEW: State for managing Active Graphic pause/resume >>>
+        # User/app explicitly paused it
+        self._active_graphic_is_manually_paused: bool = False
+        self._active_graphic_was_playing_before_pause: bool = False  # To know what to resume
+        # --- END NEW ---
+
 
         self.oled_width = oled_renderer.OLED_WIDTH if OLED_RENDERER_AVAILABLE else 128
         self.oled_height = oled_renderer.OLED_HEIGHT if OLED_RENDERER_AVAILABLE else 64
@@ -348,7 +354,6 @@ class OLEDDisplayManager(QObject):
                 f"OLED Mgr CRITICAL: NO FONT LOADED for text item '{font_family}' @{font_size_px}px.")
         return loaded_font
 
-    
     def update_global_text_item_scroll_delay(self, new_delay_ms: int):
         """Called by MainWindow to set the global default scroll speed for text items."""
         self.global_text_item_scroll_delay_ms = max(
@@ -435,7 +440,6 @@ class OLEDDisplayManager(QObject):
         QTimer.singleShot(self._builtin_startup_animation_frame_duration,
                           self._play_next_builtin_startup_frame)
 
-# In class OLEDDisplayManager(QObject):
     def set_active_graphic(self, item_data: dict | None):
         # print(f"OLED Mgr INFO: set_active_graphic called. Item Name: '{item_data.get('item_name', 'None') if item_data else 'None'}'")
 
@@ -507,7 +511,7 @@ class OLEDDisplayManager(QObject):
         if not self._is_builtin_startup_animation_playing and \
            not self._is_temporary_message_active:
             self._apply_current_oled_state()
-            
+
     def _apply_current_oled_state(self, called_by_revert: bool = False):
         """
         Central dispatcher to determine and apply the correct OLED content.
@@ -615,8 +619,6 @@ class OLEDDisplayManager(QObject):
         self._custom_animation_timer.start(timer_interval_ms)
         self._play_next_custom_animation_frame()  # Display first frame
 
-# In class OLEDDisplayManager(QObject):
-
     def _play_next_custom_animation_frame(self): # For Active Graphic Animations
         # print(f"ODM DEBUG: _play_next_custom_animation_frame CALLED. Playing: {self._is_custom_animation_playing}") # <<< ADD
 
@@ -680,10 +682,6 @@ class OLEDDisplayManager(QObject):
              # print("ODM WARNING: OLED_RENDERER_AVAILABLE is False, cannot pack/send frame.") # <<< ADD
         
         self._custom_animation_current_frame_index += 1
-        
-
-# In class OLEDDisplayManager(QObject):
-    # In managers/oled_display_manager.py
 
     def _start_or_display_active_graphic_text_internal(self):
         # ... (initial checks for data, font details, renderer availability remain the same) ...
@@ -721,8 +719,6 @@ class OLEDDisplayManager(QObject):
             self._active_graphic_text_is_scrolling = False
             self._active_graphic_text_current_scroll_offset = 0
             self._render_and_send_active_graphic_text_frame()
-
-
 
     def _render_and_send_active_graphic_text_frame(self):
         if not self._active_graphic_text_content or \
@@ -865,7 +861,7 @@ class OLEDDisplayManager(QObject):
         self._render_and_send_active_graphic_text_frame()
 
     # Define the default message text as a class constant or instance attribute
-    APP_DEFAULT_OLED_MESSAGE_TEXT = "Fire RGB Customizer by Reg0lino =^.^="
+    APP_DEFAULT_OLED_MESSAGE_TEXT = "Fire  RGB  Customizer  by  Reg0lino  =^.^="
     # Define the TARGET FONT FAMILY NAME for TomThumb (as reported by QFontDatabase)
     # This might be "Tom Thumb", "TomThumb", etc. Check your console output after registering.
     # <<< ADJUST THIS based on QFontDatabase output for TomThumb.ttf
@@ -919,8 +915,8 @@ class OLEDDisplayManager(QObject):
         self._start_or_display_active_graphic_text_internal()
 
     def show_system_message(self, text: str, duration_ms: int, scroll_if_needed: bool = True):
-        print(
-            f"OLED Mgr INFO: show_system_message: '{text}', Duration: {duration_ms}ms, Scroll: {scroll_if_needed}")
+        # print(
+            # f"OLED Mgr INFO: show_system_message: '{text}', Duration: {duration_ms}ms, Scroll: {scroll_if_needed}")
 
         if self._is_builtin_startup_animation_playing:
             print(
@@ -975,9 +971,6 @@ class OLEDDisplayManager(QObject):
             # Start the main duration timer immediately for static messages
             self._temporary_message_timer.start(
                 self._temporary_message_total_duration_ms)
-
-# In class OLEDDisplayManager(QObject):
-
     # Text now comes from self._current_temporary_message_text
     def _render_and_send_temporary_message_frame(self):
         if not self._is_temporary_message_active or \
@@ -1003,10 +996,6 @@ class OLEDDisplayManager(QObject):
             # print(f"OLED Mgr WARNING: Failed to render temporary message: '{self._current_temporary_message_text}'") # Optional
             self.request_send_bitmap_to_fire.emit(
                 oled_renderer.get_blank_packed_bitmap())
-
-
-# In class OLEDDisplayManager(QObject):
-
 
     def _scroll_temporary_message_step(self):
         if not self._is_temporary_message_active or \
@@ -1053,8 +1042,6 @@ class OLEDDisplayManager(QObject):
                     self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS)
             # No need to setInterval here if it's already running with the correct interval
 
-# In class OLEDDisplayManager(QObject):
-
     def _revert_from_temporary_display(self):
         # This slot is connected to self._temporary_message_timer.timeout()
         print(
@@ -1071,7 +1058,6 @@ class OLEDDisplayManager(QObject):
 
         # Now, apply the persistent OLED state (Active Graphic, Persistent Override, or App Default)
         self._apply_current_oled_state(called_by_revert=True)
-
 
     def set_persistent_override(self, text: str | None, scroll_if_needed: bool = True):
         # `scroll_if_needed` for persistent override is tricky with current simple display.
@@ -1103,6 +1089,173 @@ class OLEDDisplayManager(QObject):
             if blank_bitmap:
                 self.request_send_bitmap_to_fire.emit(blank_bitmap)
 
+
+# In class OLEDDisplayManager(QObject):
+
+
+    def pause_active_graphic(self):
+        if self._active_graphic_is_manually_paused:
+            return
+
+        # print("OLED Mgr INFO: Pausing Active Graphic.")
+        self._active_graphic_was_playing_before_pause = False
+
+        if self._active_graphic_text_is_scrolling and self._active_graphic_text_scroll_timer.isActive():
+            self._active_graphic_text_scroll_timer.stop()
+            self._active_graphic_was_playing_before_pause = True
+
+        if self._is_custom_animation_playing and self._custom_animation_timer.isActive():
+            self._custom_animation_timer.stop()
+            self._active_graphic_was_playing_before_pause = True
+
+        self._active_graphic_is_manually_paused = True
+        self.active_graphic_pause_state_changed.emit(True)  # <<< EMIT SIGNAL
+
+    def resume_active_graphic(self):
+        if not self._active_graphic_is_manually_paused:
+            return
+
+        # print("OLED Mgr INFO: Resuming Active Graphic.")
+        self._active_graphic_is_manually_paused = False
+
+        if self._active_graphic_was_playing_before_pause:
+            if self._active_graphic_item_type == "text" and self._active_graphic_text_is_scrolling:
+                item_anim_params = self._active_graphic_item_data.get(
+                    "animation_params", {}) if self._active_graphic_item_data else {}
+                current_step_delay = item_anim_params.get(
+                    "speed_override_ms", self.global_text_item_scroll_delay_ms)
+                self._active_graphic_text_scroll_timer.start(
+                    current_step_delay)
+
+            elif self._active_graphic_item_type == "image_animation" and self._custom_animation_logical_frames:
+                timer_interval_ms = int(
+                    1000.0 / self._custom_animation_playback_fps) if self._custom_animation_playback_fps > 0 else 100
+                min_interval = 33
+                self._custom_animation_timer.start(
+                    max(min_interval, timer_interval_ms))
+        else:
+            # print("OLED Mgr DEBUG: Nothing was actively playing before pause, re-applying current state.")
+            self._apply_current_oled_state()
+
+        self._active_graphic_was_playing_before_pause = False
+        self.active_graphic_pause_state_changed.emit(False)  # <<< EMIT SIGNAL
+
+    def is_active_graphic_paused(self) -> bool:
+        """Returns True if the Active Graphic is currently paused by a call to pause_active_graphic()."""
+        return self._active_graphic_is_manually_paused
+
+    def _play_active_graphic_animation(self):
+        if self._active_graphic_is_manually_paused:  # <<< ADD CHECK
+            # print("ODM DEBUG: _play_active_graphic_animation - Paused, not starting timer.")
+            # Mark that it *would* be playing
+            self._active_graphic_was_playing_before_pause = True
+            return
+
+        # print("ODM DEBUG: _play_active_graphic_animation CALLED")
+        if not self._active_graphic_item_data or \
+           self._active_graphic_item_type != "image_animation" or \
+           not self._custom_animation_logical_frames:
+            # print("ODM ERROR: Cannot play active graphic animation - invalid data or no logical frames.")
+            self._is_custom_animation_playing = False
+            self._apply_current_oled_state()
+            return
+
+        item_name = self._active_graphic_item_data.get(
+            "item_name", "Unnamed Animation")
+        # print(f"OLED Mgr INFO: Starting Active Graphic Animation '{item_name}' (or resuming if timer starts)")
+
+        # This indicates it's the active *type*
+        self._is_custom_animation_playing = True
+        self._custom_animation_current_frame_index = 0
+
+        timer_interval_ms = int(
+            1000.0 / self._custom_animation_playback_fps) if self._custom_animation_playback_fps > 0 else 100
+        min_interval = 33
+        timer_interval_ms = max(min_interval, timer_interval_ms)
+
+        self._custom_animation_timer.start(timer_interval_ms)
+        self._play_next_custom_animation_frame()
+
+    def _start_or_display_active_graphic_text_internal(self):
+        if self._active_graphic_is_manually_paused:  # <<< ADD CHECK
+            # print("ODM DEBUG: _start_or_display_active_graphic_text_internal - Paused, not starting timer.")
+            # Determine if it *would* be scrolling to set _active_graphic_was_playing_before_pause
+            if not self._active_graphic_item_data or self._active_graphic_text_content is None or \
+               not self._active_graphic_text_font_family or not self._active_graphic_text_font_size_px:
+                return  # Not enough data to determine if it would scroll
+
+            text_to_display = self._active_graphic_text_content
+            q_font_for_metrics = QFont(
+                self._active_graphic_text_font_family, pointSize=-1)
+            q_font_for_metrics.setPixelSize(
+                self._active_graphic_text_font_size_px)
+            fm = QFontMetrics(q_font_for_metrics)
+            temp_text_pixel_width = fm.horizontalAdvance(text_to_display)
+            if self._active_graphic_text_scroll_if_needed and temp_text_pixel_width > self.oled_width and text_to_display.strip() != "":
+                self._active_graphic_was_playing_before_pause = True
+            else:
+                self._active_graphic_was_playing_before_pause = False
+            # Render one static frame even if paused
+            self._active_graphic_text_is_scrolling = False  # Temporarily ensure static render
+            self._render_and_send_active_graphic_text_frame()
+            return
+
+        # ... (rest of the existing _start_or_display_active_graphic_text_internal method from here) ...
+        if not self._active_graphic_item_data or \
+           self._active_graphic_item_type != "text" or \
+           self._active_graphic_text_content is None or \
+           not self._active_graphic_text_font_family or \
+           not self._active_graphic_text_font_size_px:
+            if OLED_RENDERER_AVAILABLE:
+                self.request_send_bitmap_to_fire.emit(
+                    oled_renderer.get_blank_packed_bitmap())
+            return
+
+        text_to_display = self._active_graphic_text_content
+        q_font_for_metrics = QFont(
+            self._active_graphic_text_font_family, pointSize=-1)
+        q_font_for_metrics.setPixelSize(self._active_graphic_text_font_size_px)
+        fm = QFontMetrics(q_font_for_metrics)
+        self._active_graphic_text_pixel_width = fm.horizontalAdvance(
+            text_to_display)
+
+        needs_scroll = self._active_graphic_text_scroll_if_needed and \
+            self._active_graphic_text_pixel_width > self.oled_width and \
+            text_to_display.strip() != ""
+
+        if needs_scroll:
+            self._active_graphic_text_is_scrolling = True
+            self._active_graphic_text_current_scroll_offset = self.oled_width
+            # Initial render (might be off-screen)
+            self._render_and_send_active_graphic_text_frame()
+            # Use the correct step delay when starting
+            item_anim_params = self._active_graphic_item_data.get(
+                "animation_params", {})
+            current_step_delay = item_anim_params.get(
+                "speed_override_ms", self.global_text_item_scroll_delay_ms)
+            self._active_graphic_text_scroll_timer.start(current_step_delay)
+        else:
+            self._active_graphic_text_is_scrolling = False
+            self._active_graphic_text_current_scroll_offset = 0
+            self._render_and_send_active_graphic_text_frame()  # Static render
+
+    def stop_all_activity(self):
+        # ... (existing stop_all_activity logic) ...
+        self._is_builtin_startup_animation_playing = False
+        self._active_graphic_text_scroll_timer.stop()
+        self._active_graphic_text_is_scrolling = False
+        self._custom_animation_timer.stop()
+        self._is_custom_animation_playing = False
+        self._temporary_message_timer.stop()
+        self._temporary_message_text_scroll_timer.stop()
+        self._is_temporary_message_active = False
+        self._temporary_message_is_scrolling = False
+
+        # <<< NEW: Reset pause flags when stopping all activity >>>
+        self._active_graphic_is_manually_paused = False
+        self._active_graphic_was_playing_before_pause = False
+        # --- END NEW ---
+
     def _logical_frame_to_pil_image(self, logical_frame: list[str]) -> Image.Image | None:
         # (Keep this method as it was provided, it's correct)
         if not isinstance(logical_frame, list) or len(logical_frame) != self.oled_height:
@@ -1122,7 +1275,6 @@ class OLEDDisplayManager(QObject):
         except Exception as e:
             # print(f"OLED Mgr ERROR (_logical_frame_to_pil_image): Exception during conversion: {e}")
             return None
-
     # --- Methods kept for direct use by MainWindow if it bypasses the new state model (should be rare) ---
     # These are largely superseded by the new state machine but kept for specific direct calls if absolutely needed.
     def play_animation_item_temporarily(self, item_data: dict, duration_ms: int):
@@ -1138,7 +1290,3 @@ class OLEDDisplayManager(QObject):
         item_name = item_data.get("item_name", "Animation")
         self.show_system_message(f"Playing: {item_name}", duration_ms)
 
-    # old set_display_text, update_default_text_settings, etc. are effectively replaced
-    # by set_active_graphic and show_system_message.
-    # If MainWindow was calling update_default_text_settings, it should now call
-    # set_active_graphic with the text item's data.

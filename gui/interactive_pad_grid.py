@@ -35,21 +35,17 @@ class PadButton(QPushButton):
         # This is PadButton's contextMenuEvent
         self.request_context_action.emit(self.row, self.col, event.pos())
         event.accept()
-
-
 class InteractivePadGridFrame(QFrame):
     pad_action_requested = pyqtSignal(
         int, int, Qt.MouseButton)  # row, col, button_type
     pad_context_menu_requested_from_button = pyqtSignal(
         object, int, int, QPoint)  # PadButton_obj, row, col, local_pos
     pad_single_left_click_action_requested = pyqtSignal(int, int)  # row, col
-
     # <<< NEW SIGNALS FOR PAINT STROKES >>>
     # row, col, button_type (of initial pad)
     paint_stroke_started = pyqtSignal(int, int, Qt.MouseButton)
     # button_type that ended the stroke
     paint_stroke_ended = pyqtSignal(Qt.MouseButton)
-    # --- END NEW SIGNALS ---
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -95,8 +91,6 @@ class InteractivePadGridFrame(QFrame):
             return child
         return None
 
-# In class InteractivePadGridFrame(QFrame):
-
     def mousePressEvent(self, event: QMouseEvent):
         button_type = event.button()
         pad_button_widget = self._get_pad_at_event_pos(event)
@@ -128,19 +122,19 @@ class InteractivePadGridFrame(QFrame):
     def mouseReleaseEvent(self, event: QMouseEvent):
         action_taken_on_release = False
         button_released = event.button()
-        print(f"GRID DEBUG: mouseReleaseEvent - Button: {button_released}, LeftDragging: {self._is_left_dragging}, RightDragging: {self._is_right_dragging}") # <<< ADD DEBUG
+        # print(f"GRID DEBUG: mouseReleaseEvent - Button: {button_released}, LeftDragging: {self._is_left_dragging}, RightDragging: {self._is_right_dragging}") # <<< ADD DEBUG
 
         if button_released == Qt.MouseButton.LeftButton and self._is_left_dragging:
             self._is_left_dragging = False
             self._last_actioned_pad_coords = None
             action_taken_on_release = True
-            print(f"GRID DEBUG: mouseReleaseEvent - Emitting paint_stroke_ended for LeftButton") # <<< ADD DEBUG
+            # print(f"GRID DEBUG: mouseReleaseEvent - Emitting paint_stroke_ended for LeftButton") # <<< ADD DEBUG
             self.paint_stroke_ended.emit(Qt.MouseButton.LeftButton)
         elif button_released == Qt.MouseButton.RightButton and self._is_right_dragging:
             self._is_right_dragging = False
             self._last_actioned_pad_coords = None
             action_taken_on_release = True
-            print(f"GRID DEBUG: mouseReleaseEvent - Emitting paint_stroke_ended for RightButton") # <<< ADD DEBUG
+            # print(f"GRID DEBUG: mouseReleaseEvent - Emitting paint_stroke_ended for RightButton") # <<< ADD DEBUG
             self.paint_stroke_ended.emit(Qt.MouseButton.RightButton)
         
         if action_taken_on_release:
@@ -176,9 +170,6 @@ class InteractivePadGridFrame(QFrame):
             event.accept()
         else:
             super().mouseMoveEvent(event)
-
-
-
 
     def update_pad_gui_color(self, row: int, col: int, r_val: int, g_val: int, b_val: int):
         button = self._pad_buttons.get((row, col))

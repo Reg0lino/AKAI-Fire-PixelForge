@@ -1,31 +1,33 @@
 /* AKAI_Fire_RGB_Controller/resources/styles/style.qss */
 
 QWidget {
-    background-color: #181818; /* Even darker grey background */
-    color: #B3B3B3;            /* Slightly darker light grey text */
+    background-color: #181818;
+    color: #B3B3B3;
     font-family: "Segoe UI", Arial, sans-serif;
     font-size: 10pt;
 }
 
 QMainWindow {
-    background-color: #131313; /* Even darker for main window */
+    background-color: #131313;
 }
 
+/* General QPushButton Styling */
 QPushButton {
-    background-color: #393939; /* Darker medium grey for buttons */
+    background-color: #393939;
     border: 1px solid #4D4D4D;
-    padding: 5px 10px;
+    padding: 5px 10px; /* Default padding */
     border-radius: 3px;
-    min-height: 20px;
+    min-height: 20px; /* Default min-height */
+    color: #B3B3B3;   /* Default text color for buttons */
 }
 
 QPushButton:hover {
-    background-color: #474747; /* Darker lighter grey on hover */
+    background-color: #474747;
     border: 1px solid #595959;
 }
 
 QPushButton:pressed {
-    background-color: #2E2E2E; /* Darker when pressed */
+    background-color: #2E2E2E;
 }
 
 QPushButton:disabled {
@@ -34,173 +36,24 @@ QPushButton:disabled {
     border-color: #393939;
 }
 
-QComboBox {
-    background-color: #393939;
-    border: 1px solid #4D4D4D;
-    border-radius: 3px;
-    padding: 3px 5px;
-    min-height: 20px;
+/* Remove default focus outline from ALL QPushButtons */
+QPushButton:focus {
+    outline: none;
+    /* If you want a subtle custom focus border for general buttons: */
+    /* border: 1px solid #606060; */
 }
 
-QComboBox::drop-down {
-    border: none;
-    background-color: #434343;
-    width: 20px;
-}
-
-QComboBox::down-arrow {
-    image: url(none); 
-}
-
-QComboBox QAbstractItemView { 
-    background-color: #313131;
-    border: 1px solid #4D4D4D;
-    selection-background-color: #486287; 
-    color: #B3B3B3;
-    padding: 2px;
-}
-
-QStatusBar {
-    background-color: #101010; 
-    color: #999999;
-    font-size: 9pt;
-}
-
-/* Pad Button Styling - SIZE IS NOW CONTROLLED BY PYTHON'S setFixedSize */
-QPushButton#PadButton { 
-    background-color: #161616; /* Default for unlit pad */
-    border: 1px solid #333333;
-    border-radius: 2px; 
-    padding: 1px;
-    color: transparent;
-}
-
-QPushButton#PadButton:hover {
-    border: 1px solid #525252;
-}
-/* Dynamic background-color and lit hover border set in Python */
-
-
-QLabel {
-    padding: 2px;
-}
-
-QFrame#ColorSelectionGroup {
-    /* Optional styling */
-}
-
-QGroupBox {
-    font-weight: bold;
-    border: 1px solid #404040;
-    border-radius: 4px;
-    margin-top: 10px; 
-    padding-top: 15px; 
-    padding-left: 5px;
-    padding-right: 5px;
-    padding-bottom: 5px;
-}
-
-QGroupBox::title {
-    subcontrol-origin: margin;
-    subcontrol-position: top left; 
-    padding: 0 5px;
-    left: 10px; 
-    color: #999999;
-}
-
-QSlider::groove:horizontal {
-    border: 1px solid #474747;
-    height: 8px; 
-    background: #313131;
-    margin: 2px 0;
-    border-radius: 4px;
-}
-
-QSlider::handle:horizontal {
-    background: #666666; 
-    border: 1px solid #474747;
-    width: 16px; 
-    margin: -4px 0; 
-    border-radius: 8px; 
-}
-
-QSlider::handle:horizontal:hover {
-    background: #757575;
-}
-
-/* Styles for Vertical Hue Slider (if needed, though HueSlider.py does custom painting) */
-QSlider::groove:vertical {
-    border: 1px solid #474747;
-    width: 8px;
-    background: #313131;
-    margin: 0 2px;
-    border-radius: 4px;
-}
-
-QSlider::handle:vertical {
-    background: #666666;
-    border: 1px solid #474747;
-    height: 16px;
-    margin: 0 -4px;
-    border-radius: 8px;
-}
-
-QSlider::handle:vertical:hover {
-    background: #757575;
-}
-
-
-QLineEdit {
-    background-color: #232323;
-    border: 1px solid #474747;
-    border-radius: 3px;
-    padding: 3px 5px;
-    color: #B3B3B3;
-    min-height: 20px;
-}
-
-/* Main Color Preview Swatch Styling */
-QLabel#MainColorPreview {
-    border: 1px solid #595959;
-    border-radius: 3px;
-    font-weight: bold;
-    /* Background color set by Python QPalette */
-}
-
-/* Custom Swatch Buttons Styling - SIZE IS NOW CONTROLLED BY PYTHON'S setFixedSize */
-QPushButton#CustomSwatchButton {
-    background-color: #282828; /* Darker empty swatch color */
-    border: 1px dashed #525252;
-    border-radius: 2px;
-    padding: 0px;
-}
-
-QPushButton#CustomSwatchButton:hover {
-    border: 1px solid #7A7A7A;
-}
-/* Filled swatch background-color set dynamically in Python */
-
-
-QGroupBox#ColorPickerGroup {
-    margin-bottom: 5px;
-}
-
-QGroupBox#CustomSwatchesGroup { 
-    padding-top: 10px; 
-}
-
-QGroupBox#StaticPresetsGroup { 
-    margin-top: 10px;
-}
+/* Specific styling for top bar flat buttons */
 QPushButton#PatternUpButton,
 QPushButton#PatternDownButton,
 QPushButton#GridLeftButton,
 QPushButton#GridRightButton {
-    min-height: 10px;
-    padding: 1px 3px;
+    min-height: 10px; /* Override default min-height */
+    padding: 1px 3px; /* Override default padding */
     border: 1px solid #5E5E5E; 
     border-radius: 1px;
-    background-color: #868686; /* Darker light grey */
+    background-color: #868686;
+    color: #1E1E1E; /* Text color for these specific buttons */
 }
 
 QPushButton#PatternUpButton:hover,
@@ -218,12 +71,25 @@ QPushButton#GridRightButton:pressed {
     background-color: #6F6F6F;
 }
 
+/* Specific focus for these flat buttons to match normal border */
+QPushButton#PatternUpButton:focus,
+QPushButton#PatternDownButton:focus,
+QPushButton#GridLeftButton:focus,
+QPushButton#GridRightButton:focus {
+    outline: none;
+    border: 1px solid #5E5E5E; /* Match normal state border */
+}
+
+
+/* Specific styling for Browser Button */
 QPushButton#BrowserButton {
-    min-height: 10px; 
+    min-height: 28px; /* Ensure it matches icon_button_size if text "" */
+    min-width: 28px;  /* Ensure it matches icon_button_size if text "" */
     padding: 4px;    
     border: 1px solid #5E5E5E;
     border-radius: 2px;
     background-color: #868686;
+    color: #1E1E1E; /* Text color if any, or for icon tint if applicable */
 }
 QPushButton#BrowserButton:hover {
     background-color: #9C9C9C;
@@ -232,8 +98,219 @@ QPushButton#BrowserButton:hover {
 QPushButton#BrowserButton:pressed {
     background-color: #6F6F6F;
 }
-QDial {
-    background-color: #101010;
+/* Specific focus for BrowserButton to match normal border */
+QPushButton#BrowserButton:focus {
+    outline: none;
+    border: 1px solid #5E5E5E; /* Match normal state border */
 }
-QDial::groove { background: #0C0C0C; }
-QDial::handle { background: #282828; border: 1px solid #363636; }
+
+
+/* In style.qss */
+QLabel#OLEDPlayPauseIconLabel {
+    background-color: transparent;
+    border: none;
+    /* Adjust padding if the icon needs more/less space around it */
+    padding: 1px; 
+}
+
+/* Optional: If you want a slight visual feedback on hover for the QLabel icon */
+QLabel#OLEDPlayPauseIconLabel:hover { 
+    /* Example: Make it slightly more opaque or add a temporary effect if desired */
+    qproperty-opacity: 0.8;  /* This needs WA_TranslucentBackground on QLabel */
+} 
+
+QPushButton:focus {
+    outline: none;
+}
+QPushButton#BrowserButton:focus { /* If BrowserButton still shows blue */
+    outline: none;
+    border: 1px solid #5E5E5E; /* Match its normal border */
+}
+
+
+/* ComboBoxes */
+QComboBox {
+    background-color: #393939;
+    border: 1px solid #4D4D4D;
+    border-radius: 3px;
+    padding: 3px 5px;
+    min-height: 20px;
+    color: #B3B3B3; /* Ensure text color is set */
+}
+
+QComboBox:focus {
+    outline: none;
+    border: 1px solid #606060; /* Subtle focus border for combo boxes */
+}
+
+QComboBox::drop-down {
+    border: none;
+    background-color: #434343;
+    width: 20px;
+    border-top-right-radius: 3px; /* Match main border radius */
+    border-bottom-right-radius: 3px;
+}
+
+QComboBox::down-arrow {
+    image: url(none); /* You might want a custom arrow here if you remove this */
+    /* For a simple Unicode arrow:
+    qproperty-text: "▼";
+    font-size: 8pt;
+    padding-right: 2px; 
+    */
+}
+
+QComboBox QAbstractItemView { 
+    background-color: #313131;
+    border: 1px solid #4D4D4D;
+    selection-background-color: #486287; 
+    color: #B3B3B3;
+    padding: 2px;
+}
+
+/* StatusBar */
+QStatusBar {
+    background-color: #101010; 
+    color: #999999;
+    font-size: 9pt;
+}
+
+/* Pad Buttons */
+QPushButton#PadButton { 
+    background-color: #161616; 
+    border: 1px solid #333333;
+    border-radius: 2px; 
+    padding: 1px;
+    color: transparent;
+}
+QPushButton#PadButton:hover {
+    border: 1px solid #525252;
+}
+QPushButton#PadButton:focus { /* Ensure pad buttons also don't get unwanted focus rect */
+    outline: none;
+    border: 1px solid #404040; /* Subtle focus for pads */
+}
+
+/* General QLabel (if not overridden by objectName) */
+QLabel {
+    padding: 2px;
+    background-color: transparent; /* Make sure QLabels are transparent by default */
+}
+
+/* GroupBoxes */
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #404040;
+    border-radius: 4px;
+    margin-top: 10px; 
+    padding-top: 15px; 
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-bottom: 5px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left; 
+    padding: 0 5px;
+    left: 10px; 
+    color: #999999;
+}
+/* For the top strip group box if title is removed and border set to none in Python */
+QGroupBox#TopStripDeviceControls { /* Assuming you might set this objectName in Python */
+    border: none;
+    margin-top: 0px;
+    padding-top: 0px;
+}
+
+
+/* Sliders */
+QSlider::groove:horizontal {
+    border: 1px solid #474747;
+    height: 8px; 
+    background: #313131;
+    margin: 2px 0;
+    border-radius: 4px;
+}
+QSlider::handle:horizontal {
+    background: #666666; 
+    border: 1px solid #474747;
+    width: 16px; 
+    margin: -4px 0; 
+    border-radius: 8px; 
+}
+QSlider::handle:horizontal:hover {
+    background: #757575;
+}
+
+QSlider::groove:vertical { /* For Hue Slider if its default styling is used */
+    border: 1px solid #474747;
+    width: 8px;
+    background: #313131;
+    margin: 0 2px;
+    border-radius: 4px;
+}
+QSlider::handle:vertical {
+    background: #666666;
+    border: 1px solid #474747;
+    height: 16px;
+    margin: 0 -4px;
+    border-radius: 8px;
+}
+QSlider::handle:vertical:hover {
+    background: #757575;
+}
+
+/* LineEdits */
+QLineEdit {
+    background-color: #232323;
+    border: 1px solid #474747;
+    border-radius: 3px;
+    padding: 3px 5px;
+    color: #B3B3B3;
+    min-height: 20px;
+}
+QLineEdit:focus {
+    outline: none;
+    border: 1px solid #606060; /* Subtle focus border for line edits */
+}
+
+/* Main Color Preview Swatch */
+QLabel#MainColorPreview {
+    border: 1px solid #595959;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+/* Custom Swatch Buttons */
+QPushButton#CustomSwatchButton {
+    background-color: #282828; 
+    border: 1px dashed #525252;
+    border-radius: 2px;
+    padding: 0px;
+}
+QPushButton#CustomSwatchButton:hover {
+    border: 1px solid #7A7A7A;
+}
+QPushButton#CustomSwatchButton:focus { /* Ensure these also don't get unwanted focus rect */
+    outline: none;
+    border: 1px dashed #606060; /* Subtle focus for swatches */
+}
+
+
+/* Specific GroupBoxes (if needed for fine-tuning margins/paddings) */
+QGroupBox#ColorPickerGroup {
+    margin-bottom: 5px;
+}
+QGroupBox#CustomSwatchesGroup { 
+    padding-top: 10px; 
+}
+QGroupBox#StaticPresetsGroup { 
+    margin-top: 10px;
+}
+
+/* Dials */
+QDial {
+    background-color: #101010; /* Or transparent if you want QWidget background */
+}
+/* QDial::groove { background: #0C0C0C; } */ /* Often not visible or needed */
+/* QDial::handle { background: #282828; border: 1px solid #363636; } */ /* Qt handles drawing based on style */

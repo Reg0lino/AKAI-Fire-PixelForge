@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QDialogButtonBox, QFontComboBox, QSpinBox, QWidget, QSizePolicy, QFrame,
     QSlider, QGroupBox, QListWidget, QListWidgetItem, QSplitter, QComboBox,
-    QTextEdit, QCheckBox, QFileDialog, QMessageBox, QStackedWidget
+    QTextEdit, QCheckBox, QFileDialog, QMessageBox, QStackedWidget, QScrollArea
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QFont, QColor, QPixmap, QPainter, QFontMetrics, QImage, QIcon, QCloseEvent
@@ -38,11 +38,9 @@ except ImportError as e:
         def process_image_to_oled_data(*args, **kwargs): return None, None, None
     image_processing = image_processing_placeholder()
 
-
 #  should be enough to show all controls in the animation editor, including the threshold slider.
 #  try 500px for now, you can adjust this.
 INNER_EDITOR_PANEL_CONTENT_MIN_HEIGHT = 500
-
 
 # Constants for Scroll Speed Configuration
 MIN_SPEED_LEVEL = 1
@@ -62,29 +60,26 @@ MIN_SPEED_LEVEL = 1 # Example, ensure these are defined if used by sliders
 MAX_SPEED_LEVEL = 20
 
 #  Dialog Size ---
-DIALOG_INITIAL_WIDTH = 850
-DIALOG_INITIAL_HEIGHT = 900 
+DIALOG_INITIAL_WIDTH = 840
+DIALOG_INITIAL_HEIGHT = 930 
 DIALOG_MINIMUM_WIDTH = 800
-DIALOG_MINIMUM_HEIGHT = 850 
-
+DIALOG_MINIMUM_HEIGHT = 910 
 
 class OLEDCustomizerDialog(QDialog):
     global_settings_changed = pyqtSignal(str, int) # (default_item_relative_path, global_scroll_delay_ms)
     dialog_closed = pyqtSignal()
 
-# In class OLEDCustomizerDialog(QDialog):
-    # In gui/oled_customizer_dialog.py
-
     def __init__(self,
                  current_active_graphic_path: str | None,
                  current_global_scroll_delay_ms: int,
-                 available_oled_items: list, # This is actually not used directly by the dialog anymore
+                 available_oled_items: list,  # This is actually not used directly by the dialog anymore
                  user_oled_presets_base_path: str,
                  available_app_fonts: list[str],
                  parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle("⚙️ OLED Active Graphic Manager")
         
+
         # --- SET INITIAL AND MINIMUM DIALOG SIZE ---
         self.resize(DIALOG_INITIAL_WIDTH, DIALOG_INITIAL_HEIGHT)
         self.setMinimumSize(DIALOG_MINIMUM_WIDTH, DIALOG_MINIMUM_HEIGHT)
@@ -92,83 +87,96 @@ class OLEDCustomizerDialog(QDialog):
 
         self._initial_active_graphic_path = current_active_graphic_path
         self._initial_global_scroll_delay_ms = current_global_scroll_delay_ms
-        
+
         # Store the current dialog's choice for active graphic
         self._current_dialog_chosen_active_graphic_relative_path: str | None = self._initial_active_graphic_path
-        
+
+        # --- Explicitly initialize UI attributes to None before _init_ui ---
+        self.default_startup_item_combo: QComboBox | None = None
+        self.global_scroll_speed_level_slider: QSlider | None = None
+        self.global_scroll_speed_display_label: QLabel | None = None
+        self.item_library_list: QListWidget | None = None
+        self.new_text_item_button: QPushButton | None = None
+        self.new_anim_item_button: QPushButton | None = None
+        self.edit_selected_item_button: QPushButton | None = None
+        self.delete_selected_item_button: QPushButton | None = None
+        self.splitter: QSplitter | None = None
+        self.item_editor_group: QGroupBox | None = None
+        self.editor_stacked_widget: QStackedWidget | None = None
+        self.text_editor_widget: QWidget | None = None
+        self.item_name_edit: QLineEdit | None = None
+        self.text_content_edit: QLineEdit | None = None
+        self.text_font_family_combo: QFontComboBox | None = None
+        self.text_font_size_spinbox: QSpinBox | None = None
+        self.text_scroll_checkbox: QCheckBox | None = None
+        self.text_alignment_combo: QComboBox | None = None
+        self.text_anim_override_speed_checkbox: QCheckBox | None = None
+        self.text_anim_item_scroll_speed_spinbox: QSpinBox | None = None
+        self.text_anim_pause_at_ends_spinbox: QSpinBox | None = None
+        self.save_this_text_item_button: QPushButton | None = None
+        self.animation_editor_widget_container: QWidget | None = None
+        self.anim_item_name_edit: QLineEdit | None = None
+        self.anim_source_file_label: QLabel | None = None
+        self.anim_browse_button: QPushButton | None = None
+        self.anim_resize_mode_combo: QComboBox | None = None
+        self.anim_mono_conversion_combo: QComboBox | None = None
+        self.anim_threshold_widget: QWidget | None = None
+        self.anim_threshold_slider: QSlider | None = None
+        self.anim_threshold_value_label: QLabel | None = None
+        self.anim_contrast_slider: QSlider | None = None
+        self.anim_contrast_value_label: QLabel | None = None
+        self.anim_invert_colors_checkbox: QCheckBox | None = None
+        self.anim_playback_fps_spinbox: QSpinBox | None = None
+        self.anim_loop_behavior_combo: QComboBox | None = None
+        self.anim_process_button: QPushButton | None = None
+        self.anim_play_preview_button: QPushButton | None = None
+        self.anim_frame_info_label: QLabel | None = None
+        self.save_this_animation_button: QPushButton | None = None
+        self.oled_preview_label: QLabel | None = None
+        self.button_box: QDialogButtonBox | None = None
+        self.save_and_apply_button: QPushButton | None = None
+        # --- END Explicit None Initialization ---
+
         self.user_oled_presets_base_path = user_oled_presets_base_path
         self.text_items_dir = os.path.join(self.user_oled_presets_base_path, USER_OLED_TEXT_ITEMS_SUBDIR)
         self.animation_items_dir = os.path.join(self.user_oled_presets_base_path, USER_OLED_ANIM_ITEMS_SUBDIR)
         self.available_app_fonts = available_app_fonts
 
-        # Declare UI Element Attributes (initialized to None or default by _init_ui)
-        self.default_startup_item_combo: QComboBox
-        self.global_scroll_speed_level_slider: QSlider
-        self.global_scroll_speed_display_label: QLabel
-        self.item_library_list: QListWidget
-        self.new_text_item_button: QPushButton
-        self.new_anim_item_button: QPushButton
-        self.edit_selected_item_button: QPushButton
-        self.delete_selected_item_button: QPushButton
-        self.splitter: QSplitter
-        self.item_editor_group: QGroupBox
-        self.editor_stacked_widget: QStackedWidget
-        self.text_editor_widget: QWidget
-        self.item_name_edit: QLineEdit
-        self.text_content_edit: QLineEdit
-        self.text_font_family_combo: QFontComboBox
-        self.text_font_size_spinbox: QSpinBox
-        self.text_scroll_checkbox: QCheckBox
-        self.text_alignment_combo: QComboBox
-        self.text_anim_override_speed_checkbox: QCheckBox
-        self.text_anim_item_scroll_speed_spinbox: QSpinBox
-        self.text_anim_pause_at_ends_spinbox: QSpinBox
-        self.save_this_text_item_button: QPushButton
-        self.animation_editor_widget_container: QWidget
-        self.anim_item_name_edit: QLineEdit
-        self.anim_source_file_label: QLabel
-        self.anim_browse_button: QPushButton
-        self.anim_resize_mode_combo: QComboBox
-        self.anim_mono_conversion_combo: QComboBox
-        self.anim_threshold_widget: QWidget
-        self.anim_threshold_slider: QSlider
-        self.anim_threshold_value_label: QLabel
-        self.anim_contrast_slider: QSlider | None = None
-        self.anim_contrast_value_label: QLabel | None = None
-        self.anim_invert_colors_checkbox: QCheckBox
-        self.anim_playback_fps_spinbox: QSpinBox
-        self.anim_loop_behavior_combo: QComboBox
-        self.anim_process_button: QPushButton
-        self.anim_play_preview_button: QPushButton | None = None
-        self.anim_frame_info_label: QLabel
-        self.save_this_animation_button: QPushButton
-        self.oled_preview_label: QLabel 
-        self.button_box: QDialogButtonBox
-        self.save_and_apply_button: QPushButton | None = None # For Save & Apply
-
         # State Variables
-        self._preview_scroll_timer = QTimer(self); self._preview_scroll_timer.timeout.connect(self._scroll_preview_step)
-        self._preview_current_scroll_offset = 0; self._preview_text_pixel_width = 0
-        self._preview_is_scrolling = False; self._current_preview_font_object = None
+        self._preview_scroll_timer = QTimer(self)
+        self._preview_scroll_timer.timeout.connect(self._scroll_preview_step)
+        self._preview_current_scroll_offset = 0
+        self._preview_text_pixel_width = 0
+        self._preview_is_scrolling = False
+        self._current_preview_font_object = None
         self._current_preview_anim_logical_frame = None
-        self._current_edited_item_path = None; self._current_edited_item_type = None
-        self._is_editing_new_item = False; self._editor_has_unsaved_changes = False
-        self._current_anim_source_filepath = None; self._processed_logical_frames = None
-        self._processed_anim_source_fps = None; self._processed_anim_source_loop_count = None
-        self._anim_editor_preview_timer = QTimer(self); self._anim_editor_preview_timer.timeout.connect(self._play_next_anim_editor_preview_frame)
-        self._is_anim_editor_preview_playing = False; self._current_anim_editor_preview_frame_index = 0
-        self._library_preview_anim_timer = QTimer(self); self._library_preview_anim_timer.timeout.connect(self._play_next_library_preview_anim_frame)
-        self._current_library_preview_anim_frames = None; self._current_library_preview_anim_frame_index = 0
-        self._library_preview_anim_fps = 15.0; self._library_preview_anim_loop_behavior = "Loop Infinitely"
+        self._current_edited_item_path = None
+        self._current_edited_item_type = None
+        self._is_editing_new_item = False
+        self._editor_has_unsaved_changes = False
+        self._current_anim_source_filepath = None
+        self._processed_logical_frames = None
+        self._processed_anim_source_fps = None
+        self._processed_anim_source_loop_count = None
+        self._anim_editor_preview_timer = QTimer(self)
+        self._anim_editor_preview_timer.timeout.connect(self._play_next_anim_editor_preview_frame)
+        self._is_anim_editor_preview_playing = False
+        self._current_anim_editor_preview_frame_index = 0
+        self._library_preview_anim_timer = QTimer(self)
+        self._library_preview_anim_timer.timeout.connect(self._play_next_library_preview_anim_frame)
+        self._current_library_preview_anim_frames = None
+        self._current_library_preview_anim_frame_index = 0
+        self._library_preview_anim_fps = 15.0
+        self._library_preview_anim_loop_behavior = "Loop Infinitely"
         self._is_library_preview_anim_playing = False
 
         # Call UI setup methods
-        self._init_ui() # This method will create and assign to the UI element attributes declared above
-        self._connect_signals() 
-        
+        self._init_ui()  # This method will create and assign to the UI element attributes declared above
+        self._connect_signals()
+
         # Load initial data after UI is constructed
-        QTimer.singleShot(0, self._load_initial_data) 
-        
+        QTimer.singleShot(0, self._load_initial_data)
+
         # Hide editor initially
         self._update_editor_panel_visibility(None)
 
@@ -220,7 +228,7 @@ class OLEDCustomizerDialog(QDialog):
         library_layout.addWidget(self.item_library_list)
         library_buttons_layout = QGridLayout()
         self.new_text_item_button = QPushButton("✨ New Text Item")
-        self.new_anim_item_button = QPushButton("🎬 New Animation Item")
+        self.new_anim_item_button = QPushButton("🎬 New Animation or Image Item")
         self.new_anim_item_button.setEnabled(IMAGE_PROCESSING_AVAILABLE)
         self.edit_selected_item_button = QPushButton("✏️ Edit Selected")
         self.delete_selected_item_button = QPushButton("🗑️ Delete Selected")
@@ -388,15 +396,31 @@ class OLEDCustomizerDialog(QDialog):
         text_editor_layout.addWidget(self.save_this_text_item_button, 0, Qt.AlignmentFlag.AlignRight)
         return widget
 
-    def _create_animation_editor_panel(self) -> QWidget:
-        widget = QWidget()
-        # <<< NEW: Set minimum height for this content panel
-        widget.setMinimumHeight(INNER_EDITOR_PANEL_CONTENT_MIN_HEIGHT)
-        # <<< NEW: Allow vertical expansion within its minimum height constraint
-        widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+# In class OLEDCustomizerDialog(QDialog):
 
-        anim_editor_layout = QVBoxLayout(widget)
-        anim_editor_layout.setContentsMargins(0, 0, 0, 0) # Keep tight margins
+    def _create_animation_editor_panel(self) -> QWidget:
+        # This is the main container widget for the entire animation editor page
+        # It will hold the scroll area and the save button at the bottom.
+        page_widget = QWidget()
+        # Set the minimum height for the entire animation editor page.
+        # INNER_EDITOR_PANEL_CONTENT_MIN_HEIGHT should be enough for the scroll area
+        # (even if its content is short) PLUS the save button below it.
+        # Let's assume save button needs ~40px. So if content needs ~460px, total is ~500px.
+        # If INNER_EDITOR_PANEL_CONTENT_MIN_HEIGHT was 500, this should be okay.
+        page_widget.setMinimumHeight(INNER_EDITOR_PANEL_CONTENT_MIN_HEIGHT)
+        page_widget.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+
+        outer_layout = QVBoxLayout(page_widget)  # Main layout for this page
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(8)
+
+        # --- Create a widget that will contain all the scrollable content ---
+        scroll_content_widget = QWidget()
+        # This widget's layout will hold all the input fields and groups
+        anim_editor_layout = QVBoxLayout(scroll_content_widget)
+        # Padding inside the scrollable area
+        anim_editor_layout.setContentsMargins(5, 5, 5, 5)
         anim_editor_layout.setSpacing(8)
 
         # --- Animation Name ---
@@ -410,7 +434,8 @@ class OLEDCustomizerDialog(QDialog):
         source_file_layout = QHBoxLayout()
         source_file_layout.addWidget(QLabel("Source Image/GIF:"))
         self.anim_source_file_label = QLabel("<i>No file selected</i>")
-        self.anim_source_file_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.anim_source_file_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.anim_source_file_label.setWordWrap(True)
         source_file_layout.addWidget(self.anim_source_file_label, 1)
         self.anim_browse_button = QPushButton("Browse...")
@@ -419,69 +444,83 @@ class OLEDCustomizerDialog(QDialog):
 
         # --- Import Options Group ---
         import_options_group = QGroupBox("Import & Processing Options")
-        # Let this group box take preferred size
-        import_options_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        import_options_group.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         import_options_layout = QGridLayout(import_options_group)
-
+        # ... (Populate import_options_layout as before - resize, mono, threshold, contrast, invert) ...
         row = 0
         import_options_layout.addWidget(QLabel("Resize Mode:"), row, 0)
         self.anim_resize_mode_combo = QComboBox()
-        self.anim_resize_mode_combo.addItems(["Stretch to Fit", "Fit (Keep Aspect, Pad)", "Crop to Center"])
-        import_options_layout.addWidget(self.anim_resize_mode_combo, row, 1, 1, 2)
+        self.anim_resize_mode_combo.addItems(
+            ["Stretch to Fit", "Fit (Keep Aspect, Pad)", "Crop to Center"])
+        import_options_layout.addWidget(
+            self.anim_resize_mode_combo, row, 1, 1, 2)
         row += 1
-
         import_options_layout.addWidget(QLabel("Monochrome:"), row, 0)
         self.anim_mono_conversion_combo = QComboBox()
-        self.anim_mono_conversion_combo.addItems(["Floyd-Steinberg Dither", "Simple Threshold", "Ordered Dither (Bayer 4x4)"])
-        import_options_layout.addWidget(self.anim_mono_conversion_combo, row, 1, 1, 2)
+        self.anim_mono_conversion_combo.addItems(
+            ["Floyd-Steinberg Dither", "Simple Threshold", "Ordered Dither (Bayer 4x4)"])
+        import_options_layout.addWidget(
+            self.anim_mono_conversion_combo, row, 1, 1, 2)
         row += 1
-
         self.anim_threshold_widget = QWidget()
         threshold_layout_internal = QHBoxLayout(self.anim_threshold_widget)
         threshold_layout_internal.setContentsMargins(0, 0, 0, 0)
         threshold_layout_internal.addWidget(QLabel("Threshold (0-255):"))
         self.anim_threshold_slider = QSlider(Qt.Orientation.Horizontal)
-        self.anim_threshold_slider.setRange(0, 255); self.anim_threshold_slider.setValue(128)
+        self.anim_threshold_slider.setRange(0, 255)
+        self.anim_threshold_slider.setValue(128)
         threshold_layout_internal.addWidget(self.anim_threshold_slider, 1)
         self.anim_threshold_value_label = QLabel("128")
         self.anim_threshold_value_label.setMinimumWidth(30)
-        self.anim_threshold_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.anim_threshold_value_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         threshold_layout_internal.addWidget(self.anim_threshold_value_label)
-        import_options_layout.addWidget(self.anim_threshold_widget, row, 0, 1, 3)
+        import_options_layout.addWidget(
+            self.anim_threshold_widget, row, 0, 1, 3)
         self.anim_threshold_widget.setVisible(False)
         row += 1
-
         import_options_layout.addWidget(QLabel("Contrast:"), row, 0)
         self.anim_contrast_slider = QSlider(Qt.Orientation.Horizontal)
-        self.anim_contrast_slider.setRange(0, 200); self.anim_contrast_slider.setValue(100)
-        self.anim_contrast_slider.setToolTip("Adjust image contrast before dithering (0.0x to 2.0x)")
+        self.anim_contrast_slider.setRange(0, 200)
+        self.anim_contrast_slider.setValue(100)
+        self.anim_contrast_slider.setToolTip(
+            "Adjust image contrast before dithering (0.0x to 2.0x)")
         import_options_layout.addWidget(self.anim_contrast_slider, row, 1)
         self.anim_contrast_value_label = QLabel("1.00x")
         self.anim_contrast_value_label.setMinimumWidth(45)
-        self.anim_contrast_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.anim_contrast_value_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         import_options_layout.addWidget(self.anim_contrast_value_label, row, 2)
         row += 1
-        
-        self.anim_invert_colors_checkbox = QCheckBox("Invert Colors (Black/White)")
-        import_options_layout.addWidget(self.anim_invert_colors_checkbox, row, 0, 1, 3)
+        self.anim_invert_colors_checkbox = QCheckBox(
+            "Invert Colors (Black/White)")
+        import_options_layout.addWidget(
+            self.anim_invert_colors_checkbox, row, 0, 1, 3)
         row += 1
-        
         import_options_layout.setColumnStretch(1, 1)
         anim_editor_layout.addWidget(import_options_group)
 
+        # --- Playback Options Group ---
         playback_options_group = QGroupBox("Playback Options")
+        playback_options_group.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         playback_options_layout = QGridLayout(playback_options_group)
+        # ... (Populate playback_options_layout as before - FPS, loop) ...
         playback_options_layout.addWidget(QLabel("Target Playback FPS:"), 0, 0)
         self.anim_playback_fps_spinbox = QSpinBox()
-        self.anim_playback_fps_spinbox.setRange(1, 60); self.anim_playback_fps_spinbox.setValue(15)
+        self.anim_playback_fps_spinbox.setRange(1, 60)
+        self.anim_playback_fps_spinbox.setValue(15)
         playback_options_layout.addWidget(self.anim_playback_fps_spinbox, 0, 1)
         playback_options_layout.addWidget(QLabel("Loop Behavior:"), 1, 0)
         self.anim_loop_behavior_combo = QComboBox()
-        self.anim_loop_behavior_combo.addItems(["Loop Infinitely", "Play Once"])
+        self.anim_loop_behavior_combo.addItems(
+            ["Loop Infinitely", "Play Once"])
         playback_options_layout.addWidget(self.anim_loop_behavior_combo, 1, 1)
         playback_options_layout.setColumnStretch(1, 1)
         anim_editor_layout.addWidget(playback_options_group)
 
+        # --- Action Buttons ---
         action_buttons_layout = QHBoxLayout()
         self.anim_process_button = QPushButton("Process Frames")
         action_buttons_layout.addWidget(self.anim_process_button)
@@ -491,25 +530,52 @@ class OLEDCustomizerDialog(QDialog):
         action_buttons_layout.addWidget(self.anim_play_preview_button)
         anim_editor_layout.addLayout(action_buttons_layout)
 
+        # --- Frame Info Label ---
         self.anim_frame_info_label = QLabel("Frames: N/A | Source FPS: N/A")
         self.anim_frame_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         anim_editor_layout.addWidget(self.anim_frame_info_label)
 
-        anim_editor_layout.addStretch(1) # Push content up
+        # Add a stretch at the end of the scrollable content if you want to push it up
+        # when the content is shorter than the scroll area's viewport.
+        anim_editor_layout.addStretch(1)
 
+        # --- Create QScrollArea and add the scroll_content_widget to it ---
+        scroll_area = QScrollArea()
+        # Crucial for the content widget to resize correctly
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(scroll_content_widget)
+        # Make scroll area border invisible
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        # Set scroll area's vertical policy to take up available space
+        scroll_area.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+
+        # Add the scroll_area to the main page_widget's layout
+        # The '1' gives it stretch factor
+        outer_layout.addWidget(scroll_area, 1)
+
+        # --- Save Button (OUTSIDE the scroll area, at the bottom of page_widget) ---
         self.save_this_animation_button = QPushButton("💾 Save Animation Item")
-        anim_editor_layout.addWidget(self.save_this_animation_button, 0, Qt.AlignmentFlag.AlignRight)
+        # Add to outer_layout, with no stretch factor, so it sits at the bottom.
+        # AlignRight to keep it to the right.
+        outer_layout.addWidget(
+            self.save_this_animation_button, 0, Qt.AlignmentFlag.AlignRight)
 
+        # Disable controls if image processing not available
         if not IMAGE_PROCESSING_AVAILABLE:
-            # Disable relevant controls if image processing is not available
-            for w in [self.anim_browse_button, self.anim_resize_mode_combo, 
-                      self.anim_mono_conversion_combo, self.anim_threshold_slider, 
-                      self.anim_contrast_slider, self.anim_invert_colors_checkbox, 
+            for w in [self.anim_browse_button, self.anim_resize_mode_combo,
+                      self.anim_mono_conversion_combo, self.anim_threshold_slider,
+                      self.anim_contrast_slider, self.anim_invert_colors_checkbox,
                       self.anim_process_button, self.anim_play_preview_button,
                       self.save_this_animation_button]:
-                if w: w.setEnabled(False)
-            if self.anim_source_file_label: self.anim_source_file_label.setText("<i>Image processing unavailable</i>")
-        return widget
+                if w:
+                    w.setEnabled(False)
+            if self.anim_source_file_label:
+                self.anim_source_file_label.setText(
+                    "<i>Image processing unavailable</i>")
+
+        return page_widget  # Return the main container for this editor page
+
 
     def _update_editor_panel_visibility(self, item_type_to_show: str | None):
         if item_type_to_show is not None: 
@@ -626,7 +692,7 @@ class OLEDCustomizerDialog(QDialog):
         # <<< NEW: Connect the "Save & Apply" button
         if self.save_and_apply_button:
             self.save_and_apply_button.clicked.connect(self._handle_save_and_apply)
-            
+
     def _load_initial_data(self):
         initial_speed_level = self._delay_ms_to_speed_level(self._initial_global_scroll_delay_ms)
         self.global_scroll_speed_level_slider.setValue(initial_speed_level)
@@ -656,59 +722,86 @@ class OLEDCustomizerDialog(QDialog):
         self.text_font_family_combo.blockSignals(False)
 
     def _populate_item_library_list(self):
-        # Block signals on the combo box during repopulation to avoid unwanted triggers
+        # print("DIALOG DEBUG: _populate_item_library_list CALLED")
+
+        if self.default_startup_item_combo is None or self.item_library_list is None:
+            print("DIALOG CRITICAL ERROR: UI elements for library list/combo not initialized before _populate_item_library_list! Aborting population.")
+            return
+
         self.default_startup_item_combo.blockSignals(True)
-        
         self.item_library_list.clear()
         self.default_startup_item_combo.clear()
-        # First item is always "None"
-        self.default_startup_item_combo.addItem("None (Show Default Text)", userData=None) 
-        
+        self.default_startup_item_combo.addItem(
+            "None (Show Default Text)", userData=None)
+
         os.makedirs(self.text_items_dir, exist_ok=True)
         os.makedirs(self.animation_items_dir, exist_ok=True)
 
-        found_items_for_combo = [] # To sort before adding to combo
+        found_items_for_combo = []
 
         item_sources = [
-            {"dir": self.text_items_dir, "type": "text", "label": "Text"},
-            {"dir": self.animation_items_dir, "type": "animation", "label": "Animation"}
+            {"dir": self.text_items_dir, "internal_type": "text", "base_label": "Text"},
+            {"dir": self.animation_items_dir,
+                "internal_type": "animation", "base_label": "Animation"}
         ]
 
         for source in item_sources:
-            if not os.path.isdir(source["dir"]): continue
+            if not os.path.isdir(source["dir"]):
+                continue
             for filename in os.listdir(source["dir"]):
                 if filename.endswith(".json"):
-                    filepath = os.path.join(source["dir"], filename) 
+                    filepath = os.path.join(source["dir"], filename)
+                    display_label_suffix = source["base_label"]
+                    item_name_from_json = os.path.splitext(filename)[0]
+                    actual_item_type_from_json = None
+
                     try:
-                        with open(filepath, 'r', encoding='utf-8') as f: data = json.load(f)
-                        item_name = data.get("item_name", os.path.splitext(filename)[0])
-                        
-                        qlist_item = QListWidgetItem(f"{item_name} ({source['label']})")
-                        relative_path = os.path.join(os.path.basename(source["dir"]), filename)
-                        qlist_item.setData(Qt.ItemDataRole.UserRole, {
-                            'path': filepath, 
-                            'relative_path': relative_path, 
-                            'type': source['type'], 
-                            'name': item_name
-                        })
-                        self.item_library_list.addItem(qlist_item)
-                        
-                        found_items_for_combo.append({
-                            'name': item_name, 
-                            'path': relative_path, # Relative path for combo userData
-                            'type': source['type']
-                        })
-                    except Exception as e: 
-                        print(f"Dialog Error loading item metadata from {filepath}: {e}")
-        
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        item_name_from_json = data.get(
+                            "item_name", item_name_from_json)
+                        actual_item_type_from_json = data.get("item_type")
+
+                        if actual_item_type_from_json == "image_animation":
+                            frames = data.get("frames_logical")
+                            if isinstance(frames, list) and len(frames) == 1:
+                                display_label_suffix = "Image"
+                            else:
+                                display_label_suffix = "Animation"
+                        elif actual_item_type_from_json == "text":
+                            display_label_suffix = "Text"
+
+                    except Exception as e_read:
+                        print(
+                            f"Dialog Info: Could not properly read JSON content from {filepath}: {e_read}. Using default label '{display_label_suffix}'.")
+
+                    qlist_item_text = f"{item_name_from_json} ({display_label_suffix})"
+                    qlist_item = QListWidgetItem(qlist_item_text)
+                    relative_path = os.path.join(
+                        os.path.basename(source["dir"]), filename)
+                    qlist_item.setData(Qt.ItemDataRole.UserRole, {
+                        'path': filepath, 'relative_path': relative_path,
+                        'type': source['internal_type'], 'name': item_name_from_json
+                    })
+                    self.item_library_list.addItem(qlist_item)
+
+                    found_items_for_combo.append({
+                        'name': item_name_from_json,
+                        'path': os.path.join(os.path.basename(source["dir"]), filename),
+                        'type_label_for_combo': display_label_suffix,
+                        'internal_type_for_combo': source['internal_type']
+                    })
+
         found_items_for_combo.sort(key=lambda x: x['name'].lower())
+
         for item_info in found_items_for_combo:
+            combo_text = f"{item_info['name']} ({item_info['type_label_for_combo']})"
             self.default_startup_item_combo.addItem(
-                f"{item_info['name']} ({item_info['type'].capitalize()})", 
-                userData={'path': item_info['path'], 'type': item_info['type']} # Store relative path
+                combo_text,
+                userData={
+                    'path': item_info['path'], 'type': item_info['internal_type_for_combo']}
             )
 
-        # <<< NEW: Restore the previously selected active graphic in the combo box
         restored_selection = False
         if self._current_dialog_chosen_active_graphic_relative_path:
             for i in range(self.default_startup_item_combo.count()):
@@ -717,21 +810,16 @@ class OLEDCustomizerDialog(QDialog):
                    item_data.get('path') == self._current_dialog_chosen_active_graphic_relative_path:
                     self.default_startup_item_combo.setCurrentIndex(i)
                     restored_selection = True
-                    # print(f"Dialog TRACE: Restored active graphic selection to: {self._current_dialog_chosen_active_graphic_relative_path}") # Optional
                     break
-        
         if not restored_selection and self._current_dialog_chosen_active_graphic_relative_path is not None:
-            # If the previously chosen path is no longer in the list (e.g., deleted),
-            # default to "None" and update our internal state variable.
-            print(f"Dialog INFO: Previously chosen active graphic '{self._current_dialog_chosen_active_graphic_relative_path}' not found. Defaulting to 'None'.")
-            self.default_startup_item_combo.setCurrentIndex(0) # Select "None"
-            self._current_dialog_chosen_active_graphic_relative_path = None # Update state
+            self.default_startup_item_combo.setCurrentIndex(0)
+            self._current_dialog_chosen_active_graphic_relative_path = None
         elif self._current_dialog_chosen_active_graphic_relative_path is None and self.default_startup_item_combo.count() > 0:
-             self.default_startup_item_combo.setCurrentIndex(0) # Ensure "None" is selected if path is None
+            self.default_startup_item_combo.setCurrentIndex(0)
 
-        # Unblock signals after repopulation and potential selection restoration
         self.default_startup_item_combo.blockSignals(False)
-        
+        # print("DIALOG DEBUG: _populate_item_library_list FINISHED")
+
     def _play_next_library_preview_anim_frame(self):
         if not self._is_library_preview_anim_playing or \
            not self._current_library_preview_anim_frames or \
@@ -917,11 +1005,11 @@ class OLEDCustomizerDialog(QDialog):
 
     def _clear_preview_label_content(self):
         """Clears the main oled_preview_label to black."""
-        if self.oled_preview_label:
+        if self.oled_preview_label: # Check if it exists
             pixmap = QPixmap(self.oled_preview_label.size())
             pixmap.fill(Qt.GlobalColor.black)
             self.oled_preview_label.setPixmap(pixmap)
-            self.oled_preview_label.setText("") # Ensure no fallback text shows
+            self.oled_preview_label.setText("") # Ensure no fallback text shows (like "Preview")
 
     def _update_editor_panel_visibility(self, item_type_to_show: str | None):
         # Stop library animation preview if editor is becoming visible
@@ -1306,7 +1394,7 @@ class OLEDCustomizerDialog(QDialog):
         else:
             self.anim_frame_info_label.setText("Frames: N/A (Reload or Re-process)")
             if self.anim_play_preview_button: self.anim_play_preview_button.setEnabled(False)
-            
+
     def _handle_delete_selected_item(self):
         selected_qlist_item = self.item_library_list.currentItem()
         if not selected_qlist_item:
@@ -1680,28 +1768,25 @@ class OLEDCustomizerDialog(QDialog):
         self._render_preview_frame(override_text=text_to_scroll_for_render)
 
     def _update_preview(self):
-        if not self.oled_preview_label:
-            self._clear_preview() 
+        if not self.oled_preview_label: # Guard clause
+            self._clear_preview() # This will also try to clear the label if it exists
             return
 
-        # Always stop the text scroll timer before updating the main preview with new content.
         self._preview_scroll_timer.stop()
-        self._preview_is_scrolling = False # Reset text scroll flag
+        self._preview_is_scrolling = False 
 
-        # Default to clearing animation frame unless explicitly set
         self._current_preview_anim_logical_frame = None
-        self._current_preview_font_object = None # Default to no text font
+        self._current_preview_font_object = None 
 
-        if self.item_editor_group.isVisible(): # An editor panel is active
+        if self.item_editor_group.isVisible(): 
             active_editor_widget = self.editor_stacked_widget.currentWidget()
             if active_editor_widget == self.text_editor_widget:
-                # --- TEXT EDITOR IS ACTIVE ---
                 text_to_preview = self.text_content_edit.text()
                 font_family = self.text_font_family_combo.currentFont().family()
                 font_size_px = self.text_font_size_spinbox.value()
                 
                 if not font_family or font_size_px <= 0: 
-                    self._clear_main_preview_content()
+                    self._clear_preview_label_content() # <<< CORRECTED METHOD NAME
                     return
 
                 self._current_preview_font_object = QFont(font_family)
@@ -1722,37 +1807,26 @@ class OLEDCustomizerDialog(QDialog):
                     self._preview_scroll_timer.start(max(20, preview_scroll_delay)) 
                 else:
                     self._preview_current_scroll_offset = 0
-                self._render_preview_frame(override_text=text_to_preview) # Render the text
+                self._render_preview_frame(override_text=text_to_preview)
 
             elif active_editor_widget == self.animation_editor_widget_container:
-                # --- ANIMATION EDITOR IS ACTIVE ---
-                # If the in-dialog animation preview ISN'T playing, show the static first frame
-                # of the currently *processed* frames in the editor.
                 if not self._is_anim_editor_preview_playing:
                     if self._processed_logical_frames and len(self._processed_logical_frames) > 0:
                         self._current_preview_anim_logical_frame = self._processed_logical_frames[0]
-                    # else: _current_preview_anim_logical_frame remains None (cleared at start of method)
-                    self._render_preview_frame() # Render (static first anim frame or blank)
-                # If _is_anim_editor_preview_playing is True, its timer is updating the main preview, so do nothing here.
-            else: # Some other unknown widget in stack? Should not happen.
-                self._clear_main_preview_content()
+                    self._render_preview_frame() 
+            else: 
+                self._clear_preview_label_content() # <<< CORRECTED METHOD NAME
         
-        else: # Editor is NOT visible (implies library selection drives the preview)
+        else: 
             selected_lib_item = self.item_library_list.currentItem()
             if selected_lib_item:
                 item_data = selected_lib_item.data(Qt.ItemDataRole.UserRole)
-                # _preview_item_from_path will set _current_preview_font_object OR _current_preview_anim_logical_frame
-                # and then call _render_preview_frame itself.
-                self._preview_item_from_path(item_data.get('path')) 
-            else: # No library item selected, editor hidden
-                self._clear_main_preview_content()
-                
-    def _clear_main_preview_content(self):
-        if self.oled_preview_label:
-            pixmap = QPixmap(self.oled_preview_label.size())
-            pixmap.fill(Qt.GlobalColor.black)
-            self.oled_preview_label.setPixmap(pixmap)
-            self.oled_preview_label.setText("Preview") # Reset text if pixmap is cleared
+                if item_data: # Ensure item_data is not None
+                    self._preview_item_from_path(item_data.get('path')) 
+                else: # item_data was None
+                    self._clear_preview_label_content() # <<< CORRECTED METHOD NAME
+            else: 
+                self._clear_preview_label_content() # <<< CORRECTED METHOD NAME
 
     def _mark_editor_dirty_if_needed(self, *args):
         sender = self.sender()
@@ -2123,6 +2197,7 @@ class OLEDCustomizerDialog(QDialog):
         print("Dialog TRACE: Save & Apply - Calling self.accept()") # Optional
         self.accept()
 
+# In class OLEDCustomizerDialog(QDialog):
     def _on_anim_mono_conversion_changed(self):
         if not IMAGE_PROCESSING_AVAILABLE:
             return
@@ -2130,37 +2205,17 @@ class OLEDCustomizerDialog(QDialog):
         current_selection = self.anim_mono_conversion_combo.currentText()
         show_threshold = (current_selection == "Simple Threshold")
 
-        # Only proceed if visibility actually changes, to avoid unnecessary layout updates
         if self.anim_threshold_widget.isVisible() == show_threshold:
-            self._mark_editor_dirty_if_needed() # Still mark as dirty
+            self._mark_editor_dirty_if_needed()
             return 
 
         self.anim_threshold_widget.setVisible(show_threshold)
-
-        # The animation_editor_widget_container (the QWidget page) now has a fixed minimum height.
-        # When a child's visibility changes, its internal layout should adjust.
-        # We might still want to give the container a nudge to re-evaluate its layout.
-        if self.animation_editor_widget_container:
-            # Request the layout to activate/update. This should respect the panel's minimum height.
-            if self.animation_editor_widget_container.layout() is not None:
-                 self.animation_editor_widget_container.layout().activate()
-            # self.animation_editor_widget_container.updateGeometry() # May also help
-            # self.animation_editor_widget_container.adjustSize() # This might try to shrink if content allows, but minHeight should prevent it.
-                                                               # Let's see if just activate() is enough.
-
-        # The QStackedWidget should also update its size hint if its current page's hint changes.
-        # self.editor_stacked_widget.updateGeometry()
-
-        # The item_editor_group (QGroupBox) will adjust to the QStackedWidget.
-        # self.item_editor_group.updateGeometry()
-
-        # The main dialog's adjustSize() might be called if the overall preferred size changes,
-        # but since we have a fixed dialog minimum height, it's less critical here unless
-        # content GROWS beyond the current dialog size.
-        # self.adjustSize() 
-
+        # The QScrollArea should handle the content resizing internally.
+        # No explicit adjustSize() or updateGeometry() calls should be needed here
+        # for the parent panel if the scroll area is set up correctly.
         self._mark_editor_dirty_if_needed()
-
+        
+        
     def _on_anim_threshold_slider_changed(self, value: int):
         if not IMAGE_PROCESSING_AVAILABLE:
             return
@@ -2304,7 +2359,7 @@ class OLEDCustomizerDialog(QDialog):
             self._current_preview_anim_logical_frame = None
             self._update_preview()
         self._update_save_this_item_button_state()
-        
+
     def _on_global_scroll_speed_level_slider_changed(self, speed_level_value: int):
         delay_ms = self._speed_level_to_delay_ms(speed_level_value)
         self._update_scroll_speed_display_label(speed_level_value, delay_ms)

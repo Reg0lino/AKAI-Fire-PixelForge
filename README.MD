@@ -1,20 +1,19 @@
-# Akai Fire PixelForge by Reg0lino & Gemini 2.5 Pro
+# Akai Fire PixelForge
 
 ## 🚀 Download Latest Release!
 
-**Get the latest standalone executable for Windows from the [GitHub Releases Page](https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/releases/latest)!** 
+**Get the latest standalone executable for Windows from the [GitHub Releases Page](https://github.com/Reg0lino/AKAI-Fire-PixelForge/releases/latest)!** 
 *(See "Getting Started (Standalone Executable)" below for installation instructions.)*
+![Image](https://github.com/user-attachments/assets/16759301-d11a-4260-aab8-803e2cc5c84f)
 
 ## 🎛️ Overview
 
-The "Akai Fire PixelForge by Reg0lino & Gemini 2.5 Pro" is a Python desktop application designed to provide comprehensive control over an Akai Fire MIDI controller. It allows users to customize its 4x16 RGB pad matrix with static color layouts and frame-by-frame animations, and dynamically reflect desktop colors onto the pads using a screen sampler. Critically, it now offers advanced customization of the Akai Fire's 128x64 monochrome OLED display. The application features a modern, dark-themed, and intuitive user interface built with PyQt6.
+**Akai Fire PixelForge** (developed by Reg0lino & Gemini AI) is a Python desktop application designed to provide comprehensive control over an Akai Fire MIDI controller. It allows users to customize its 4x16 RGB pad matrix with static color layouts and frame-by-frame animations, and dynamically reflect desktop colors onto the pads using a screen sampler. Critically, it now offers advanced customization of the Akai Fire's 128x64 monochrome OLED display. The application features a modern, dark-themed, and intuitive user interface built with PyQt6.
 
 This project aims to unlock the full visual potential of the Akai Fire, transforming it from just a MIDI controller into a versatile lighting instrument and a rich visual feedback tool, especially through its newly enhanced OLED capabilities.
 
-<!-- Placeholder for a general app screenshot -->
-<!-- Suggested: ![Main Application Interface](link_to_main_interface_screenshot.png) -->
-<!-- Placeholder for a photo of the Akai Fire displaying a custom OLED animation -->
-<!-- Suggested: ![Akai Fire with Custom OLED](link_to_fire_with_oled_custom_content.jpg) -->
+![Image](https://github.com/user-attachments/assets/fcec95de-555b-4066-87a9-aa0419526ef4)
+![Image](https://github.com/user-attachments/assets/f3bbcca6-abad-454e-b441-ec2d4533f6b0)
 
 ## ✨ Features
 
@@ -22,70 +21,36 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
 *   **Sophisticated Color Picker:** Includes SV (Saturation/Value) map, Hue slider, RGB/Hex inputs, and "My Colors" swatches for saving favorite colors (right-click swatches for options).
 *   **Static Color Layouts:** Create, save, load, and manage static color presets for the entire 4x16 pad grid.
 *   **Frame-by-Frame Pad Animation Sequencer ("Animator Studio"):**
+![Image](https://github.com/user-attachments/assets/bd3e8232-df5d-4a1d-ba4b-05975b16d59b)
     *   Visual timeline for arranging frames (supports multi-selection).
     *   Add (snapshot/blank), delete, duplicate, copy, cut, and paste frames.
-    *   Undo/Redo functionality for frame edits and sequence property changes.
+    *   **Improved Undo/Redo:** Undo functionality now operates on a "per paint stroke" basis for smoother drawing performance, while still supporting undo for other major actions.
     *   Control animation speed (FPS) and looping.
-    *   Integrated sequence file management: Save, load, create new, and delete animation sequences (user, prefab, sampler-recorded).
+    *   Integrated sequence file management: Save, load, create new, and delete animation sequences.
+    *   **Performance Note:** Pad drawing responsiveness in the Animator is significantly improved.
 *   **Interactive Screen Sampler ("Ambient Mode"):**
-    *   Visually select a region on any connected monitor using a resizable and snappable selection box.
+    *   Visually select a region on any connected monitor.
     *   Dropdown to select the target monitor for sampling.
     *   Live preview of the sampled region within the configuration dialog.
-    *   Adjust Saturation, Contrast, Brightness, and Hue Shift for the sampled colors. These settings are saved per monitor.
-    *   Colors from the selected screen region are reflected onto the Akai Fire pads.
-*   **Sampler Recording:**
-    *   Record the output of the screen sampler over a sequence of frames.
-    *   Automatically save the recording as a new animation sequence into a dedicated user folder.
+    *   Adjust Saturation, Contrast, Brightness, and Hue Shift for the sampled colors (settings saved per monitor).
+    *   Colors from the screen region are reflected onto the Akai Fire pads.
+*   **Sampler Recording:** Record sampler output as new animation sequences.
 *   **Advanced OLED Display Customization (New & Enhanced!):**
-    *   **OLED Content Library Manager:**
-        *   Create, edit, and manage a library of custom OLED content items.
-        *   Supports two main item types: "Text Items" and "Image Animation Items."
-        *   Save items as JSON presets in user-accessible "Documents" subfolders.
-        *   Live preview area within the dialog for selected/edited items (including playing animations).
-        <!-- Placeholder for OLED Customizer Dialog screenshot -->
-        <!-- Suggested: ![OLED Customizer Dialog](link_to_oled_customizer_dialog.png) -->
-    *   **Custom Text Items:**
-        *   Define text content, select system fonts, set font size.
-        *   Configure alignment (left, center, right) for static text.
-        *   Enable scrolling for long text, with options to override global scroll speed and set end-pause durations.
-    *   **Custom Image & GIF Animations:**
-        *   Import various static image formats (PNG, JPG, BMP) and animated GIFs.
-        *   Image processing options:
-            *   Resize modes: Stretch, Fit (Keep Aspect & Pad), Crop to Center.
-            *   Contrast adjustment.
-            *   Color inversion.
-            *   Monochrome conversion with multiple dithering algorithms: Floyd-Steinberg, Simple Threshold (adjustable), Ordered Dither (Bayer 4x4).
-        *   Set target playback FPS and loop behavior (Loop Infinitely, Play Once) for animations on the OLED.
-    *   **"Active Graphic" System:**
-        *   Select any custom Text Item or Image Animation Item from your library to be the persistent "Active Graphic."
-        *   This Active Graphic automatically displays on the OLED after the initial hardware boot-up sequence.
-    *   **Built-in Visual Startup:** A fixed, dynamic visual animation plays on the OLED upon MIDI connection before transitioning to the Active Graphic.
-    *   **Temporary System Messages:**
-        *   Robust system for displaying transient feedback (e.g., knob turns, sampler status, UI navigation cues).
-        *   Uses a clear, large "TomThumb" 60pt retro font for high visibility.
-        *   Messages display briefly (scrolling if necessary) and then gracefully revert to the user's chosen "Active Graphic" (or application default).
-    *   **Application Default Message:** If no Active Graphic is set, a scrolling "Fire RGB Customizer by Reg0lino =^.^=" message (TomThumb 60pt) displays.
+![Image](https://github.com/user-attachments/assets/bd4aa2e4-a4fb-47e6-909b-2d501bb30c99)
+    *   **OLED Content Library Manager:** Create, edit, manage, and save custom "Text Items" and "Image Animation Items" (from static images or GIFs) as JSON presets. Includes live previews and a "Save & Apply" feature. Single-frame image items are now distinctly labeled "(Image)".
+    *   **Custom Text Items:** Define text, select system fonts, set size, alignment, and scrolling behavior (with speed/pause overrides).
+    *   **Custom Image & GIF Animations:** Import images/GIFs with processing options (resize, contrast, invert, multiple dithering algorithms like Floyd-Steinberg, Threshold, Bayer). Set playback FPS and loop behavior.
+    *   **"Active Graphic" System:** Designate any custom item as your persistent default OLED display after the built-in startup visual.
+    *   **Manual Play/Pause for OLED Active Graphic:** A new clickable icon on the main UI allows users to manually pause/resume the OLED's Active Graphic. This can be useful for performance if the OLED animation (especially high FPS) impacts other interactions like pad animator drawing.
+    *   **Temporary System Messages:** Clear, large "TomThumb" font feedback for hardware actions and status updates, gracefully reverting to the Active Graphic.
+    *   **Application Default Message:** A default scrolling message if no Active Graphic is set.
 *   **Hardware Integration & Contextual Control:**
-    *   Connects to the Akai Fire via MIDI, with port selection and auto-detection.
-    *   **Dynamic Knob Control:** Top hardware knobs (Volume, Pan, Filter, Resonance) change function based on context:
-        *   **Global Mode:** Knob 1 controls global physical pad brightness. Knobs 2-4 are currently unassigned globally.
-        *   **Sampler Active Mode:** Knobs 1-4 control Sampler Brightness, Saturation, Contrast, and Hue Shift respectively.
-        *   **Animator Playing Mode:** Knob 4 controls animation playback speed (FPS).
-    *   **OLED Feedback for Hardware Actions:** Knobs provide real-time value feedback on the OLED using the TomThumb font. Sampler ON/OFF, animator Play/Pause/Stop, and UI navigation cues also show temporary messages.
-    *   **Hardware Button Mapping:**
-        *   Physical BROWSER/PERFORM buttons toggle the screen sampler ON/OFF.
-        *   Physical DRUM button cycles through available monitors for the screen sampler.
-        *   GRID L/R buttons cycle focus for on-screen list navigation (Animator sequences, Static Layouts).
-        *   SELECT Encoder navigates items within the focused list and SELECT press applies/loads the item.
-        *   PATTERN UP/DOWN buttons cycle through cued OLED items (Text/Animation from user library).
-        *   BROWSER button (when not toggling sampler due to context) activates the currently cued OLED item as the "Active Graphic."
-*   **Modern UI:** Dark-themed and user-friendly interface using PyQt6 and QSS styling.
-*   **Persistent User Settings:**
-    *   Color picker swatches.
-    *   Screen sampler configurations (region, adjustments per monitor).
-    *   OLED customization settings (selected Active Graphic path, global scroll speed, cued items).
-    *   All saved to platform-specific user configuration directories.
-*   **Global Hotkeys:** Standard shortcuts for common operations (Undo/Redo, Copy/Cut/Paste for animator, etc.).
+    *   MIDI connection with port selection and auto-detection.
+    *   **Dynamic Knob Control:** Top hardware knobs adapt to control Global Pad Brightness, Sampler Parameters (Brightness, Saturation, Contrast, Hue), or Animator Speed.
+    *   **OLED Feedback:** Real-time feedback for knob turns and system events on the OLED.
+    *   **Hardware Button Mapping:** BROWSER/PERFORM for sampler toggle; DRUM for monitor cycle; GRID L/R & SELECT Encoder for UI list navigation; PATTERN UP/DOWN & BROWSER for OLED item cueing/activation.
+*   **Modern UI & Persistent Settings:** Dark-themed PyQt6 interface, QSS styling. User settings (color swatches, sampler prefs, OLED config) saved.
+*   **Global Hotkeys:** For common animator operations.
 
 ## 🛠️ Technology Stack
 
@@ -93,7 +58,7 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
 *   **GUI Framework:** PyQt6
 *   **MIDI Communication:** `python-rtmidi` (via `mido`)
 *   **Screen Capture:** `mss`
-*   **Image Manipulation:** `Pillow (PIL)`, `NumPy` (for some dithering)
+*   **Image Manipulation:** `Pillow (PIL)`, `NumPy`
 *   **Configuration & Presets:** JSON
 *   **Styling:** QSS
 *   **User Directory Management:** `appdirs`
@@ -101,24 +66,28 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
 
 ## 🚀 Getting Started (Standalone Executable - Windows)
 
-<!-- 
-1.  Go to the [**Releases**](https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/releases) page of this repository.
-2.  Download the latest `AkaiFireControllerApp.exe` file.
-3.  Ensure your Akai Fire controller is connected to your PC.
-4.  Run `AkaiFireControllerApp.exe`. (You might need to "unblock" the file in its properties if Windows SmartScreen flags it).
--->
+1.  Go to the [**GitHub Releases Page**](https://github.com/Reg0lino/AKAI-Fire-PixelForge/releases/latest).
+2.  Download the `Akai.Fire.PixelForge.Release.zip` (or `...DEBUG.zip` for a console window).
+3.  Extract the ZIP archive to a folder on your computer.
+4.  **IMPORTANT (Windows Users):** You may need to "unblock" the executable.
+    *   Right-click on `Akai Fire PixelForge.exe` inside the extracted folder.
+    *   Select "Properties."
+    *   On the "General" tab, if you see an "Unblock" checkbox or button near the bottom, check/click it, then click "Apply" and "OK."
+    *   (A more detailed `INSTRUCTIONS_TO_UNBLOCK.MD` is included in the ZIP).
+5.  Connect your Akai Fire controller.
+6.  Run `Akai Fire PixelForge.exe`.
 
 ## ⚙️ Setup & Installation (From Source - For Developers)
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/Reg0lino/AKAI-Fire-RGB-Controller.git
-    cd AKAI-Fire-RGB-Controller
+    git clone https://github.com/Reg0lino/AKAI-Fire-PixelForge.git
+    cd AKAI-Fire-PixelForge
     ```
 2.  **Create and activate a virtual environment (highly recommended):**
-    *   Create: `python -m venv .venv` (or your preferred venv name, e.g., `c:\venvs\akai_fire_build_venv`)
+    *   Create: `python -m venv .venv`
     *   Activate (Windows CMD): `.\.venv\Scripts\activate.bat`
-    *   Activate (Windows PowerShell): `.\.venv\Scripts\Activate.ps1` (May require `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`)
+    *   Activate (Windows PowerShell): `.\.venv\Scripts\Activate.ps1`
     *   Activate (macOS/Linux): `source .venv/bin/activate`
 3.  **Install dependencies:**
     ```bash
@@ -129,67 +98,39 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
     ```bash
     python fire_control_app.py
     ```
-    Or, on Windows, you can use `FIRE_RGB.bat` (included in the project root) to launch.
 
 ## 📂 Project Structure (Key Files)
-
 ```
-AKAI_Fire_RGB_Controller/
-├── animator/               # Animator-specific logic & UI components
-├── features/               # Screen sampler core & thread logic
-├── gui/                    # Main GUI components (MainWindow, dialogs, UI managers)
-├── hardware/               # Akai Fire MIDI communication layer (akai_fire_controller.py)
-├── managers/               # Higher-level logic managers (hardware_input_manager.py, oled_display_manager.py)
-├── oled_utils/             # OLED image processing and rendering utilities
-├── presets/                # Default/prefab static layouts and animation sequences (bundled with app)
-├── resources/              # Fonts (e.g., TomThumb.ttf), Icons, Stylesheets (QSS)
-├── utils.py                # Utility functions (e.g., get_resource_path)
-├── user_settings/          # (Dev only for some configs) Local user configs (e.g. oled_config.json)
-│                           # Bundled app uses platform-specific appdirs location for most user configs.
-├── fire_control_app.py     # Main application entry point
-├── AkaiFireControllerApp.spec # PyInstaller specification file
-├── README.md
-├── CHANGELOG.md
-├── LICENSE
-├── requirements.txt
-└── .gitignore
+AKAI-Fire-PixelForge/
+├── animator/               # Animator logic & UI
+├── features/               # Screen sampler core
+├── gui/                    # Main GUI components (MainWindow, dialogs)
+├── hardware/               # Akai Fire MIDI communication
+├── managers/               # Logic managers (input, OLED)
+├── oled_utils/             # OLED image processing, rendering
+├── presets/                # Bundled prefab sequences & layouts
+├── resources/              # Fonts, Icons (including play-pause.png), Stylesheets
+├── fire_control_app.py     # Main entry point
+├── README.md, CHANGELOG.md, LICENSE, requirements.txt
+...
 ```
-User-generated presets (Static Layouts, Animator Sequences, OLED Text Items, OLED Image Animations) are saved in a dedicated folder within the user's "Documents" directory (e.g., `Documents/Akai Fire RGB Controller User Presets/`).
+User-generated presets (Animator Sequences, Static Layouts, OLED Items) are saved in `Documents/Akai Fire RGB Controller User Presets/`.
 
 ## 🎮 Usage
 
-1.  Launch the application.
-2.  Select the "AKAI Fire" MIDI output and input ports (should auto-select if "Fire" is in the name) and click "Connect". A startup animation will play on the OLED.
-3.  **OLED Customization:**
-    *   Click the OLED mirror on the main GUI (top strip) to open the "OLED Active Graphic Manager."
-    *   Create new "Text Items" or "Image Animation Items" using the respective buttons.
-    *   Edit their properties (text, font, size, scroll for text; source image/GIF, resize, dither, contrast, FPS for animations).
-    *   Save your custom items. They will appear in the "Item Library."
-    *   Select an item from the library and choose it from the "Set as Active Graphic" dropdown to make it your default OLED display.
-    *   Use the "Save & Apply" button to save an edited item and immediately set it as the Active Graphic.
-    *   The "Global Scroll Speed" slider affects text items that don't have their own speed override.
-    <!-- Placeholder for OLED in action on hardware -->
-    <!-- Suggested: ![Custom OLED Text Example](link_to_custom_text_on_fire.jpg) -->
-    <!-- Suggested: ![Custom OLED Animation Example](link_to_custom_animation_on_fire.jpg) -->
-4.  **Pad Control & Animation:**
-    *   Use the **Color Picker** to select colors.
-    *   Apply **Static Pad Layouts**.
-    *   Use the **Animator Studio** to create and manage frame-by-frame animations.
-5.  **Screen Sampler (Ambient Mode):**
-    *   Toggle ON/OFF using the UI button or hardware PERFORM/BROWSER buttons.
-    *   Configure the sampling region and color adjustments. Hardware knobs control adjustments when active.
-    *   Use the **Record** feature to save sampler output as an animation.
-6.  **Hardware Controls:** Utilize the top knobs and buttons for contextual control over brightness, sampler parameters, animation speed, and OLED navigation/selection as described in Features.
+1.  Launch, connect to Akai Fire (ports should auto-select). OLED shows startup, then Active Graphic.
+2.  **OLED Customization:** Click OLED mirror. Create/edit Text or Image/GIF items. Use "Set as Active Graphic" or "Save & Apply". Manually pause/play OLED via icon next to mirror.
+3.  **Pad Control:** Use Color Picker, Static Layouts, or Animator Studio.
+4.  **Screen Sampler:** Toggle via UI/hardware. Configure region/adjustments. Record animations.
+5.  **Hardware Controls:** Utilize top knobs and buttons for context-sensitive control.
 
 ## 📝 TODO / Future Enhancements
 
-*   Additional dithering algorithms (e.g., Atkinson) for OLED image processing.
-*   More advanced animation editing features (interpolation, effects).
-*   Refined UI/UX for OLED item management.
-*   Enhanced MIDI input mapping for triggering application functions.
-*   More prefab content (pad animations, OLED items).
-*   Cross-platform testing and official packaging for macOS and Linux.
-*   Investigate performance for very long/complex OLED animations (e.g., Base64 frame storage).
+*   Additional dithering algorithms (e.g., Atkinson).
+*   Advanced animation editing (interpolation, effects).
+*   More prefab content.
+*   Cross-platform packaging (macOS, Linux).
+*   Investigate Base64 frame storage for large OLED animations.
 
 ## ⚖️ License
 
@@ -197,11 +138,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgements
 
-*   The developers of PyQt, Pillow, python-rtmidi, mido, mss, appdirs, and NumPy.
-*   The Akai Pro team for creating the Fire controller.
-*   The SEGGER Blog that provided initial insights into Fire's OLED SysEx commands.
-*   AI Assistants (Gemini models from Google) for extensive assistance with coding, debugging, refactoring, planning, and documentation throughout all stages of this project.
+*   Developers of PyQt, Pillow, python-rtmidi, mido, mss, appdirs, NumPy.
+*   Akai Pro for the Fire controller.
+*   The SEGGER Blog for initial OLED SysEx insights.
+*   This project was largely envisioned, directed, and debugged by Reg0lino, with Google's Gemini AI acting as an intensive coding and refactoring partner to implement many of the complex features.
 
 ---
 *Developed by Reg0lino (RegularRegs)*
-```

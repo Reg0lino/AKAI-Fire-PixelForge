@@ -111,16 +111,16 @@ class SequenceModel(QObject):
         
         
     def begin_paint_stroke(self):
-        print(f"MODEL DEBUG: begin_paint_stroke() called. Current _paint_action_in_progress: {self._paint_action_in_progress}") # <<< ADD DEBUG
+        # print(f"MODEL DEBUG: begin_paint_stroke() called. Current _paint_action_in_progress: {self._paint_action_in_progress}") # <<< ADD DEBUG
         if not self._paint_action_in_progress:
-            print("MODEL DEBUG: ---> Pushing undo state because stroke is starting.") # <<< ADD DEBUG
+            # print("MODEL DEBUG: ---> Pushing undo state because stroke is starting.") # <<< ADD DEBUG
             self._push_undo_state()
             self._paint_action_in_progress = True
-        else:
-            print("MODEL DEBUG: ---> Stroke already in progress, NOT pushing undo state.") # <<< ADD DEBUG
+        # else:
+            # print("MODEL DEBUG: ---> Stroke already in progress, NOT pushing undo state.") # <<< ADD DEBUG
 
     def end_paint_stroke(self):
-        print(f"MODEL DEBUG: end_paint_stroke() called. Setting _paint_action_in_progress to False.") # <<< ADD DEBUG
+        # print(f"MODEL DEBUG: end_paint_stroke() called. Setting _paint_action_in_progress to False.") # <<< ADD DEBUG
         self._paint_action_in_progress = False
         
         

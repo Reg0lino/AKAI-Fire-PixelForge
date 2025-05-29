@@ -352,11 +352,11 @@ class ScreenSamplerManager(QObject):
         if needs_fetch:
             print(f"DEBUG SSM.populate_monitor_list_for_ui: Needs fetch. force_fetch={force_fetch}, cache_empty={not self.screen_sampler_monitor_list_cache}")
             try:
-                print("DEBUG SSM.populate_monitor_list_for_ui: Attempting to fetch monitors with mss...")
+                # print("DEBUG SSM.populate_monitor_list_for_ui: Attempting to fetch monitors with mss...")
                 with mss.mss() as sct:
                     # This line updates the cache:
                     self.screen_sampler_monitor_list_cache = ScreenSamplerCore.get_available_monitors(sct)
-                print(f"DEBUG SSM.populate_monitor_list_for_ui: Monitors fetched: {self.screen_sampler_monitor_list_cache}")
+                # print(f"DEBUG SSM.populate_monitor_list_for_ui: Monitors fetched: {self.screen_sampler_monitor_list_cache}")
                 if not self.screen_sampler_monitor_list_cache:
                     self.sampler_status_update.emit("No monitors detected for screen sampler.", 3000)
             except Exception as e:
@@ -368,7 +368,7 @@ class ScreenSamplerManager(QObject):
 
         # Update the UI manager's combo box with the (potentially new) cache
         if hasattr(self.ui_manager, 'populate_monitors_combo_external'):
-            print(f"DEBUG SSM.populate_monitor_list_for_ui: Calling ui_manager.populate_monitors_combo_external with cache.")
+            # print(f"DEBUG SSM.populate_monitor_list_for_ui: Calling ui_manager.populate_monitors_combo_external with cache.")
             self.ui_manager.populate_monitors_combo_external(self.screen_sampler_monitor_list_cache)
         else:
             print("CRITICAL WARNING (SSM.populate_monitor_list_for_ui): self.ui_manager is missing 'populate_monitors_combo_external' method. UI cannot be updated.")
@@ -385,14 +385,14 @@ class ScreenSamplerManager(QObject):
             apply_prefs_needed = False
 
             if monitor_id_to_apply_prefs_for not in current_monitor_ids_in_cache:
-                print(f"DEBUG SSM.populate_monitor_list_for_ui: Current monitor_id {monitor_id_to_apply_prefs_for} not in cache. Setting to default: {self.screen_sampler_monitor_list_cache[0]['id']}")
+                # print(f"DEBUG SSM.populate_monitor_list_for_ui: Current monitor_id {monitor_id_to_apply_prefs_for} not in cache. Setting to default: {self.screen_sampler_monitor_list_cache[0]['id']}")
                 monitor_id_to_apply_prefs_for = self.screen_sampler_monitor_list_cache[0]['id']
                 self.current_sampler_params['monitor_id'] = monitor_id_to_apply_prefs_for
                 apply_prefs_needed = True # ID changed, so prefs for this new ID need to be applied.
             
             # Update the UI to select the (potentially new) current monitor_id
             if hasattr(self.ui_manager, 'set_selected_monitor_ui'):
-                print(f"DEBUG SSM.populate_monitor_list_for_ui: Calling ui_manager.set_selected_monitor_ui with ID: {monitor_id_to_apply_prefs_for}")
+                # print(f"DEBUG SSM.populate_monitor_list_for_ui: Calling ui_manager.set_selected_monitor_ui with ID: {monitor_id_to_apply_prefs_for}")
                 self.ui_manager.set_selected_monitor_ui(monitor_id_to_apply_prefs_for)
             else:
                 print("WARNING (SSM.populate_monitor_list_for_ui): self.ui_manager missing 'set_selected_monitor_ui'")
@@ -401,7 +401,7 @@ class ScreenSamplerManager(QObject):
             # we should re-apply preferences for the now-current monitor_id.
             # Also, apply if it's the very first time (needs_fetch was true due to empty cache initially).
             if apply_prefs_needed or (needs_fetch and not force_fetch and not self.screen_sampler_monitor_list_cache): # Check if cache was empty before this successful fetch
-                print(f"DEBUG SSM.populate_monitor_list_for_ui: Applying preferences for monitor ID: {monitor_id_to_apply_prefs_for}. Needs fetch was: {needs_fetch}, apply_prefs_needed was: {apply_prefs_needed}")
+                # print(f"DEBUG SSM.populate_monitor_list_for_ui: Applying preferences for monitor ID: {monitor_id_to_apply_prefs_for}. Needs fetch was: {needs_fetch}, apply_prefs_needed was: {apply_prefs_needed}")
                 self._apply_prefs_for_current_monitor() # Apply prefs for this monitor_id
         else: # No monitors in cache (either never found or error during fetch)
             print("DEBUG SSM.populate_monitor_list_for_ui: No monitors in cache to select or apply prefs for.")
@@ -411,7 +411,7 @@ class ScreenSamplerManager(QObject):
         # Update the capture preview dialog if it's open and visible
         if self.capture_preview_dialog and hasattr(self.capture_preview_dialog, 'isVisible') and self.capture_preview_dialog.isVisible():
             if hasattr(self.capture_preview_dialog, 'set_initial_monitor_data'):
-                print(f"DEBUG SSM.populate_monitor_list_for_ui: Updating visible capture preview dialog with monitor data.")
+                # print(f"DEBUG SSM.populate_monitor_list_for_ui: Updating visible capture preview dialog with monitor data.")
                 self.capture_preview_dialog.set_initial_monitor_data(
                     self.screen_sampler_monitor_list_cache,
                     self.current_sampler_params.get('monitor_id', 1)

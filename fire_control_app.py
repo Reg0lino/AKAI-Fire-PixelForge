@@ -1,10 +1,8 @@
 # AKAI_Fire_RGB_Controller/fire_control_app.py
 import sys
 import os
-from utils import get_resource_path # <<< NEW IMPORT
-# --- Set MIDO_BACKEND very early ---
+from utils import get_resource_path 
 os.environ['MIDO_BACKEND'] = 'mido.backends.rtmidi'
-# ------------------------------------
 
 # --- Ensure project root is in sys.path ---
 # This assumes fire_control_app.py is in the project root.
@@ -13,14 +11,10 @@ if project_root_for_path not in sys.path:
     sys.path.insert(0, project_root_for_path)
 # Print sys.path for debugging bundled app path issues
 # print("DEBUG fire_control_app.py: sys.path is now:", sys.path)
-# ------------------------------------------
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon, QFontDatabase
-# MainWindow import is deferred to main() to allow MIDO_BACKEND to be set first
-# and to ensure QApplication exists before Qt modules are heavily used.
 
-# --- Resource Path Function ---
 def get_resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
@@ -34,12 +28,6 @@ def get_resource_path(relative_path):
     resource_full_path = os.path.join(base_path, relative_path)
     # print(f"DEBUG get_resource_path: Relative='{relative_path}', Base='{base_path}', Full='{resource_full_path}'")
     return resource_full_path
-# --- End Resource Path Function ---
-
-# In fire_control_app.py
-
-# --- NEW: Function to Register Application Fonts ---
-
 
 def register_application_fonts():
     """Scans the resources/fonts directory and registers .ttf/.otf files with QFontDatabase."""
@@ -68,7 +56,6 @@ def register_application_fonts():
     else:
         print(
             f"APP WARNING: Application fonts directory not found: '{fonts_dir}'")
-# --- END NEW Function ---
 
 def get_project_root_for_config(): # Renamed to avoid confusion with path for imports
     """Gets the absolute path to the project's root directory for config/data loading."""
