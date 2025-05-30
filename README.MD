@@ -14,8 +14,7 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
 
 ![Image](https://github.com/user-attachments/assets/fcec95de-555b-4066-87a9-aa0419526ef4)
 ![Image](https://github.com/user-attachments/assets/f3bbcca6-abad-454e-b441-ec2d4533f6b0)
-![Image](https://github.com/user-attachments/assets/fcec95de-555b-4066-87a9-aa0419526ef4)
-![Image](https://github.com/user-attachments/assets/f3bbcca6-abad-454e-b441-ec2d4533f6b0)
+
 
 ## ✨ Features
 
