@@ -97,7 +97,7 @@ class InteractivePadGridFrame(QFrame):
         action_taken = False
 
         if button_type == Qt.MouseButton.LeftButton or button_type == Qt.MouseButton.RightButton:
-            print(f"GRID DEBUG: mousePressEvent - Button: {button_type}") # <<< ADD DEBUG
+            # print(f"GRID DEBUG: mousePressEvent - Button: {button_type}") # <<< ADD DEBUG
             if button_type == Qt.MouseButton.LeftButton:
                 self._is_left_dragging = True
                 self._is_right_dragging = False
@@ -106,7 +106,7 @@ class InteractivePadGridFrame(QFrame):
                 self._is_left_dragging = False
 
             if pad_button_widget:
-                print(f"GRID DEBUG: mousePressEvent - Emitting paint_stroke_started for pad ({pad_button_widget.row},{pad_button_widget.col})") # <<< ADD DEBUG
+                # print(f"GRID DEBUG: mousePressEvent - Emitting paint_stroke_started for pad ({pad_button_widget.row},{pad_button_widget.col})") # <<< ADD DEBUG
                 self.paint_stroke_started.emit(pad_button_widget.row, pad_button_widget.col, button_type)
                 self.pad_action_requested.emit(pad_button_widget.row, pad_button_widget.col, button_type)
                 self._last_actioned_pad_coords = (pad_button_widget.row, pad_button_widget.col)

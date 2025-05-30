@@ -69,23 +69,62 @@ class SequenceModel(QObject):
             # print(f"DEBUG: SequenceModel '{self.name}' marked as modified.")
 
     def _push_undo_state(self):
-        # if len(self.frames) == 0 and not self._undo_stack : 
-        #      pass 
-        
+        # if len(self.frames) == 0 and not self._undo_stack :
+        #      pass
+
         if len(self._undo_stack) >= MAX_UNDO_STEPS:
-            self._undo_stack.pop(0) # Remove the oldest state
-        
+            self._undo_stack.pop(0)  # Remove the oldest state
+
+        # --- START OF DETAILED LOGGING FOR UNDO STATE ---
+        print(
+            f"MODEL_UNDO_DEBUG: _push_undo_state called. Current edit frame index: {self._current_edit_frame_index}")
+        if 0 <= self._current_edit_frame_index < len(self.frames):
+            current_edit_frame_for_log = self.frames[self._current_edit_frame_index]
+            frame_colors_for_log = current_edit_frame_for_log.get_all_colors()
+            # Log first few and last few colors to get an idea of its content
+            if len(frame_colors_for_log) >= 64:
+                log_sample = frame_colors_for_log[:5] + \
+                    ["..."] + frame_colors_for_log[-5:]
+                is_blank_log = all(c == QColor("black").name()
+                                   for c in frame_colors_for_log)
+                print(
+                    f"MODEL_UNDO_DEBUG:   Content of current edit frame (idx {self._current_edit_frame_index}) being snapshotted: {log_sample}, IsBlank: {is_blank_log}")
+            else:
+                print(
+                    f"MODEL_UNDO_DEBUG:   Current edit frame (idx {self._current_edit_frame_index}) has unexpected color count: {len(frame_colors_for_log)}")
+        elif self.frames:  # Edit index is -1 but frames exist
+            print(
+                f"MODEL_UNDO_DEBUG:   No current edit frame selected (index {self._current_edit_frame_index}), but frames exist. Logging first frame content if available.")
+            if len(self.frames) > 0:
+                first_frame_for_log = self.frames[0]
+                first_frame_colors_log = first_frame_for_log.get_all_colors()
+                if len(first_frame_colors_log) >= 64:
+                    log_sample_first = first_frame_colors_log[:5] + [
+                        "..."] + first_frame_colors_log[-5:]
+                    is_blank_first_log = all(c == QColor(
+                        "black").name() for c in first_frame_colors_log)
+                    print(
+                        f"MODEL_UNDO_DEBUG:     Content of first frame (idx 0) in sequence: {log_sample_first}, IsBlank: {is_blank_first_log}")
+        else:  # No frames in sequence
+            print(
+                f"MODEL_UNDO_DEBUG:   No frames in sequence. Pushing current state (name, delay).")
+        # --- END OF DETAILED LOGGING FOR UNDO STATE ---
+
         # Create deep copies of frames for the undo state
-        frames_copy = [AnimationFrame(colors=frame.get_all_colors()) for frame in self.frames]
-        
+        frames_copy = [AnimationFrame(
+            colors=frame.get_all_colors()) for frame in self.frames]
+
         self._undo_stack.append({
             "frames": frames_copy,
             "current_edit_frame_index": self._current_edit_frame_index,
-            "name": self.name, # Also track name/properties if they are undoable
+            "name": self.name,  # Also track name/properties if they are undoable
             "frame_delay_ms": self.frame_delay_ms
             # Add other properties like 'loop', 'description' if they should be part of undo
         })
-        self._redo_stack.clear() # Any new action clears the redo stack
+        # Log stack size
+        print(
+            f"MODEL_UNDO_DEBUG:   Pushed state to undo_stack. New stack size: {len(self._undo_stack)}")
+        self._redo_stack.clear()  # Any new action clears the redo stack
 
     def _apply_state(self, state_dict):
         """Applies a previously saved state (from undo/redo stack)."""

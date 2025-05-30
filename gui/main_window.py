@@ -945,7 +945,7 @@ class MainWindow(QMainWindow):
                    self.pad_grid_frame.paint_stroke_ended.disconnect(
                        self.animator_manager.on_paint_stroke_ended)
                except TypeError:
-                   pass  # Not connected yet
+                   pass
 
                self.pad_grid_frame.paint_stroke_started.connect(
                    self.animator_manager.on_paint_stroke_started
@@ -953,11 +953,6 @@ class MainWindow(QMainWindow):
                self.pad_grid_frame.paint_stroke_ended.connect(
                    self.animator_manager.on_paint_stroke_ended
                )
-               # print("MW TRACE: Connected pad_grid_frame paint_stroke signals to AnimatorManagerWidget.") # Optional
-           # else: # Optional
-               # print("MW WARNING: AnimatorManager not available to connect paint stroke signals during pad_grid_frame setup.")
-        # else: # Optional
-            # print("MW TRACE WARNING: self.pad_grid_frame is None during _connect_signals.")
 
         # Color Picker Manager signals
         if self.color_picker_manager:
@@ -979,15 +974,14 @@ class MainWindow(QMainWindow):
         if self.screen_sampler_manager:
             self.screen_sampler_manager.sampled_colors_for_display.connect(
                 lambda colors: self.apply_colors_to_main_pad_grid(
-                    # Mark as sampler output
                     [QColor(r, g, b).name() for r, g, b in colors], update_hw=True, is_sampler_output=True
                 )
             )
             self.screen_sampler_manager.sampler_status_update.connect(
                 self.status_bar.showMessage)
             self.screen_sampler_manager.sampling_activity_changed.connect(
-                self._on_sampler_activity_changed)  # Handles OLED persistent override
-            self.screen_sampler_manager.sampling_activity_changed.connect(  # Also connect for knob reconfiguration
+                self._on_sampler_activity_changed)
+            self.screen_sampler_manager.sampling_activity_changed.connect(
                 self._on_sampler_activity_changed_for_knobs)
             self.screen_sampler_manager.new_sequence_from_recording_ready.connect(
                 self._handle_load_sequence_request)
@@ -1004,14 +998,18 @@ class MainWindow(QMainWindow):
                 self.status_bar.showMessage)
             self.animator_manager.sequence_modified_status_changed.connect(
                 self._update_oled_and_title_on_sequence_change)
-            self.animator_manager.animator_playback_active_status_changed.connect(  # For transport LEDs (now forced off by controller)
+            self.animator_manager.animator_playback_active_status_changed.connect(
                 self._update_fire_transport_leds)
-            self.animator_manager.animator_playback_active_status_changed.connect(  # For OLED Play/Pause cue
+            self.animator_manager.animator_playback_active_status_changed.connect(
                 self._on_animator_playback_status_for_oled)
-            self.animator_manager.animator_playback_active_status_changed.connect(  # For knob reconfiguration
+            self.animator_manager.animator_playback_active_status_changed.connect(
                 self._on_animator_playback_status_changed_for_knobs)
+
+            # <<< CONNECTED NEW SIGNAL HERE >>>
             self.animator_manager.undo_redo_state_changed.connect(
                 self._on_animator_undo_redo_state_changed)
+            # --- END OF NEW CONNECTION ---
+
             self.animator_manager.clipboard_state_changed.connect(
                 self._on_animator_clipboard_state_changed)
             self.animator_manager.request_sampler_disable.connect(
@@ -1019,18 +1017,16 @@ class MainWindow(QMainWindow):
             self.animator_manager.request_load_sequence_with_prompt.connect(
                 self._handle_animator_request_load_prompt)
 
-
         # HardwareInputManager Signals
         if self.hardware_input_manager:
             if hasattr(self.hardware_input_manager, 'physical_encoder_rotated'):
                 self.hardware_input_manager.physical_encoder_rotated.connect(
                     self._on_physical_encoder_rotated)
-            # ... (other HIM connections like animator play/stop, grid, select, sampler toggle/cycle) ...
             if self.animator_manager:
                 self.hardware_input_manager.request_animator_play_pause.connect(
                     self.animator_manager.action_play_pause_toggle)
                 self.hardware_input_manager.request_animator_stop.connect(
-                    self._handle_hardware_animator_stop_request)  # Connect to MW stop handler
+                    self._handle_hardware_animator_stop_request)
             self.hardware_input_manager.grid_left_pressed.connect(
                 self._handle_grid_left_pressed)
             self.hardware_input_manager.grid_right_pressed.connect(
@@ -1043,20 +1039,15 @@ class MainWindow(QMainWindow):
                 self._on_request_toggle_screen_sampler)
             self.hardware_input_manager.request_cycle_sampler_monitor.connect(
                 self._on_request_cycle_sampler_monitor)
-
             if hasattr(self.hardware_input_manager, 'oled_pattern_up_pressed'):
                 self.hardware_input_manager.oled_pattern_up_pressed.connect(
                     self._handle_oled_pattern_up)
-            # else: print("MW WARNING: HIM missing 'oled_pattern_up_pressed' signal.")
             if hasattr(self.hardware_input_manager, 'oled_pattern_down_pressed'):
                 self.hardware_input_manager.oled_pattern_down_pressed.connect(
                     self._handle_oled_pattern_down)
-            # else: print("MW WARNING: HIM missing 'oled_pattern_down_pressed' signal.")
             if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
                 self.hardware_input_manager.oled_browser_activate_pressed.connect(
                     self._handle_oled_browser_activate)
-            # else: print("MW WARNING: HIM missing 'oled_browser_activate_pressed' signal.")
-            # print("MW TRACE: Connected HardwareInputManager signals.") # Optional
 
         # OLEDDisplayManager Signals
         if self.oled_display_manager:
@@ -1068,7 +1059,6 @@ class MainWindow(QMainWindow):
                     pass
                 self.oled_display_manager.request_send_bitmap_to_fire.connect(
                     self.akai_controller.oled_send_full_bitmap)
-
             if self.oled_display_mirror_widget:
                 try:
                     self.oled_display_manager.request_send_bitmap_to_fire.disconnect(
@@ -1077,17 +1067,14 @@ class MainWindow(QMainWindow):
                     pass
                 self.oled_display_manager.request_send_bitmap_to_fire.connect(
                     self._update_oled_mirror)
-                # print("MW TRACE: Successfully connected OLEDManager signal to GUI mirror.") # Optional
-
-            # <<< MODIFIED: Connection for OLED Play/Pause Indicator UI update (no clicked signal for QLabel) >>>
             if hasattr(self.oled_display_manager, 'active_graphic_pause_state_changed'):
                 try:
-                    self.oled_display_manager.active_graphic_pause_state_changed.disconnect(self._update_oled_play_pause_button_ui)
+                    self.oled_display_manager.active_graphic_pause_state_changed.disconnect(
+                        self._update_oled_play_pause_button_ui)
                 except TypeError:
                     pass
-                self.oled_display_manager.active_graphic_pause_state_changed.connect(self._update_oled_play_pause_button_ui)
-            # --- END MODIFIED ---
-        # print("MW TRACE: _connect_signals FINISHED.") # Optional
+                self.oled_display_manager.active_graphic_pause_state_changed.connect(
+                    self._update_oled_play_pause_button_ui)
 
     def _update_oled_play_pause_button_ui(self, is_paused: bool):
         """
@@ -1139,19 +1126,20 @@ class MainWindow(QMainWindow):
     def _create_edit_actions(self):
         """Creates global QActions for menu items and keyboard shortcuts."""
         # Undo/Redo (Connected to AnimatorManagerWidget)
-        self.undo_action = QAction("Undo Sequence Edit", self)
+        self.undo_action = QAction("↩️ Undo Sequence Edit", self) # Icon added
         self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
         self.undo_action.setToolTip(
             f"Undo last sequence edit ({QKeySequence(QKeySequence.StandardKey.Undo).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.undo_action.triggered.connect(self.action_animator_undo)
-        # Add to window for global shortcut context
-        self.addAction(self.undo_action)
-        self.redo_action = QAction("Redo Sequence Edit", self)
+        self.addAction(self.undo_action) # Ensure it's added for global shortcut
+
+        self.redo_action = QAction("↪️ Redo Sequence Edit", self) # Icon added
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         self.redo_action.setToolTip(
             f"Redo last undone sequence edit ({QKeySequence(QKeySequence.StandardKey.Redo).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.redo_action.triggered.connect(self.action_animator_redo)
-        self.addAction(self.redo_action)
+        self.addAction(self.redo_action) # Ensure it's added for global shortcut
+
         # Animator Frame Operations (using icons from animator.controls_widget)
         self.copy_action = QAction(ICON_COPY + " Copy Frame(s)", self)
         self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
@@ -1159,35 +1147,38 @@ class MainWindow(QMainWindow):
             f"Copy selected frame(s) ({QKeySequence(QKeySequence.StandardKey.Copy).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.copy_action.triggered.connect(self.action_animator_copy_frames)
         self.addAction(self.copy_action)
-        # Cut, Paste, Duplicate, Delete
+        
         self.cut_action = QAction(ICON_CUT + " Cut Frame(s)", self)
         self.cut_action.setShortcut(QKeySequence.StandardKey.Cut)
         self.cut_action.setToolTip(
             f"Cut selected frame(s) ({QKeySequence(QKeySequence.StandardKey.Cut).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.cut_action.triggered.connect(self.action_animator_cut_frames)
         self.addAction(self.cut_action)
-        # Icon might need review if it's for duplicate
+        
         self.paste_action = QAction(ICON_DUPLICATE + " Paste Frame(s)", self)
         self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
         self.paste_action.setToolTip(
             f"Paste frame(s) from clipboard ({QKeySequence(QKeySequence.StandardKey.Paste).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.paste_action.triggered.connect(self.action_animator_paste_frames)
         self.addAction(self.paste_action)
+
         self.duplicate_action = QAction(
             ICON_DUPLICATE + " Duplicate Frame(s)", self)
         self.duplicate_action.setShortcut(QKeySequence(
-            Qt.Modifier.CTRL | Qt.Key.Key_D))  # Ctrl+D
+            Qt.Modifier.CTRL | Qt.Key.Key_D))
         self.duplicate_action.setToolTip(
             f"Duplicate selected frame(s) (Ctrl+D)")
         self.duplicate_action.triggered.connect(
             self.action_animator_duplicate_frames)
         self.addAction(self.duplicate_action)
+
         self.delete_action = QAction(ICON_DELETE + " Delete Frame(s)", self)
         self.delete_action.setShortcut(QKeySequence.StandardKey.Delete)
         self.delete_action.setToolTip(f"Delete selected frame(s) (Del)")
         self.delete_action.triggered.connect(
             self.action_animator_delete_frames)
         self.addAction(self.delete_action)
+
         self.add_blank_global_action = QAction(
             ICON_ADD_BLANK + " Add Blank Frame", self)
         self.add_blank_global_action.setShortcut(QKeySequence(
@@ -1197,6 +1188,7 @@ class MainWindow(QMainWindow):
         self.add_blank_global_action.triggered.connect(
             self.action_animator_add_blank_frame)
         self.addAction(self.add_blank_global_action)
+        
         # Sequence File Operations
         self.new_sequence_action = QAction("✨ New Sequence", self)
         self.new_sequence_action.setShortcut(QKeySequence.StandardKey.New)
@@ -1205,8 +1197,8 @@ class MainWindow(QMainWindow):
         self.new_sequence_action.triggered.connect(
             lambda: self.action_animator_new_sequence(prompt_save=True))
         self.addAction(self.new_sequence_action)
+
         self.save_sequence_as_action = QAction("💾 Save Sequence As...", self)
-        # StandardKey.SaveAs often Ctrl+Shift+S, StandardKey.Save is Ctrl+S
         self.save_sequence_as_action.setShortcut(
             QKeySequence.StandardKey.SaveAs)
         self.save_sequence_as_action.setToolTip(
@@ -1214,28 +1206,31 @@ class MainWindow(QMainWindow):
         self.save_sequence_as_action.triggered.connect(
             self.action_animator_save_sequence_as)
         self.addAction(self.save_sequence_as_action)
+        
         # Eyedropper Toggle
         self.eyedropper_action = QAction("💧 Eyedropper Mode", self)
         self.eyedropper_action.setShortcut(
-            QKeySequence(Qt.Key.Key_I))  # 'I' for eyedropper
+            QKeySequence(Qt.Key.Key_I))
         self.eyedropper_action.setToolTip(
             "Toggle Eyedropper mode to pick color from a pad (I).")
-        self.eyedropper_action.setCheckable(True)  # Make it a toggle action
+        self.eyedropper_action.setCheckable(True)
         self.eyedropper_action.triggered.connect(
-            self.toggle_eyedropper_mode)  # Connect to main toggle method
+            self.toggle_eyedropper_mode)
         self.addAction(self.eyedropper_action)
+        
         # Animator Play/Pause Global Shortcut
         self.play_pause_action = QAction("Play/Pause Sequence", self)
         self.play_pause_action.setShortcut(
-            QKeySequence(Qt.Key.Key_Space))  # Spacebar
+            QKeySequence(Qt.Key.Key_Space))
         self.play_pause_action.setToolTip(
             "Play or Pause the current animation sequence (Space).")
         self.play_pause_action.triggered.connect(
             self.action_animator_play_pause_toggle)
         self.addAction(self.play_pause_action)
+        
         # Initial UI state update for actions (many will be disabled initially)
         self._update_global_ui_interaction_states()
-
+        
     def populate_midi_ports(self):
         """Populates the MIDI output port selection QComboBox."""
         if self.port_combo_direct_ref is None:
@@ -1429,18 +1424,18 @@ class MainWindow(QMainWindow):
     
         # --- Global UI State Management ---
 
+
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
-        # <<< ADD THIS DEBUG PRINT >>>
-        # print(f"MW DEBUG: _update_global_ui_interaction_states - is_connected: {is_connected}")
-        # --- END DEBUG PRINT ---
 
         is_anim_playing = False
         if self.animator_manager and self.animator_manager.active_sequence_model:
             is_anim_playing = self.animator_manager.active_sequence_model.get_is_playing()
+
         is_sampler_on = False
         if self.screen_sampler_manager:
             is_sampler_on = self.screen_sampler_manager.is_sampling_active()
+
         can_use_animator = is_connected and not is_sampler_on
         can_paint_direct = is_connected and not is_sampler_on and not is_anim_playing
         can_toggle_sampler = is_connected and not is_anim_playing
@@ -1450,27 +1445,31 @@ class MainWindow(QMainWindow):
             self.animator_manager.set_overall_enabled_state(can_use_animator)
             has_frames = False
             has_sel = False
-            can_undo_anim = False
-            can_redo_anim = False
+            # Get undo/redo state directly from model for QActions
+            can_undo_anim = self.animator_manager.active_sequence_model._undo_stack if self.animator_manager.active_sequence_model else False
+            can_redo_anim = self.animator_manager.active_sequence_model._redo_stack if self.animator_manager.active_sequence_model else False
+
             if self.animator_manager.active_sequence_model:
                 has_frames = self.animator_manager.active_sequence_model.get_frame_count() > 0
-                can_undo_anim = bool(
-                    self.animator_manager.active_sequence_model._undo_stack)
-                can_redo_anim = bool(
-                    self.animator_manager.active_sequence_model._redo_stack)
             if self.animator_manager.sequence_timeline_widget:
                 has_sel = len(
                     self.animator_manager.sequence_timeline_widget.get_selected_item_indices()) > 0
             has_clip = bool(self.animator_manager.frame_clipboard)
+
+            # Global QActions for Animator
             if hasattr(self, 'new_sequence_action') and self.new_sequence_action:
                 self.new_sequence_action.setEnabled(can_use_animator)
             if hasattr(self, 'save_sequence_as_action') and self.save_sequence_as_action:
                 self.save_sequence_as_action.setEnabled(
                     can_use_animator and has_frames)
+
+            # --- Update Undo/Redo QAction enabled states ---
             if hasattr(self, 'undo_action') and self.undo_action:
                 self.undo_action.setEnabled(can_use_animator and can_undo_anim)
             if hasattr(self, 'redo_action') and self.redo_action:
                 self.redo_action.setEnabled(can_use_animator and can_redo_anim)
+            # --- End Update ---
+
             if hasattr(self, 'copy_action') and self.copy_action:
                 self.copy_action.setEnabled(can_use_animator and has_sel)
             if hasattr(self, 'cut_action') and self.cut_action:
@@ -1491,6 +1490,8 @@ class MainWindow(QMainWindow):
         if self.screen_sampler_manager:
             self.screen_sampler_manager.update_ui_for_global_state(
                 is_connected, can_toggle_sampler)
+
+        # Pad Grid and Direct Painting Tools
         if hasattr(self, 'pad_grid_frame') and self.pad_grid_frame:
             self.pad_grid_frame.setEnabled(can_paint_direct)
         if hasattr(self, 'color_picker_manager') and self.color_picker_manager:
@@ -1499,19 +1500,25 @@ class MainWindow(QMainWindow):
             self.quick_tools_group_ref.setEnabled(can_paint_direct)
         if hasattr(self, 'eyedropper_button') and self.eyedropper_button:
             self.eyedropper_button.setEnabled(can_paint_direct)
+
         is_eyedropper_active = hasattr(
             self, 'is_eyedropper_mode_active') and self.is_eyedropper_mode_active
         if hasattr(self, 'eyedropper_action') and self.eyedropper_action:
-            self.eyedropper_action.setEnabled(
-                can_paint_direct and not is_eyedropper_active)
+            # Eyedropper action should be enabled if painting is possible,
+            # its checked state indicates if mode is active.
+            self.eyedropper_action.setEnabled(can_paint_direct)
+            self.eyedropper_action.setChecked(
+                is_eyedropper_active)  # Sync QAction check state
+
         if hasattr(self, 'static_layouts_manager') and self.static_layouts_manager:
             self.static_layouts_manager.set_enabled_state(can_paint_direct)
 
         # OLED Play/Pause Indicator (QLabel) enable/disable and icon update
         if hasattr(self, 'oled_play_pause_icon_label') and self.oled_play_pause_icon_label:
-            self.oled_play_pause_icon_label.setEnabled(is_connected) 
+            self.oled_play_pause_icon_label.setEnabled(is_connected)
             if is_connected and self.oled_display_manager:
-                self._update_oled_play_pause_button_ui(self.oled_display_manager.is_active_graphic_paused())
+                self._update_oled_play_pause_button_ui(
+                    self.oled_display_manager.is_active_graphic_paused())
 
 # init here
 
@@ -2842,6 +2849,21 @@ class MainWindow(QMainWindow):
     def _on_animator_clipboard_state_changed(self, has_content: bool):
         if self.paste_action: self.paste_action.setEnabled(has_content)
         self._update_global_ui_interaction_states()
+
+    def _on_animator_undo_redo_state_changed(self, can_undo: bool, can_redo: bool):
+        """
+        Updates the enabled state of global Undo and Redo QActions.
+        This is connected to AnimatorManagerWidget.undo_redo_state_changed.
+        """
+        if self.undo_action: # Check if QAction exists
+            self.undo_action.setEnabled(can_undo)
+        if self.redo_action: # Check if QAction exists
+            self.redo_action.setEnabled(can_redo)
+        
+        # Also call _update_global_ui_interaction_states as it might affect other things
+        # or re-evaluate the context.
+        self._update_global_ui_interaction_states()
+
 
 # --- Handler for GUI Brightness Knob Change ---
     def _on_sampler_brightness_knob_changed(self, gui_knob_value: int):

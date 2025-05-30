@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Akai Fire PixelForge - Unleash Your Controller's Visual Potential</title>
+    <title>Akai Fire PixelForge - Make Your Controller a Canvas</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
@@ -96,9 +96,78 @@
             font-family: 'Press Start 2P', monospace;
             text-shadow: 1px 1px #8b5cf6; /* Subtle shadow for blocky feel */
         }
+
+        /* Twinkling Stars Background - now only on .bg-black and .bg-gray-950 */
+        .twinkle-stars {
+            position: absolute;
+            z-index: 1; /* Lower than images/content */
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.7;
+            animation: twinkle 2s infinite alternate;
+        }
+        @keyframes twinkle {
+            0% { opacity: 0.7; }
+            50% { opacity: 0.2; }
+            100% { opacity: 0.7; }
+        }
+        /* Remove .shooting-star and related keyframes */
+        /* Image Zoom Modal */
+        .modal-bg {
+            display: none;
+            position: fixed;
+            z-index: 50;
+            left: 0; top: 0; width: 100vw; height: 100vh;
+            background: rgba(10,10,20,0.95);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-bg.active {
+            display: flex;
+        }
+        .modal-img {
+            max-width: 90vw;
+            max-height: 85vh;
+            border-radius: 1rem;
+            box-shadow: 0 0 40px #8b5cf6, 0 0 0 8px #222 inset;
+            border: 2px solid #6366f1;
+            animation: popin 0.2s;
+        }
+        @keyframes popin {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .modal-close {
+            position: absolute;
+            top: 2rem;
+            right: 2rem;
+            font-size: 2.5rem;
+            color: #fff;
+            cursor: pointer;
+            z-index: 51;
+            text-shadow: 0 2px 8px #000;
+            transition: color 0.2s;
+        }
+        .modal-close:hover {
+            color: #ec4899;
+        }
+        /* Add a subtle border to feature cards */
+        .feature-card {
+            border: 1.5px solid #312e81;
+            background: linear-gradient(135deg, #18181b 80%, #312e81 100%);
+        }
     </style>
 </head>
-<body class="antialiased">
+<body class="antialiased relative">
+
+    <!-- Twinkling Stars -->
+    <div id="stars-bg" style="position:fixed;z-index:1;top:0;left:0;width:100vw;height:100vh;pointer-events:none;"></div>
 
     <header class="bg-black text-white py-4 shadow-lg">
         <div class="container mx-auto px-4 flex flex-col md:flex-row md:justify-between md:items-center text-center">
@@ -114,35 +183,64 @@
     </header>
 
     <section class="relative bg-gray-950 py-20 md:py-32 overflow-hidden">
+        <!-- No stars here (bg image section) -->
         <div class="container mx-auto px-4 text-center relative z-10">
             <h1 class="text-3xl md:text-5xl font-extrabold leading-tight mb-6 text-white ascii-font glitch-text">
-                UNLEASH YOUR AKAI FIRE'S FULL VISUAL POTENTIAL
+                TURN YOUR AKAI FIRE INTO <br><span class="text-purple-300">YOUR VISUAL CANVAS</span>
             </h1>
             <p class="text-lg md:text-xl text-gray-300 mb-10 max-w-3xl mx-auto">
-                Transform your Akai Fire MIDI controller into a dynamic lighting instrument and a rich visual feedback tool with <span class="font-semibold text-purple-300">Akai Fire PixelForge</span>. Customize RGB pads and its monochrome OLED display like never before.
+                I'm <span class="font-semibold text-purple-300">Reg0lino</span>—I tinker, I code, and I couldn't stand those default red and white lights when my Akai Fire wasn't running FL Studio. So I built <span class="font-semibold text-purple-300">PixelForge</span> to take over every pad and the OLED screen—paint, animate, and even run dithered GIFs.<br><br>
+                With a little help from AI, I've been able to bring wild ideas to life. PixelForge turns my controller into a playground for light and motion. Next up? <br> <span class="text-pink-400 font-bold">Getting it to run DOOM.</span>
             </p>
             <a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/releases/latest" target="_blank"
                class="gradient-button inline-block text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
-                🚀 DOWNLOAD LATEST RELEASE FOR WINDOWS
+                🚀 DOWNLOAD FOR WINDOWS
             </a>
             <p class="text-sm text-gray-400 mt-4 ascii-font">
                 (STANDALONE EXECUTABLE)
             </p>
         </div>
         <div class="absolute inset-0 flex items-center justify-center opacity-10">
-            <img src="https://placehold.co/1200x600/1a202c/6366f1?text=YOUR+APP+SCREENSHOT+HERE" alt="Main Application Interface Placeholder" class="w-full h-full object-cover">
+            <img src="images/full.png" alt="Main Application Interface" class="w-full h-full object-cover bg-parallax" style="will-change: transform;">
         </div>
     </section>
 
-    <section id="features" class="py-16 md:py-24 bg-black">
-        <div class="container mx-auto px-4">
+    <!-- Painting Screenshot Section -->
+    <section class="relative bg-black py-10 md:py-16 z-10 overflow-hidden">
+        <div class="twinkle-stars" id="stars-paint"></div>
+        <div class="container mx-auto px-4 flex flex-col items-center relative z-10">
+            <img src="images/draw.png"
+                 alt="Painting pads with the cursor"
+                 class="rounded-lg shadow-2xl border-2 border-gray-800 max-w-2xl w-full mb-4 transition-transform hover:scale-105 duration-300 cursor-zoom-in zoomable-img" />
+            <figcaption class="text-gray-400 text-base md:text-lg text-center max-w-xl">
+                I can paint directly onto my Akai Fire—every pad is a pixel. <br><span class="text-purple-300">Hands-on, real-time, and fun.</span>
+            </figcaption>
+        </div>
+    </section>
+
+    <!-- Screen Sampler Screenshot Section -->
+    <section class="relative bg-black py-10 md:py-16 z-10 overflow-hidden">
+        <div class="twinkle-stars" id="stars-sampler"></div>
+        <div class="container mx-auto px-4 flex flex-col items-center relative z-10">
+            <img src="images/sample.png"
+                 alt="Screen Sampler in action"
+                 class="rounded-lg shadow-2xl border-2 border-gray-800 max-w-2xl w-full mb-4 transition-transform hover:scale-105 duration-300 cursor-zoom-in zoomable-img" />
+            <figcaption class="text-gray-400 text-base md:text-lg text-center max-w-xl">
+                The screen sampler grabs colors from any part of my monitor and splashes them onto the pads—here's Iron Man lighting up the grid.
+            </figcaption>
+        </div>
+    </section>
+
+    <section id="features" class="relative py-16 md:py-24 bg-black z-10 overflow-hidden">
+        <div class="twinkle-stars" id="stars-features"></div>
+        <div class="container mx-auto px-4 relative z-10">
             <h2 class="text-3xl md:text-5xl font-extrabold text-center mb-16 text-white ascii-font">
-                POWERFUL FEATURES AT YOUR FINGERTIPS
+                WHAT CAN PIXELFORGE DO?
             </h2>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
 
-                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 feature-card">
                     <div class="text-purple-400 mb-4">
                         <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2h1v-.08c-1.1-.23-2-1.2-2-2.32v-1.58l-6.38-6.38C5.23 6.16 8.27 4 12 4c4.07 0 7.42 3.05 7.93 7h-6.93v-1c0-1.1-.9-2-2-2H9V8l-2.45-2.45C6.73 5.27 7.34 5 8 5c2.21 0 4 1.79 4 4v1h6.93c.49 3.95-2.85 7-7.93 7z"/></svg>
                         <h3 class="text-2xl font-semibold inline-block ascii-font">RGB PAD CONTROL</h3>
@@ -152,7 +250,7 @@
                     </p>
                 </div>
 
-                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 feature-card">
                     <div class="text-purple-400 mb-4">
                         <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM4 20V4h16l.01 16H4zM9 8h6v2H9zm0 4h6v2H9zm0 4h6v2H9z"/></svg>
                         <h3 class="text-2xl font-semibold inline-block ascii-font">OLED DISPLAY CUSTOMIZATION</h3>
@@ -162,7 +260,7 @@
                     </p>
                 </div>
 
-                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 feature-card">
                     <div class="text-purple-400 mb-4">
                         <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zM11 7h2v4h-2zm0 6h2v2h-2z"/></svg>
                         <h3 class="text-2xl font-semibold inline-block ascii-font">AMBIENT SCREEN SAMPLER</h3>
@@ -172,7 +270,7 @@
                     </p>
                 </div>
 
-                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 feature-card">
                     <div class="text-purple-400 mb-4">
                         <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
                         <h3 class="text-2xl font-semibold inline-block ascii-font">SMART HARDWARE INTEGRATION</h3>
@@ -182,7 +280,7 @@
                     </p>
                 </div>
 
-                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 feature-card">
                     <div class="text-purple-400 mb-4">
                         <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
                         <h3 class="text-2xl font-semibold inline-block ascii-font">INTUITIVE UI & PERSISTENCE</h3>
@@ -192,7 +290,7 @@
                     </p>
                 </div>
 
-                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                <div class="bg-gray-950 p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 feature-card">
                     <div class="text-purple-400 mb-4">
                         <svg class="feature-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
                         <h3 class="text-2xl font-semibold inline-block ascii-font">ANIMATOR STUDIO</h3>
@@ -203,16 +301,31 @@
                 </div>
 
             </div>
+
+            <!-- OLED Customizer Screenshot -->
+            <div class="flex flex-col md:flex-row items-center justify-center gap-8 mt-16">
+                <img src="images/oled.png"
+                     alt="OLED Customizer Dialog"
+                     class="rounded-lg shadow-2xl border-2 border-gray-800 max-w-xl w-full md:w-1/2 transition-transform hover:scale-105 duration-300 cursor-zoom-in zoomable-img" />
+                <div class="md:w-1/2 text-gray-300 text-lg mt-6 md:mt-0">
+                    <h3 class="text-2xl font-bold text-white mb-2">OLED Customizer</h3>
+                    <p>
+                        Create and preview custom text, pixel art, or animated GIFs for your Akai Fire's OLED display. <br>
+                        <span class="text-pink-400">Dithered GIFs? Check. Nerdy ambitions? <br> <b>DOOM</b> is on the roadmap.</span>
+                    </p>
+                </div>
+            </div>
         </div>
     </section>
 
-    <section class="bg-gray-950 py-16 md:py-24 text-center">
-        <div class="container mx-auto px-4">
+    <section class="relative bg-gray-950 py-16 md:py-24 text-center overflow-hidden">
+        <!-- No stars here (bg image section) -->
+        <div class="container mx-auto px-4 relative z-10">
             <h2 class="text-3xl md:text-5xl font-extrabold mb-8 text-white ascii-font">
-                READY TO EXPERIENCE PIXELFORGE?
+                READY TO MAKE YOUR CONTROLLER DO MORE?
             </h2>
             <p class="text-lg md:text-xl text-gray-300 mb-10 max-w-3xl mx-auto">
-                Download the latest release and unlock a new dimension of control and visual flair for your Akai Fire.
+                Download PixelForge and give your Akai Fire a new life—no more boring default lights, just pure creative control. And yes, we're working on making it run DOOM.
             </p>
             <a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/releases/latest" target="_blank"
                class="gradient-button inline-block text-white font-bold py-4 px-10 rounded-full text-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
@@ -222,11 +335,15 @@
                 (WINDOWS STANDALONE EXECUTABLE)
             </p>
         </div>
+        <div class="absolute inset-0 flex items-center justify-center opacity-10 z-0 pointer-events-none">
+            <img src="images/full.png" alt="Main Application Interface" class="w-full h-full object-cover">
+        </div>
     </section>
 
-    <footer class="bg-black py-10 text-center text-gray-400 text-sm">
-        <div class="container mx-auto px-4">
-            <p class="mb-2">Open source project by <a href="https://github.com/Reg0lino" target="_blank" class="text-purple-400 hover:underline ascii-font">Reg0lino</a> & Gemini 2.5</p>
+    <footer class="bg-black py-10 text-center text-gray-400 text-sm relative overflow-hidden">
+        <div class="twinkle-stars" id="stars-footer"></div>
+        <div class="container mx-auto px-4 relative z-10">
+            <p class="mb-2">Open source project by <a href="https://github.com/Reg0lino" target="_blank" class="text-purple-400 hover:underline ascii-font">Reg0lino</a> & friends. Powered by curiosity, caffeine, and the eternal quest to run DOOM on everything.</p>
             <div class="mt-4 flex justify-center space-x-6">
                 <a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/blob/main/LICENSE" target="_blank" class="hover:text-purple-400 transition-colors">LICENSE (MIT)</a>
                 <a href="https://github.com/Reg0lino/AKAI-Fire-RGB-Controller/issues" target="_blank" class="hover:text-purple-400 transition-colors">REPORT ISSUES</a>
@@ -235,6 +352,73 @@
         </div>
     </footer>
 
+    <!-- Modal for image zoom -->
+    <div id="img-modal" class="modal-bg" onclick="closeModal(event)">
+        <span class="modal-close" onclick="closeModal(event)">&times;</span>
+        <img id="modal-img" class="modal-img" src="" alt="Zoomed screenshot" />
+    </div>
+
+    <script>
+    // Twinkling stars for only black bg sections (no stars on bg image sections)
+    function spawnStars(containerId, count) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            const size = Math.random() * 1.8 + 1.2;
+            star.style.width = size + 'px';
+            star.style.height = size + 'px';
+            star.style.top = (Math.random() * 100) + '%';
+            star.style.left = (Math.random() * 100) + '%';
+            star.style.opacity = Math.random() * 0.7 + 0.3;
+            star.style.animationDuration = (Math.random() * 2 + 1.5) + 's';
+            container.appendChild(star);
+        }
+    }
+    // Only spawn stars on black bg sections
+    spawnStars('stars-paint', 25);
+    spawnStars('stars-sampler', 25);
+    spawnStars('stars-features', 30);
+    spawnStars('stars-footer', 18);
+
+    // Image zoom modal
+    function closeModal(e) {
+        if (e.target.id === 'img-modal' || e.target.classList.contains('modal-close')) {
+            document.getElementById('img-modal').classList.remove('active');
+            document.getElementById('modal-img').src = '';
+        }
+    }
+    document.querySelectorAll('.zoomable-img').forEach(img => {
+        img.addEventListener('click', function(e) {
+            document.getElementById('modal-img').src = this.src;
+            document.getElementById('img-modal').classList.add('active');
+        });
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === "Escape") {
+            document.getElementById('img-modal').classList.remove('active');
+            document.getElementById('modal-img').src = '';
+        }
+    });
+
+    // Parallax background effect for hero section only
+    function parallaxBg() {
+        const scrollY = window.scrollY || window.pageYOffset;
+        // Only apply to the first .bg-gray-950 section (hero)
+        const heroSection = document.querySelector('.bg-gray-950');
+        if (heroSection) {
+            const heroBg = heroSection.querySelector('.absolute img.bg-parallax');
+            if (heroBg) {
+                heroBg.style.transform = `translateY(${scrollY * 0.35}px) scale(1.03)`;
+            }
+        }
+    }
+    window.addEventListener('scroll', parallaxBg);
+    window.addEventListener('resize', parallaxBg);
+    setTimeout(parallaxBg, 100); // Initial call after DOM ready
+    </script>
 </body>
 </html>
 
