@@ -70,8 +70,10 @@ except ImportError:
                                'saturation': 1.0, 'hue_shift': 0.0}  # ensure float for hue
 
 from .oled_customizer_dialog import OLEDCustomizerDialog
+from .app_guide_dialog import AppGuideDialog # <<< ADD THIS IMPORT
+
 # --- Constants ---
-INITIAL_WINDOW_WIDTH = 1050
+INITIAL_WINDOW_WIDTH = 1100
 INITIAL_WINDOW_HEIGHT = 900
 PRESETS_BASE_DIR_NAME = "presets"
 APP_NAME = "AKAI_Fire_RGB_Controller"
@@ -413,8 +415,8 @@ class MainWindow(QMainWindow):
         # self.right_panel_layout_v.setSpacing(8)               # Optional: spacing for items in right panel
         
         # Set size constraints for the right panel
-        self.right_panel_widget.setMinimumWidth(360) 
-        self.right_panel_widget.setMaximumWidth(400) 
+        self.right_panel_widget.setMinimumWidth(380) 
+        self.right_panel_widget.setMaximumWidth(420) 
         self.right_panel_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding) # Fixed width, expanding height
         
         # Add the right_panel_widget to the main_app_layout
@@ -429,15 +431,13 @@ class MainWindow(QMainWindow):
 
         print("MW DEBUG: _init_ui_layout COMPLETE")
 
-# In class MainWindow(QMainWindow):
-
     def _create_hardware_top_strip(self) -> QGroupBox:
         top_strip_group = QGroupBox("Device Controls")
         top_strip_group.setTitle("")
         top_strip_group.setStyleSheet(
             "QGroupBox { border: none; margin: 0px; padding: 0px; background-color: transparent; }"
         )
-        # Make the GroupBox itself expand horizontally to fill the space given by left_panel_layout
+        # Make the GroupBox itself expand horizontally to fill the space given by left_panel_layout 
         # Fixed height, but expanding width
         top_strip_group.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -825,6 +825,26 @@ class MainWindow(QMainWindow):
             self.right_panel_layout_v.addWidget(self.static_layouts_manager)
         else:
             print("MW WARNING: StaticLayoutsManager not available to add to right panel.")
+
+        # --- App Guide Button ---
+        app_guide_button_container = QWidget() # Use a container for better layout control if needed
+        app_guide_button_layout = QHBoxLayout(app_guide_button_container)
+        app_guide_button_layout.setContentsMargins(0, 10, 0, 0) # Add some top margin
+        
+        # Or use an icon: QPushButton("🚀")
+        self.app_guide_button = QPushButton("🚀 App Guide && Hotkey List")
+        self.app_guide_button.setToolTip("Open the App Guide and Hotkey List")
+        self.app_guide_button.setObjectName("AppGuideButton") # For potential specific styling
+        # Set a policy that allows it to be a reasonable size but not stretch excessively
+        self.app_guide_button.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
+        self.app_guide_button.clicked.connect(self._open_app_guide_dialog) # Connect to new slot
+
+        app_guide_button_layout.addStretch(1) # Push button to the right
+        app_guide_button_layout.addWidget(self.app_guide_button)
+        app_guide_button_layout.addStretch(1) # Center the button (or remove one stretch to keep it right)
+        
+        self.right_panel_layout_v.addWidget(app_guide_button_container)
+
 
         self.right_panel_layout_v.addStretch(1)
         print(f"MW TRACE: _populate_right_panel - FINISHED")
@@ -1420,11 +1440,8 @@ class MainWindow(QMainWindow):
                 self.gui_knob4.setValue(64)
                 # self.gui_knob4.valueChanged.connect(self._on_global_resonance_knob_changed) # Future
                 print("MW TRACE: Knob 4 configured for GLOBAL RESONANCE/UNASSIGNED.")
-    
-    
+
         # --- Global UI State Management ---
-
-
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
 
@@ -1711,6 +1728,7 @@ class MainWindow(QMainWindow):
         # <<< NEW: For OLED Play/Pause Icon Label and container >>>
         self.oled_play_pause_icon_label: QLabel | None = None
         self.oled_container_widget_ref: QWidget | None = None
+        self.app_guide_button: QPushButton | None = None
         # --- END UI ELEMENT REFERENCES ---
         if hasattr(self, 'ensure_user_dirs_exist'):
             self.ensure_user_dirs_exist()
@@ -2320,7 +2338,7 @@ class MainWindow(QMainWindow):
         else:
             # Check the _stop_action_issued_for_oled flag to distinguish between Pause and Stop
             # This flag should be set to True in your action_animator_stop method right before
-            # the animator's stop action is called, and reset here or after the message.
+            # the animator's stop action is called, and reset here o5r after the message.
             if self._stop_action_issued_for_oled:
                 oled_message_text = "STOP"
                 self._stop_action_issued_for_oled = False # Reset flag after using it
@@ -2596,6 +2614,22 @@ class MainWindow(QMainWindow):
             painter.end()
             self.oled_display_mirror_widget.setPixmap(error_pixmap)
 
+    def _open_app_guide_dialog(self):
+        """
+        Creates and shows the AppGuideDialog.
+        """
+        # Check if a dialog is already open to prevent multiple instances (optional)
+        # For a simple guide, it's often okay to create a new one each time.
+
+        guide_dialog = AppGuideDialog(self)  # Pass self as parent
+        # guide_dialog.set_guide_content(APP_GUIDE_HTML_CONTENT) # Content is already in dialog's __init__
+        guide_dialog.exec()  # Show as a modal dialog
+        # exec() blocks until dialog is closed. Use show() for non-modal.
+
+        # Clean up the dialog after it's closed if it was modal and created on the fly
+        guide_dialog.deleteLater()
+
+
     def _on_animator_undo_redo_state_changed(self, can_undo: bool, can_redo: bool):
         if self.undo_action: self.undo_action.setEnabled(can_undo)
         if self.redo_action: self.redo_action.setEnabled(can_redo)
@@ -2609,9 +2643,6 @@ class MainWindow(QMainWindow):
         will be forced to OFF by AkaiFireController.
         """
         # print(f"DEBUG MW: _update_fire_transport_leds - Animator playing: {is_animator_playing}. (Play/Stop LEDs are forced OFF by AkaiFireController)") # Optional        
-        # No explicit calls to self.akai_controller.set_play_led() or set_stop_led() needed here
-        # if AkaiFireController is forcing them off.
-        # If you had other LEDs to control based on playback, that logic would go here.
         pass
 
     # --- Delegating Methods for QActions to AnimatorManagerWidget ---  

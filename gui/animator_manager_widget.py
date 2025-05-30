@@ -128,6 +128,7 @@ class AnimatorManagerWidget(QWidget):
                            QSizePolicy.Policy.Expanding)
 
     def _connect_ui_signals(self):
+        # Animator Studio Buttons
         self.sequence_selection_combo.currentIndexChanged.connect(
             self._on_sequence_combo_changed)
         self.load_sequence_button.clicked.connect(
@@ -138,7 +139,8 @@ class AnimatorManagerWidget(QWidget):
             self.action_save_sequence_as)
         self.delete_sequence_button.clicked.connect(
             self._on_delete_selected_sequence_button_clicked)
-        
+
+        # Controls Widget
         self.sequence_controls_widget.add_frame_requested.connect(
             self.action_add_frame)
         self.sequence_controls_widget.delete_selected_frame_requested.connect(
@@ -151,10 +153,8 @@ class AnimatorManagerWidget(QWidget):
             self.action_cut_frames)
         self.sequence_controls_widget.paste_frames_requested.connect(
             self.action_paste_frames)
-        self.sequence_controls_widget.undo_requested.connect(
-            self.action_undo)  # <<< CONNECT NEW
-        self.sequence_controls_widget.redo_requested.connect(
-            self.action_redo)  # <<< CONNECT NEW
+        # REMOVED: Connections for self.sequence_controls_widget.undo_requested
+        # REMOVED: Connections for self.sequence_controls_widget.redo_requested
         self.sequence_controls_widget.navigate_first_requested.connect(
             self.action_navigate_first)
         self.sequence_controls_widget.navigate_prev_requested.connect(
@@ -170,6 +170,7 @@ class AnimatorManagerWidget(QWidget):
         self.sequence_controls_widget.frame_delay_changed.connect(
             self.on_controls_frame_delay_changed)
 
+        # Timeline Widget
         self.sequence_timeline_widget.add_frame_action_triggered.connect(
             self.on_timeline_add_frame_action)
         self.sequence_timeline_widget.frame_selected.connect(
@@ -186,6 +187,7 @@ class AnimatorManagerWidget(QWidget):
             self.action_delete_selected_frames)
         self.sequence_timeline_widget.select_all_action_triggered.connect(
             self.action_select_all_frames)
+
         self.sequence_timeline_widget.insert_blank_frame_before_action_triggered.connect(
             lambda index: self.action_add_frame("blank", at_index=index)
         )

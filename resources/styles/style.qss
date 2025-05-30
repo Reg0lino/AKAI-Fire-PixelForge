@@ -312,5 +312,3 @@ QGroupBox#StaticPresetsGroup {
 QDial {
     background-color: #101010; /* Or transparent if you want QWidget background */
 }
-/* QDial::groove { background: #0C0C0C; } */ /* Often not visible or needed */
-/* QDial::handle { background: #282828; border: 1px solid #363636; } */ /* Qt handles drawing based on style */

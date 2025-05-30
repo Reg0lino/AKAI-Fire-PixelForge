@@ -83,3 +83,5 @@ minimal_qt_test.py
 .spec_chat_5-26-25.md
 test_qfontdatabase.py
 debug_mirror_pil_frame.png
+animator/controls_widget.py
+installer.iss
