@@ -138,7 +138,7 @@ class AnimatorManagerWidget(QWidget):
             self.action_save_sequence_as)
         self.delete_sequence_button.clicked.connect(
             self._on_delete_selected_sequence_button_clicked)
-
+        
         self.sequence_controls_widget.add_frame_requested.connect(
             self.action_add_frame)
         self.sequence_controls_widget.delete_selected_frame_requested.connect(
@@ -324,6 +324,8 @@ class AnimatorManagerWidget(QWidget):
         self._request_load_selected_sequence_from_main()
 
     def action_undo(self):
+        # <<< ADD DEBUG
+        print("AMW DEBUG: action_undo called (potentially by button or QAction)")
         self.request_sampler_disable.emit()
         if self.active_sequence_model.undo():
             self.playback_status_update.emit("Undo.", 1500)
@@ -332,6 +334,8 @@ class AnimatorManagerWidget(QWidget):
         self._emit_state_updates()  # Will update button states
 
     def action_redo(self):
+        # <<< ADD DEBUG
+        print("AMW DEBUG: action_redo called (potentially by button or QAction)")
         self.request_sampler_disable.emit()
         if self.active_sequence_model.redo():
             self.playback_status_update.emit("Redo.", 1500)
@@ -483,15 +487,51 @@ class AnimatorManagerWidget(QWidget):
             self.active_sequence_model.frame_delay_ms)
         self._emit_state_updates()
 
-    def _update_ui_for_current_sequence_properties(self):
+    def _update_ui_for_current_sequence(self):
+        # print(f"DEBUG AMW._update_ui_for_current_sequence: Called. Frame count: {self.active_sequence_model.get_frame_count()}") # Keep for debug if needed
+
+        # This method is called when the frames list changes (add, delete, duplicate, paste)
+        # or when properties affecting the whole sequence display might change.
+        # Its primary role is to refresh the timeline display and controls based on the model.
+
+        if not self.active_sequence_model or not self.sequence_timeline_widget or not self.sequence_controls_widget:
+            print(
+                "AMW WARNING: _update_ui_for_current_sequence - Critical UI components missing.")
+            return
+
+        # 1. Get all frame color data for the timeline thumbnails
+        all_frames_colors = []
+        for i in range(self.active_sequence_model.get_frame_count()):
+            colors = self.active_sequence_model.get_frame_colors(i)
+            all_frames_colors.append(colors if colors else [
+                                     QColor("black").name()] * 64)
+
+        # 2. Get current edit and playback indices from the model
+        current_edit_idx = self.active_sequence_model.get_current_edit_frame_index()
+        current_playback_idx = -1
+        if self.active_sequence_model.get_is_playing():
+            current_playback_idx = self.active_sequence_model.get_current_playback_frame_index()
+
+        # 3. Update the timeline widget's display
+        # This will clear and repopulate items, potentially changing selection.
+        self.sequence_timeline_widget.update_frames_display(
+            all_frames_colors,
+            current_edit_idx,
+            current_playback_idx
+        )
+
+        # 4. Update the controls widget (e.g., frame delay/speed slider)
         self.sequence_controls_widget.set_frame_delay_ui(
             self.active_sequence_model.frame_delay_ms)
-        self.refresh_sequences_list_and_select(
-            self.active_sequence_model.name,
-            self._get_type_id_from_filepath(
-                self.active_sequence_model.loaded_filepath)
-        )
+        # Note: The loop toggle in SequenceControlsWidget might need its own update mechanism
+        # if it's directly part of that widget and not managed via model properties_changed.
+
+        # 5. Emit state updates for MainWindow (undo/redo, modified, clipboard)
+        # This also calls _update_animator_controls_enabled_state locally.
         self._emit_state_updates()
+
+        # IMPORTANT: This method should NOT cause any further modifications to the active_sequence_model
+        # that would trigger another _push_undo_state(). It's purely for reflecting the model in the UI.
 
     # Add can_undo, can_redo
     def _update_animator_controls_enabled_state(self, can_undo: bool = False, can_redo: bool = False):
@@ -535,17 +575,47 @@ class AnimatorManagerWidget(QWidget):
         self._emit_state_updates()
 
     def on_model_edit_frame_changed(self, frame_index: int):
+        # print(f"DEBUG AMW: on_model_edit_frame_changed CALLED with NEW model_frame_index: {frame_index}")
+
+        # This slot is called when SequenceModel.current_edit_frame_changed is emitted.
+        # Purpose:
+        # 1. Update the timeline widget to visually select/highlight the new edit frame.
+        # 2. Update the main pad grid display in MainWindow to show the content of this new edit frame.
+        # 3. Emit general state updates.
+
+        if not self.active_sequence_model:
+            print("AMW WARNING: on_model_edit_frame_changed - No active sequence model.")
+            return
+
+        # 1. Update timeline selection (if the timeline widget exists)
         if self.sequence_timeline_widget:
+            # print(f"DEBUG AMW: on_model_edit_frame_changed - Syncing timeline selection to model index: {frame_index}")
+            # This call might trigger sequence_timeline_widget.frame_selected, which calls
+            # on_timeline_frame_selected. The guard in on_timeline_frame_selected should prevent
+            # a loop if the model's index already matches.
             self.sequence_timeline_widget.set_selected_frame_by_index(
                 frame_index)
+            # Ensure the timeline's delegate knows about the edit index for its special border
+            self.sequence_timeline_widget.thumbnail_delegate.set_current_edit_idx(
+                frame_index)
+            self.sequence_timeline_widget.frame_list_widget.update()  # Force repaint of items
+
+        # 2. Update main display with new frame's content
         current_colors_hex = None
-        if frame_index != -1 and self.active_sequence_model:
+        if frame_index != -1:  # A valid frame is selected
             current_colors_hex = self.active_sequence_model.get_frame_colors(
                 frame_index)
+
+        # Prepare data for display (default to blank if no valid colors)
         final_data_to_emit = current_colors_hex if current_colors_hex else [
             QColor("black").name()] * 64
         self.active_frame_data_for_display.emit(final_data_to_emit)
+
+        # 3. Emit general state updates
         self._emit_state_updates()
+
+        # This method should NOT cause further model modifications that push undo states.
+
 
     def on_model_playback_state_changed(self, is_playing: bool):
         self.sequence_controls_widget.update_playback_button_state(is_playing)
@@ -869,30 +939,67 @@ class AnimatorManagerWidget(QWidget):
     def _on_delete_selected_sequence_button_clicked(self):
         self.request_sampler_disable.emit()
         index = self.sequence_selection_combo.currentIndex()
-        if index <= 0:
+
+        if index <= 0:  # No valid item selected (index 0 is placeholder)
             self.playback_status_update.emit(
                 "No sequence selected to delete.", 2000)
             return
+
         item_data = self.sequence_selection_combo.itemData(index)
-        display_name = self.sequence_selection_combo.itemText(index)
-        if not item_data or "path" not in item_data or item_data.get("type") not in ["user", "sampler"]:
+        display_name = self.sequence_selection_combo.itemText(
+            index)  # Get display name for the prompt
+
+        if not item_data or "path" not in item_data:
             self.playback_status_update.emit(
-                "Cannot delete selected item.", 3000)
+                f"Error: Could not get data for '{display_name}'.", 3000)
+            self.refresh_sequences_list_and_select()  # Refresh list to fix inconsistency
             return
-        filepath = item_data["path"]
-        try:
-            if os.path.exists(filepath):
-                os.remove(filepath)
+
+        sequence_type = item_data.get("type")
+        if sequence_type not in ["user", "sampler"]:
+            QMessageBox.warning(self, "Delete Error",
+                                f"Cannot delete '{display_name}'.\nOnly user-saved or sampler-recorded sequences can be deleted via this UI.")
+            return
+
+        # --- Confirmation Dialog ---
+        reply = QMessageBox.question(self, "Confirm Deletion",
+                                     f"Are you sure you want to permanently delete the sequence:\n'{display_name}'?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No)  # Default to No
+
+        if reply == QMessageBox.StandardButton.No:
             self.playback_status_update.emit(
-                f"Sequence '{display_name}' deleted.", 2000)
-            if self.active_sequence_model.loaded_filepath and \
-               os.path.normpath(self.active_sequence_model.loaded_filepath) == os.path.normpath(filepath):
-                self.action_new_sequence(prompt_save=False)
-            self.refresh_sequences_list_and_select()
+                f"Deletion of '{display_name}' cancelled.", 1500)
+            return
+        # --- End Confirmation Dialog ---
+
+        filepath_to_delete = item_data["path"]
+
+        try:
+            if os.path.exists(filepath_to_delete):
+                os.remove(filepath_to_delete)
+                self.playback_status_update.emit(
+                    f"Sequence '{display_name}' deleted successfully.", 2000)
+
+                # If the deleted sequence was the currently active one, create a new sequence
+                if self.active_sequence_model and self.active_sequence_model.loaded_filepath and \
+                   os.path.normpath(self.active_sequence_model.loaded_filepath) == os.path.normpath(filepath_to_delete):
+                    # Create new if active was deleted, don't prompt again
+                    self.action_new_sequence(prompt_save=False)
+
+                self.refresh_sequences_list_and_select()  # Refresh the combo box
+            else:
+                self.playback_status_update.emit(
+                    f"Error: File for '{display_name}' not found. Already deleted?", 3000)
+                self.refresh_sequences_list_and_select()  # Still refresh if file was missing
+
         except Exception as e:
+            QMessageBox.critical(
+                self, "Delete Error", f"Could not delete sequence '{display_name}':\n{e}")
             self.playback_status_update.emit(
                 f"Error deleting sequence: {e}", 4000)
-        self._emit_state_updates()
+
+        self._emit_state_updates()  # Update undo/redo states etc.
 
     def set_overall_enabled_state(self, enabled: bool):
         self.setEnabled(enabled)
@@ -1390,7 +1497,7 @@ class AnimatorManagerWidget(QWidget):
         return [QColor("black").name()] * 64 # Placeholder
 
     def _update_ui_for_current_sequence(self):
-        print(f"DEBUG AMW._update_ui_for_current_sequence: Called. Frame count: {self.active_sequence_model.get_frame_count()}") # ADD THIS
+        # print(f"DEBUG AMW._update_ui_for_current_sequence: Called. Frame count: {self.active_sequence_model.get_frame_count()}") # ADD THIS
         # Updates timeline, controls widget properties based on the active_sequence_model
         all_frames_colors = [self.active_sequence_model.get_frame_colors(i) or [QColor("black").name()] * 64
                              for i in range(self.active_sequence_model.get_frame_count())]
@@ -1525,8 +1632,8 @@ class AnimatorManagerWidget(QWidget):
 
     # frame_index is from the timeline widget UI
     def on_timeline_frame_selected(self, frame_index: int):
-        print(
-            f"DEBUG AMW: on_timeline_frame_selected CALLED with frame_index from timeline: {frame_index}")
+        # print(
+            # f"DEBUG AMW: on_timeline_frame_selected CALLED with frame_index from timeline: {frame_index}")
 
         self.request_sampler_disable.emit()
 
@@ -1537,8 +1644,8 @@ class AnimatorManagerWidget(QWidget):
             # This helps prevent re-processing if the model already knows this is the edit frame.
             current_model_edit_idx = self.active_sequence_model.get_current_edit_frame_index()
             if current_model_edit_idx != frame_index:
-                print(
-                    f"DEBUG AMW: on_timeline_frame_selected - Model's edit_idx ({current_model_edit_idx}) differs from timeline's ({frame_index}). Updating model.")
+                # print(
+                    # f"DEBUG AMW: on_timeline_frame_selected - Model's edit_idx ({current_model_edit_idx}) differs from timeline's ({frame_index}). Updating model.")
                 self.active_sequence_model.set_current_edit_frame_index(
                     frame_index)
                 # When set_current_edit_frame_index is called and it *actually changes* the index in the model,
@@ -1846,28 +1953,70 @@ class AnimatorManagerWidget(QWidget):
     def _on_delete_selected_sequence_button_clicked(self):
         self.request_sampler_disable.emit()
         index = self.sequence_selection_combo.currentIndex()
-        if index <= 0:
-            self.playback_status_update.emit("No sequence selected to delete.", 2000); return
-        item_data = self.sequence_selection_combo.itemData(index)
-        display_name = self.sequence_selection_combo.itemText(index)
-        if not item_data or "path" not in item_data or item_data.get("type") not in ["user", "sampler"]:
-            self.playback_status_update.emit("Cannot delete selected item.", 3000); return
-
-        # reply = QMessageBox.question(...) # Needs MW parent
-        # Assuming Yes for now
         
-        filepath = item_data["path"]
+        if index <= 0: # No valid item selected (index 0 is placeholder)
+            self.playback_status_update.emit("No sequence selected to delete.", 2000)
+            # print("AMW_DELETE_DEBUG: Exiting early - index <= 0") # Debug
+            return
+
+        item_data = self.sequence_selection_combo.itemData(index)
+        display_name = self.sequence_selection_combo.itemText(index) 
+
+        if not item_data or "path" not in item_data:
+            self.playback_status_update.emit(f"Error: Could not get data for '{display_name}'.", 3000)
+            # print(f"AMW_DELETE_DEBUG: Exiting early - no item_data or no path for '{display_name}'") # Debug
+            self.refresh_sequences_list_and_select() 
+            return
+            
+        sequence_type = item_data.get("type")
+        if sequence_type not in ["user", "sampler"]:
+            # print(f"AMW_DELETE_DEBUG: Attempt to delete non-user/sampler type: '{sequence_type}' for '{display_name}'") # Debug
+            QMessageBox.warning(self, "Delete Error", 
+                                f"Cannot delete '{display_name}'.\nOnly user-saved or sampler-recorded sequences can be deleted via this UI.")
+            return
+
+        # --- ADD THIS DEBUG PRINT ---
+        print(f"AMW_DELETE_DEBUG: Preparing to show QMessageBox.question for '{display_name}', type: '{sequence_type}'")
+        # --- END OF DEBUG PRINT ---
+
+        # --- Confirmation Dialog ---
+        reply = QMessageBox.question(self, "Confirm Deletion",
+                                     f"Are you sure you want to permanently delete the sequence:\n'{display_name}'?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No) 
+
+        if reply == QMessageBox.StandardButton.No:
+            self.playback_status_update.emit(f"Deletion of '{display_name}' cancelled.", 1500)
+            # print(f"AMW_DELETE_DEBUG: User cancelled deletion for '{display_name}'") # Debug
+            return
+        # --- End Confirmation Dialog ---
+        
+        # print(f"AMW_DELETE_DEBUG: User confirmed YES to delete '{display_name}'") # Debug
+        filepath_to_delete = item_data["path"]
+        
         try:
-            if os.path.exists(filepath): os.remove(filepath)
-            self.playback_status_update.emit(f"Sequence '{display_name}' deleted.", 2000)
-            if self.active_sequence_model.loaded_filepath and \
-               os.path.normpath(self.active_sequence_model.loaded_filepath) == os.path.normpath(filepath):
-                self.action_new_sequence(prompt_save=False) # Create new if active was deleted
-            self.refresh_sequences_list_and_select()
+            if os.path.exists(filepath_to_delete):
+                os.remove(filepath_to_delete)
+                self.playback_status_update.emit(f"Sequence '{display_name}' deleted successfully.", 2000)
+                
+                if self.active_sequence_model and self.active_sequence_model.loaded_filepath and \
+                   os.path.normpath(self.active_sequence_model.loaded_filepath) == os.path.normpath(filepath_to_delete):
+                    # print(f"AMW_DELETE_DEBUG: Deleted active sequence, creating new.") # Debug
+                    self.action_new_sequence(prompt_save=False) 
+                
+                self.refresh_sequences_list_and_select() 
+            else:
+                self.playback_status_update.emit(f"Error: File for '{display_name}' not found. Already deleted?", 3000)
+                # print(f"AMW_DELETE_DEBUG: File not found for deletion: '{filepath_to_delete}'") # Debug
+                self.refresh_sequences_list_and_select() 
+
         except Exception as e:
-            # QMessageBox.critical(self, "Delete Error", f"Could not delete: {e}") # Needs MW parent
+            # print(f"AMW_DELETE_DEBUG: Exception during deletion of '{filepath_to_delete}': {e}") # Debug
+            QMessageBox.critical(self, "Delete Error", f"Could not delete sequence '{display_name}':\n{e}")
             self.playback_status_update.emit(f"Error deleting sequence: {e}", 4000)
+        
         self._emit_state_updates()
+
 
     def set_overall_enabled_state(self, enabled: bool):
         """Called by MainWindow to enable/disable this entire animator panel."""

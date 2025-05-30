@@ -76,8 +76,8 @@ class SequenceModel(QObject):
             self._undo_stack.pop(0)  # Remove the oldest state
 
         # --- START OF DETAILED LOGGING FOR UNDO STATE ---
-        print(
-            f"MODEL_UNDO_DEBUG: _push_undo_state called. Current edit frame index: {self._current_edit_frame_index}")
+        # print(
+            # f"MODEL_UNDO_DEBUG: _push_undo_state called. Current edit frame index: {self._current_edit_frame_index}")
         if 0 <= self._current_edit_frame_index < len(self.frames):
             current_edit_frame_for_log = self.frames[self._current_edit_frame_index]
             frame_colors_for_log = current_edit_frame_for_log.get_all_colors()
@@ -87,14 +87,14 @@ class SequenceModel(QObject):
                     ["..."] + frame_colors_for_log[-5:]
                 is_blank_log = all(c == QColor("black").name()
                                    for c in frame_colors_for_log)
-                print(
-                    f"MODEL_UNDO_DEBUG:   Content of current edit frame (idx {self._current_edit_frame_index}) being snapshotted: {log_sample}, IsBlank: {is_blank_log}")
-            else:
-                print(
-                    f"MODEL_UNDO_DEBUG:   Current edit frame (idx {self._current_edit_frame_index}) has unexpected color count: {len(frame_colors_for_log)}")
+                # print(
+                    # f"MODEL_UNDO_DEBUG:   Content of current edit frame (idx {self._current_edit_frame_index}) being snapshotted: {log_sample}, IsBlank: {is_blank_log}")
+            # else:
+                # print(
+                    # f"MODEL_UNDO_DEBUG:   Current edit frame (idx {self._current_edit_frame_index}) has unexpected color count: {len(frame_colors_for_log)}")
         elif self.frames:  # Edit index is -1 but frames exist
-            print(
-                f"MODEL_UNDO_DEBUG:   No current edit frame selected (index {self._current_edit_frame_index}), but frames exist. Logging first frame content if available.")
+            # print(
+                # f"MODEL_UNDO_DEBUG:   No current edit frame selected (index {self._current_edit_frame_index}), but frames exist. Logging first frame content if available.")
             if len(self.frames) > 0:
                 first_frame_for_log = self.frames[0]
                 first_frame_colors_log = first_frame_for_log.get_all_colors()
@@ -103,11 +103,11 @@ class SequenceModel(QObject):
                         "..."] + first_frame_colors_log[-5:]
                     is_blank_first_log = all(c == QColor(
                         "black").name() for c in first_frame_colors_log)
-                    print(
-                        f"MODEL_UNDO_DEBUG:     Content of first frame (idx 0) in sequence: {log_sample_first}, IsBlank: {is_blank_first_log}")
-        else:  # No frames in sequence
-            print(
-                f"MODEL_UNDO_DEBUG:   No frames in sequence. Pushing current state (name, delay).")
+                    # print(
+                        # f"MODEL_UNDO_DEBUG:     Content of first frame (idx 0) in sequence: {log_sample_first}, IsBlank: {is_blank_first_log}")
+        # else:  # No frames in sequence
+            # print(
+                # f"MODEL_UNDO_DEBUG:   No frames in sequence. Pushing current state (name, delay).")
         # --- END OF DETAILED LOGGING FOR UNDO STATE ---
 
         # Create deep copies of frames for the undo state
@@ -122,8 +122,8 @@ class SequenceModel(QObject):
             # Add other properties like 'loop', 'description' if they should be part of undo
         })
         # Log stack size
-        print(
-            f"MODEL_UNDO_DEBUG:   Pushed state to undo_stack. New stack size: {len(self._undo_stack)}")
+        # print(
+            # f"MODEL_UNDO_DEBUG:   Pushed state to undo_stack. New stack size: {len(self._undo_stack)}")
         self._redo_stack.clear()  # Any new action clears the redo stack
 
     def _apply_state(self, state_dict):
@@ -202,7 +202,7 @@ class SequenceModel(QObject):
         return True
 
     def _add_frame_internal(self, frame_object: AnimationFrame, at_index=None) -> int:
-        print(f"DEBUG Model._add_frame_internal: Called. Current frame count before add: {len(self.frames)}, at_index={at_index}") # ADD THIS
+        # print(f"DEBUG Model._add_frame_internal: Called. Current frame count before add: {len(self.frames)}, at_index={at_index}") # ADD THIS
         if at_index is None or not (0 <= at_index <= len(self.frames)):
             # Append to the end
             self.frames.append(frame_object)
@@ -215,11 +215,11 @@ class SequenceModel(QObject):
         # After adding, set current edit frame to the newly added one
         self.set_current_edit_frame_index(new_index) # This emits current_edit_frame_changed
         self.frames_changed.emit() # This signals timeline to update its display
-        print(f"DEBUG Model._add_frame_internal: New index: {new_index}, Frame count after add: {len(self.frames)}") # ADD THIS
+        # print(f"DEBUG Model._add_frame_internal: New index: {new_index}, Frame count after add: {len(self.frames)}") # ADD THIS
         return new_index
 
     def add_blank_frame(self, at_index: int = None) -> int:
-        print("DEBUG Model.add_blank_frame: Called") # ADD THIS
+        # print("DEBUG Model.add_blank_frame: Called") # ADD THIS
         self._push_undo_state()
         new_frame = AnimationFrame() # Default constructor creates a blank frame
         result_index = self._add_frame_internal(new_frame, at_index)
@@ -399,7 +399,7 @@ class SequenceModel(QObject):
         return self.get_frame_object(self._current_edit_frame_index)
 
     def set_current_edit_frame_index(self, index: int):
-        print(f"DEBUG Model: set_current_edit_frame_index CALLED with requested_index: {index}") # ADD THIS
+        # print(f"DEBUG Model: set_current_edit_frame_index CALLED with requested_index: {index}") # ADD THIS
         target_index = -1 # Default if no frames or index invalid
         if not self.frames:
             target_index = -1
@@ -407,13 +407,13 @@ class SequenceModel(QObject):
             target_index = index
         elif self.frames: # If index is out of bounds but frames exist, select first frame
             target_index = 0 
-        print(f"DEBUG Model: set_current_edit_frame_index - Old _current_edit_frame_index: {self._current_edit_frame_index}, Target new index: {target_index}") # ADD THIS
+        # print(f"DEBUG Model: set_current_edit_frame_index - Old _current_edit_frame_index: {self._current_edit_frame_index}, Target new index: {target_index}") # ADD THIS
         if self._current_edit_frame_index != target_index:
             self._current_edit_frame_index = target_index
-            print(f"DEBUG Model: set_current_edit_frame_index - Index CHANGED to: {self._current_edit_frame_index}. Emitting current_edit_frame_changed.") # ADD THIS
+            # print(f"DEBUG Model: set_current_edit_frame_index - Index CHANGED to: {self._current_edit_frame_index}. Emitting current_edit_frame_changed.") # ADD THIS
             self.current_edit_frame_changed.emit(self._current_edit_frame_index)
-        else:
-            print(f"DEBUG Model: set_current_edit_frame_index - Index NOT changed (was already {self._current_edit_frame_index}). Signal NOT emitted.") # ADD THIS
+        # else:
+            # print(f"DEBUG Model: set_current_edit_frame_index - Index NOT changed (was already {self._current_edit_frame_index}). Signal NOT emitted.") # ADD THIS
 
     def get_current_edit_frame_index(self) -> int:
         return self._current_edit_frame_index

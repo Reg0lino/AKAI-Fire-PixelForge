@@ -274,7 +274,7 @@ class SequenceTimelineWidget(QWidget):
         selected_items = self.frame_list_widget.selectedItems()
         if selected_items:
             first_selected_index = self.frame_list_widget.row(selected_items[0])
-            print(f"DEBUG TimelineWidget: _on_item_selection_changed. Emitting frame_selected({first_selected_index})") # ADD THIS
+            # print(f"DEBUG TimelineWidget: _on_item_selection_changed. Emitting frame_selected({first_selected_index})") # ADD THIS
             self.frame_selected.emit(first_selected_index)
         else:
             self.frame_selected.emit(-1) # No items selected
