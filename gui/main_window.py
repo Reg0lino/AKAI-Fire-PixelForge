@@ -1445,9 +1445,13 @@ class MainWindow(QMainWindow):
             self.animator_manager.set_overall_enabled_state(can_use_animator)
             has_frames = False
             has_sel = False
-            # Get undo/redo state directly from model for QActions
-            can_undo_anim = self.animator_manager.active_sequence_model._undo_stack if self.animator_manager.active_sequence_model else False
-            can_redo_anim = self.animator_manager.active_sequence_model._redo_stack if self.animator_manager.active_sequence_model else False
+
+            # --- CORRECTED: Explicitly cast to bool ---
+            can_undo_anim = bool(
+                self.animator_manager.active_sequence_model._undo_stack) if self.animator_manager.active_sequence_model else False
+            can_redo_anim = bool(
+                self.animator_manager.active_sequence_model._redo_stack) if self.animator_manager.active_sequence_model else False
+            # --- END CORRECTION ---
 
             if self.animator_manager.active_sequence_model:
                 has_frames = self.animator_manager.active_sequence_model.get_frame_count() > 0
@@ -1463,12 +1467,10 @@ class MainWindow(QMainWindow):
                 self.save_sequence_as_action.setEnabled(
                     can_use_animator and has_frames)
 
-            # --- Update Undo/Redo QAction enabled states ---
             if hasattr(self, 'undo_action') and self.undo_action:
                 self.undo_action.setEnabled(can_use_animator and can_undo_anim)
             if hasattr(self, 'redo_action') and self.redo_action:
                 self.redo_action.setEnabled(can_use_animator and can_redo_anim)
-            # --- End Update ---
 
             if hasattr(self, 'copy_action') and self.copy_action:
                 self.copy_action.setEnabled(can_use_animator and has_sel)
@@ -1504,16 +1506,12 @@ class MainWindow(QMainWindow):
         is_eyedropper_active = hasattr(
             self, 'is_eyedropper_mode_active') and self.is_eyedropper_mode_active
         if hasattr(self, 'eyedropper_action') and self.eyedropper_action:
-            # Eyedropper action should be enabled if painting is possible,
-            # its checked state indicates if mode is active.
             self.eyedropper_action.setEnabled(can_paint_direct)
-            self.eyedropper_action.setChecked(
-                is_eyedropper_active)  # Sync QAction check state
+            self.eyedropper_action.setChecked(is_eyedropper_active)
 
         if hasattr(self, 'static_layouts_manager') and self.static_layouts_manager:
             self.static_layouts_manager.set_enabled_state(can_paint_direct)
 
-        # OLED Play/Pause Indicator (QLabel) enable/disable and icon update
         if hasattr(self, 'oled_play_pause_icon_label') and self.oled_play_pause_icon_label:
             self.oled_play_pause_icon_label.setEnabled(is_connected)
             if is_connected and self.oled_display_manager:
