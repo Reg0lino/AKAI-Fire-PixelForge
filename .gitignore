@@ -61,14 +61,14 @@ Thumbs.db
 # PyInstaller
 #-----------
 # *.manifest
-# *.spec
+*.spec
 
 # Nuitka
 #-----------
-# *.build/
+*.build/
 # *.py.เดี่ยว # Nuitka for single file, Thai characters mean "single"
-# *.dist/
-# *.onefile-build/
+*.dist/
+*.onefile-build/
 
 # MyPy cache
 .mypy_cache/
@@ -79,9 +79,14 @@ Thumbs.db
 minimal_qt_test.py
 .specstory/history/2025-05-14_16-37-file-akai-fire-rgb-controller-gui-main-window-py.md
 .specstory/
-.gitignore
 .spec_chat_5-26-25.md
 test_qfontdatabase.py
 debug_mirror_pil_frame.png
 animator/controls_widget.py
 installer.iss
+CHANGELOG.txt
+
+# Miscellaneous
+Installer_Content/
+README.txt
+Output/
