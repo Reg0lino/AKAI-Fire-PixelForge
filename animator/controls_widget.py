@@ -17,23 +17,23 @@ MIN_FRAME_DELAY_MS = 5
 MAX_FRAME_DELAY_MS = 1667
 
 # --- Icons (Unicode Emojis) ---
-ICON_ADD_FRAME = "➕"
+ICON_ADD_FRAME = "✚"
 ICON_ADD_SNAPSHOT = "📷"
 ICON_ADD_BLANK = "⬛"
-ICON_DUPLICATE = "📋" # Also used for Paste
-ICON_DELETE = "🗑️"
-ICON_COPY = "📄"
-ICON_CUT = "✂️"
-# ICON_PASTE = "📋" # Re-using ICON_DUPLICATE for Paste for now
+ICON_DUPLICATE = "⿻"  
+ICON_DELETE = "🗑"
+ICON_COPY = "🗐"
+ICON_CUT = "✂"
+ICON_PASTE = "⤵" 
 
 ICON_NAV_FIRST = "|◀"
 ICON_NAV_PREV = "◀"
 ICON_NAV_NEXT = "▶"
 ICON_NAV_LAST = "▶|"
 
-ICON_PLAY = "▶️"
-ICON_PAUSE = "⏸️"
-ICON_STOP = "⏹️"
+ICON_PLAY = "▷"
+ICON_PAUSE = "⏸"
+ICON_STOP = "☐"
 
 
 class SequenceControlsWidget(QWidget):
@@ -115,7 +115,7 @@ class SequenceControlsWidget(QWidget):
         bar1_layout.addWidget(self.paste_frames_button)
 
         # --- Add Undo/Redo Buttons ---
-        self.undo_button = QPushButton("↩️ Undo")
+        self.undo_button = QPushButton("↩")
         self.undo_button.setToolTip(f"Undo Last Action (Ctrl+Z)")
         self.undo_button.setStatusTip(
             f"Reverts the last sequence modification (Shortcut: Ctrl+Z).")
@@ -123,7 +123,7 @@ class SequenceControlsWidget(QWidget):
             self.undo_requested)  # Emit new signal
         bar1_layout.addWidget(self.undo_button)
 
-        self.redo_button = QPushButton("↪️ Redo")
+        self.redo_button = QPushButton("↪")
         self.redo_button.setToolTip(f"Redo Last Undone Action (Ctrl+Y)")
         self.redo_button.setStatusTip(
             f"Re-applies the last undone sequence modification (Shortcut: Ctrl+Y).")
