@@ -90,16 +90,16 @@ class AnimatorManagerWidget(QWidget):
         self.sequence_selection_combo.setPlaceholderText(
             "--- Select Sequence ---")
         combo_load_layout.addWidget(self.sequence_selection_combo, 1)
-        self.load_sequence_button = QPushButton("📲 Load")
+        self.load_sequence_button = QPushButton("🗀 Load")
         combo_load_layout.addWidget(self.load_sequence_button)
         animator_studio_layout.addLayout(combo_load_layout)
 
         action_buttons_layout = QHBoxLayout()
-        self.new_sequence_button = QPushButton("✨ New")
+        self.new_sequence_button = QPushButton("✚ New")
         action_buttons_layout.addWidget(self.new_sequence_button)
         self.save_sequence_as_button = QPushButton("💾 Save As...")
         action_buttons_layout.addWidget(self.save_sequence_as_button)
-        self.delete_sequence_button = QPushButton("🗑️ Delete")
+        self.delete_sequence_button = QPushButton("☠ Delete")
         action_buttons_layout.addWidget(self.delete_sequence_button)
         action_buttons_layout.addSpacerItem(QSpacerItem(
             10, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))

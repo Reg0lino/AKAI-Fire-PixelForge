@@ -32,7 +32,7 @@ ICON_NAV_NEXT = "▶"
 ICON_NAV_LAST = "▶|"
 
 ICON_PLAY = "▷"
-ICON_PAUSE = "⏸"
+ICON_PAUSE = "❚❚"
 ICON_STOP = "☐"
 
 
@@ -410,14 +410,14 @@ class SequenceControlsWidget(QWidget):
         bar1_layout.addWidget(self.paste_frames_button)
         
 # --- Add Undo/Redo Buttons ---
-        self.undo_button = QPushButton("↩️ Undo")
+        self.undo_button = QPushButton("↩")
         self.undo_button.setToolTip(f"Undo Last Action (Ctrl+Z)")
         self.undo_button.setStatusTip(
             f"Reverts the last sequence modification (Shortcut: Ctrl+Z).")
         # self.undo_button.clicked.connect(self.undo_requested) # Signal will be connected in AnimatorManagerWidget
         bar1_layout.addWidget(self.undo_button)
 
-        self.redo_button = QPushButton("↪️ Redo")
+        self.redo_button = QPushButton("↪")
         self.redo_button.setToolTip(f"Redo Last Undone Action (Ctrl+Y)")
         self.redo_button.setStatusTip(
             f"Re-applies the last undone sequence modification (Shortcut: Ctrl+Y).")

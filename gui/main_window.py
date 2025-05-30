@@ -1126,14 +1126,14 @@ class MainWindow(QMainWindow):
     def _create_edit_actions(self):
         """Creates global QActions for menu items and keyboard shortcuts."""
         # Undo/Redo (Connected to AnimatorManagerWidget)
-        self.undo_action = QAction("↩️ Undo Sequence Edit", self) # Icon added
+        self.undo_action = QAction("↶ Undo Sequence Edit", self)  # Icon added
         self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
         self.undo_action.setToolTip(
             f"Undo last sequence edit ({QKeySequence(QKeySequence.StandardKey.Undo).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.undo_action.triggered.connect(self.action_animator_undo)
         self.addAction(self.undo_action) # Ensure it's added for global shortcut
 
-        self.redo_action = QAction("↪️ Redo Sequence Edit", self) # Icon added
+        self.redo_action = QAction("↷ Redo Sequence Edit", self)  # Icon added
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         self.redo_action.setToolTip(
             f"Redo last undone sequence edit ({QKeySequence(QKeySequence.StandardKey.Redo).toString(QKeySequence.SequenceFormat.NativeText)})")
@@ -2316,16 +2316,16 @@ class MainWindow(QMainWindow):
         message_duration_ms = 1000  # Standard duration for these short cues
         
         if is_playing:
-            oled_message_text = "▶ PLAY"
+            oled_message_text = "PLAY"
         else:
             # Check the _stop_action_issued_for_oled flag to distinguish between Pause and Stop
             # This flag should be set to True in your action_animator_stop method right before
             # the animator's stop action is called, and reset here or after the message.
             if self._stop_action_issued_for_oled:
-                oled_message_text = "■ STOP"
+                oled_message_text = "STOP"
                 self._stop_action_issued_for_oled = False # Reset flag after using it
             else:
-                oled_message_text = "❚❚ PAUSE"
+                oled_message_text = "PAUSE"
         
         if oled_message_text:
             self.oled_display_manager.show_system_message(
