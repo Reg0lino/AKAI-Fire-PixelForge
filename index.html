@@ -162,6 +162,81 @@
             border: 1.5px solid #312e81;
             background: linear-gradient(135deg, #18181b 80%, #312e81 100%);
         }
+
+        /* --- PixelForge Logo Animation Styles --- */
+        .logo-main-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem 1.2rem 1rem;
+            background-color: rgba(26,26,26,0.92); /* semi-transparent for stars */
+            border-radius: 1rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
+            max-width: 900px;
+            margin: 0.5rem auto 0 auto;
+            z-index: 20;
+        }
+        .pixel-font-container {
+            font-family: 'Press Start 2P', cursive;
+            font-size: clamp(2.2rem, 8vw, 4.5rem);
+            white-space: nowrap;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 15;
+            display: flex;
+            pointer-events: none;
+        }
+        .glitch-letter {
+            display: inline-block;
+            animation: glitch-color 1.5s infinite alternate;
+            text-shadow:
+                -2px -2px 0px #000,
+                2px -2px 0px #000,
+                -2px 2px 0px #000,
+                2px 2px 0px #000,
+                0 0 5px currentColor,
+                0 0 10px currentColor,
+                0 0 20px currentColor;
+        }
+        @keyframes glitch-color {
+            0% { color: #00FFFF; }
+            15% { color: #FF00FF; }
+            30% { color: #FFFF00; }
+            45% { color: #00FF00; }
+            60% { color: #FF0000; }
+            75% { color: #0000FF; }
+            90% { color: #FFFFFF; }
+            100% { color: #FF00FF; }
+        }
+        .pixel {
+            fill: #333;
+            stroke: #000;
+            stroke-width: 0.5;
+            animation: rgb-lightshow 2s infinite alternate;
+            transform-origin: center;
+            opacity: 0.6;
+        }
+        @keyframes rgb-lightshow {
+            0% { fill: #0c0c0c; transform: scale(0.8); opacity: 0.4; }
+            10% { fill: #FF0000; transform: scale(1.0); opacity: 0.8; }
+            20% { fill: #FF7F00; }
+            30% { fill: #FFFF00; }
+            40% { fill: #00FF00; }
+            50% { fill: #0000FF; }
+            60% { fill: #4B0082; }
+            70% { fill: #9400D3; }
+            80% { fill: #00FFFF; }
+            90% { fill: #FF00FF; }
+            100% { fill: #222; transform: scale(0.8); opacity: 0.4; }
+        }
+        /* Responsive tweak for mobile */
+        @media (max-width: 600px) {
+            .logo-main-container { max-width: 98vw; padding: 1.2rem 0.2rem 0.8rem 0.2rem; }
+            .pixel-font-container { font-size: 1.1rem; }
+        }
     </style>
 </head>
 <body class="antialiased relative">
@@ -169,7 +244,7 @@
     <!-- Twinkling Stars -->
     <div id="stars-bg" style="position:fixed;z-index:1;top:0;left:0;width:100vw;height:100vh;pointer-events:none;"></div>
 
-    <header class="bg-black text-white py-4 shadow-lg">
+    <header class="bg-black text-white py-4 shadow-lg z-30 relative">
         <div class="container mx-auto px-4 flex flex-col md:flex-row md:justify-between md:items-center text-center">
             <a href="#" class="text-xl font-bold tracking-tight ascii-font text-purple-400 mb-4 md:mb-0">AKAI FIRE PIXELFORGE</a>
             <nav class="w-full md:w-auto">
@@ -182,6 +257,53 @@
             </nav>
         </div>
     </header>
+
+    <!-- === PIXELFORGE LOGO ANIMATION (below header, above hero) === -->
+    <div class="relative z-20" style="background: transparent;">
+        <!-- Add stars to logo section -->
+        <div class="twinkle-stars" id="stars-logo"></div>
+        <div class="logo-main-container" style="background:rgba(0, 0, 0, 0.92); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); margin-top:0.5rem; max-width:900px;">
+            <div class="pixel-font-container" id="pixelForgeTitle" style="font-size:clamp(2.2rem,8vw,4.5rem);"></div>
+            <svg viewBox="0 0 320 80" class="w-full max-w-4xl h-auto border-4 border-black rounded-lg shadow-inner" style="background: transparent;">
+                <g id="pixelGrid"></g>
+            </svg>
+        </div>
+    </div>
+    <script>
+        // --- Pixel Grid Generation ---
+        const pixelGrid = document.getElementById('pixelGrid');
+        // Increase pixel size and grid for larger logo
+        const pixelSize = 20, numRows = 4, numCols = 16;
+        const animationDuration = 2, staggerDelayPerCol = 0.05, staggerDelayPerRow = 0.02;
+        for (let row = 0; row < numRows; row++) {
+            for (let col = 0; col < numCols; col++) {
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', col * pixelSize);
+                rect.setAttribute('y', row * pixelSize);
+                rect.setAttribute('width', pixelSize);
+                rect.setAttribute('height', pixelSize);
+                rect.setAttribute('class', `pixel`);
+                const delay = (col * staggerDelayPerCol) + (row * staggerDelayPerRow);
+                rect.style.animationDelay = `${delay}s`;
+                rect.style.animationDuration = `${animationDuration}s`;
+                pixelGrid.appendChild(rect);
+            }
+        }
+        // --- Glitching PixelForge Title ---
+        const titleText = "PixelForge";
+        const pixelForgeTitleDiv = document.getElementById('pixelForgeTitle');
+        const baseAnimationDuration = 1.5;
+        for (let i = 0; i < titleText.length; i++) {
+            const span = document.createElement('span');
+            span.textContent = titleText[i];
+            span.className = 'glitch-letter';
+            const delay = Math.random() * baseAnimationDuration;
+            span.style.animationDelay = `${delay}s`;
+            span.style.animationDuration = `${baseAnimationDuration + (Math.random() * 0.5 - 0.25)}s`;
+            pixelForgeTitleDiv.appendChild(span);
+        }
+    </script>
+    <!-- === END PIXELFORGE LOGO ANIMATION === -->
 
     <section class="relative bg-gray-950 py-20 md:py-32 overflow-hidden">
         <!-- No stars here (bg image section) -->
@@ -379,6 +501,7 @@
         }
     }
     // Only spawn stars on black bg sections
+    spawnStars('stars-logo', 30);
     spawnStars('stars-paint', 25);
     spawnStars('stars-sampler', 25);
     spawnStars('stars-features', 30);

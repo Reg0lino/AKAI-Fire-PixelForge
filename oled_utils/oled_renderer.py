@@ -1,108 +1,112 @@
-### START OF FILE oled_renderer.py ###
 # AKAI_Fire_RGB_Controller/oled_utils/oled_renderer.py
 import os
 from PIL import Image, ImageDraw, ImageFont
 import sys
-import random # For animation
-import math   # For pulse/grid calculations
+import random
+import math
 
 OLED_WIDTH = 128
 OLED_HEIGHT = 64
-PACKED_BITMAP_SIZE_BYTES = 1176 
-
+PACKED_BITMAP_SIZE_BYTES = 1176
 A_BIT_MUTATE = [
-    [13, 19, 25, 31, 37, 43, 49], [0,  20, 26, 32, 38, 44, 50], [1,  7,  27, 33, 39, 45, 51],
-    [2,  8,  14, 34, 40, 46, 52], [3,  9,  15, 21, 41, 47, 53], [4,  10, 16, 22, 28, 48, 54],
+    [13, 19, 25, 31, 37, 43, 49], [0,  20, 26, 32,
+                                   38, 44, 50], [1,  7,  27, 33, 39, 45, 51],
+    [2,  8,  14, 34, 40, 46, 52], [3,  9,  15, 21,
+                                   41, 47, 53], [4,  10, 16, 22, 28, 48, 54],
     [5,  11, 17, 23, 29, 35, 55], [6,  12, 18, 24, 30, 36, 42]
 ]
+_FONT_OBJECT: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
+CUSTOM_FONT_FILENAME = "TomThumb.ttf"
+_PRIMARY_FONT_OBJECT = None
+_SECONDARY_TEXT_FONT_OBJECT = None
+DEFAULT_SECONDARY_FONT_SIZE_PX = 10
+CUSTOM_FONT_TARGET_HEIGHT_PX = 50
+DEFAULT_TEXT_FONT_SIZE_PX = 12
 
-_FONT_OBJECT: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None # Type hint
-CUSTOM_FONT_FILENAME = "TomThumb.ttf" 
-_PRIMARY_FONT_OBJECT = None # This would be your TomThumb
-_SECONDARY_TEXT_FONT_OBJECT = None # For ASCII art
-DEFAULT_SECONDARY_FONT_SIZE_PX = 10 # Or whatever looks good
+# --- Simplified import for get_resource_path ---
+try:
+    from utils import get_resource_path as resource_path_func
+    print(f"DEBUG (oled_renderer.py): Successfully imported get_resource_path from utils.")
+except ImportError as e_utils:
+    print(f"ERROR (oled_renderer.py): Could not import get_resource_path from utils: {e_utils}")
+    print(f"  Current sys.path for oled_renderer: {sys.path}")
+    print(f"  Location of oled_renderer.py: {__file__}")
+    # Fallback if direct import fails (e.g., running oled_renderer.py standalone without project root in path)
+    def resource_path_func(relative_path_from_project_root: str) -> str:
+        oled_utils_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root_guess = os.path.dirname(oled_utils_dir)
+        fallback_path = os.path.join(project_root_guess, relative_path_from_project_root)
+        print(f"DEBUG (oled_renderer.py): Using FALLBACK resource_path_func. Path for '{relative_path_from_project_root}' -> '{fallback_path}'")
+        return fallback_path
+    print(f"WARNING (oled_renderer): Using fallback resource_path_func. This might not be reliable for all scenarios.")
+# --- End simplified import ---
 
-
-# --- ADJUSTED FONT SIZING ---
-# If TomThumb.ttf is a pixel font designed for a specific height (e.g., to fill OLED height with one char):
-CUSTOM_FONT_TARGET_HEIGHT_PX = 50 # Example: if TomThumb is designed to be ~50px tall at "size 50"
-# For general purpose text, a smaller size is better for readability of multiple characters
-DEFAULT_TEXT_FONT_SIZE_PX = 12 # For system fallback or general use text
-# --- END ADJUSTED FONT SIZING ---
 try:
     # Try common system monospaced fonts
-    font_name_fallbacks = ["Consolas", "Menlo", "DejaVu Sans Mono", "Liberation Mono"]
-    # ... (logic to find and load one of these into _SECONDARY_TEXT_FONT_OBJECT
-    #      at DEFAULT_SECONDARY_FONT_SIZE_PX) ...
+    font_name_fallbacks = ["Consolas", "Menlo",
+                           "DejaVu Sans Mono", "Liberation Mono"]
     if not _SECONDARY_TEXT_FONT_OBJECT:
-         _SECONDARY_TEXT_FONT_OBJECT = ImageFont.load_default() # Ultimate fallback
+        _SECONDARY_TEXT_FONT_OBJECT = ImageFont.load_default()
 except Exception as e:
     print(f"WARNING (oled_renderer): Could not load secondary text font: {e}")
     _SECONDARY_TEXT_FONT_OBJECT = ImageFont.load_default()
-    
+
 try:
-    # Ensure utils.get_resource_path is available
-    # This assumes oled_renderer.py is in oled_utils, and utils.py is at the project root.
-    # Adjust path if necessary: from ..utils import get_resource_path as resource_path_func
-    try:
-        from utils import get_resource_path as resource_path_func
-    except ImportError: # Fallback if running script directly from oled_utils for testing
-        sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-        from utils import get_resource_path as resource_path_func
-
-    font_path = resource_path_func(os.path.join("resources", "fonts", CUSTOM_FONT_FILENAME))
+    # --- TomThumb Font Loading with Enhanced Debugging ---
+    print(f"DEBUG (oled_renderer.py): Attempting to load TomThumb font.")
+    tom_thumb_relative_path = os.path.join("resources", "fonts", CUSTOM_FONT_FILENAME)
+    print(f"DEBUG (oled_renderer.py): Relative path for TomThumb: '{tom_thumb_relative_path}'")
+    font_path = resource_path_func(tom_thumb_relative_path)
+    print(f"DEBUG (oled_renderer.py): Path returned by resource_path_func for TomThumb: '{font_path}'")
     if os.path.exists(font_path):
-        # For pixel fonts like TomThumb, the 'size' parameter might directly map to pixel height.
-        # If TomThumb at size 64 was your intention for large text, use that.
-        # For now, let's use CUSTOM_FONT_TARGET_HEIGHT_PX if it's TomThumb.
-        _FONT_OBJECT = ImageFont.truetype(font_path, CUSTOM_FONT_TARGET_HEIGHT_PX)
-        print(f"INFO (oled_renderer): Loaded custom font '{CUSTOM_FONT_FILENAME}' target height ~{CUSTOM_FONT_TARGET_HEIGHT_PX}px")
+        _FONT_OBJECT = ImageFont.truetype(
+            font_path, CUSTOM_FONT_TARGET_HEIGHT_PX)
+        print(
+            f"INFO (oled_renderer): Loaded custom font '{CUSTOM_FONT_FILENAME}' @ {CUSTOM_FONT_TARGET_HEIGHT_PX}px from '{font_path}'")
     else:
-        # This path means get_resource_path worked, but the file wasn't there.
-        print(f"WARNING (oled_renderer): Custom font file '{CUSTOM_FONT_FILENAME}' not found at '{font_path}'.")
-        raise IOError(f"Custom font file not found") # Trigger fallback
-
-except (ImportError, IOError, OSError) as e: # Added OSError for broader font loading issues
-    print(f"WARNING (oled_renderer): Custom font '{CUSTOM_FONT_FILENAME}' not loaded ({e}). Falling back.")
+        print(
+            f"WARNING (oled_renderer): Custom font file '{CUSTOM_FONT_FILENAME}' NOT FOUND at resolved path: '{font_path}'.")
+        raise IOError(f"Custom font file not found via resource_path_func at '{font_path}'")
+    # --- End TomThumb Font Loading ---
+except (IOError, OSError) as e:
+    print(
+        f"WARNING (oled_renderer): Custom font '{CUSTOM_FONT_FILENAME}' loading failed ({e}). Falling back to system/default.")
     try:
-        # Try common system monospaced fonts
-        font_name_fallbacks = ["Consolas", "Menlo", "DejaVu Sans Mono", "Liberation Mono"]
-        if sys.platform == "darwin": font_name_fallbacks = ["Menlo", "Monaco"] + font_name_fallbacks
-        elif "linux" in sys.platform: font_name_fallbacks = ["DejaVu Sans Mono", "Liberation Mono"] + font_name_fallbacks
-        
+        font_name_fallbacks = ["Consolas", "Menlo",
+                               "DejaVu Sans Mono", "Liberation Mono"]
+        if sys.platform == "darwin":
+            font_name_fallbacks = ["Menlo", "Monaco"] + font_name_fallbacks
+        elif "linux" in sys.platform:
+            font_name_fallbacks = ["DejaVu Sans Mono",
+                                   "Liberation Mono"] + font_name_fallbacks
         font_loaded = False
         for fname in font_name_fallbacks:
             try:
-                _FONT_OBJECT = ImageFont.truetype(fname, DEFAULT_TEXT_FONT_SIZE_PX)
-                print(f"INFO (oled_renderer): Loaded system font '{fname}' size {DEFAULT_TEXT_FONT_SIZE_PX}px as fallback.")
+                _FONT_OBJECT = ImageFont.truetype(
+                    fname, DEFAULT_TEXT_FONT_SIZE_PX)
+                print(
+                    f"INFO (oled_renderer): Loaded system font '{fname}' size {DEFAULT_TEXT_FONT_SIZE_PX}px as fallback.")
                 font_loaded = True
                 break
             except IOError:
                 continue
         if not font_loaded:
-            _FONT_OBJECT = ImageFont.load_default() # Final fallback
-            print("WARNING (oled_renderer): Using Pillow load_default() font as ultimate fallback.")
+            _FONT_OBJECT = ImageFont.load_default()
+            print("WARNING (oled_renderer): Using Pillow load_default() font.")
     except Exception as e_fallback:
         _FONT_OBJECT = ImageFont.load_default()
-        print(f"CRITICAL (oled_renderer): Error loading system fallback font ({e_fallback}). Using Pillow load_default().")
+        print(
+            f"CRITICAL (oled_renderer): Error loading fallback ({e_fallback}). Using Pillow default.")
 
 # --- PUBLIC API for OLED Rendering ---
-
-
-
 def show_temporary_knob_value(self, text: str, use_status_font: bool = False):
     if self.is_startup_animation_playing: return
     self.is_knob_feedback_active = True 
     self.stop_scrolling()
-    
     font_to_use = self.ascii_status_font if use_status_font else self.primary_font # Or just self.font if it's unified
-    
-    # Call _render_text_to_bitmap, passing the chosen font
-    # This means _render_text_to_bitmap needs to accept a font_override
     bitmap = self._render_text_to_bitmap(text, font_override=font_to_use)
     if bitmap:
         self.request_send_bitmap_to_fire.emit(bitmap)
-
 
 def get_text_actual_width(text: str, font_to_use: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None) -> int:
     """Calculates the pixel width of a given text string using the specified font."""
@@ -125,7 +129,6 @@ def get_text_actual_width(text: str, font_to_use: ImageFont.FreeTypeFont | Image
         avg_char_width = getattr(font_to_use, 'size', DEFAULT_TEXT_FONT_SIZE_PX) * 0.6
         return int(len(text) * avg_char_width)
 
-
 def render_text_to_packed_buffer(text: str, 
                                  font_override: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None, 
                                  offset_x: int = 0, 
@@ -133,31 +136,10 @@ def render_text_to_packed_buffer(text: str,
     """
     Renders text to the 7-bit packed buffer for the Akai Fire OLED.
     """
-    # --- ADD DEBUG PRINT ---
-    # print(f"RENDERER TRACE: render_text_to_packed_buffer - Received font_override: {type(font_override)}, Text: '{text}'")
-    # if font_override and hasattr(font_override, 'font') and hasattr(font_override.font, 'family'):
-    #     print(f"RENDERER TRACE: font_override details: Family='{font_override.font.family}', Size='{font_override.size}'")
-    # elif font_override:
-    #     print(f"RENDERER TRACE: font_override details: Type is basic ImageFont (likely Pillow default).")
-    # --- END DEBUG PRINT ---
-
     actual_font = font_override if font_override is not None else _FONT_OBJECT
-    
-    # --- ADD DEBUG PRINT ---
-    # if actual_font and hasattr(actual_font, 'font') and hasattr(actual_font.font, 'family'):
-    #     print(f"RENDERER TRACE: Using actual_font: Family='{actual_font.font.family}', Size='{actual_font.size}'")
-    # elif actual_font:
-    #     print(f"RENDERER TRACE: Using actual_font: Type is basic ImageFont (likely Pillow default or _FONT_OBJECT is basic).")
-    # else:
-    #     print("RENDERER TRACE: Using actual_font: _FONT_OBJECT is None or actual_font became None.")
-    # --- END DEBUG PRINT ---
-
     if actual_font is None:
         print("ERROR (oled_renderer.render_text_to_packed_buffer): Font object (actual_font) is None.")
         return get_blank_packed_bitmap()
-
-    # ... (rest of the method: logical_image = Image.new(...), draw = ImageDraw.Draw(...), etc.)
-    # ... (as provided in the last full oled_renderer.py script) ...
     logical_image = Image.new('1', (OLED_WIDTH, OLED_HEIGHT), 0); draw = ImageDraw.Draw(logical_image)
     text_x = -offset_x; text_y = 0
     try:
@@ -177,7 +159,6 @@ def render_text_to_packed_buffer(text: str,
     pixels = logical_image.load()
     def pixel_is_on(x_coord, y_coord): return 0 <= x_coord < OLED_WIDTH and 0 <= y_coord < OLED_HEIGHT and pixels[x_coord, y_coord] != 0
     return _generate_fire_packed_stream_from_logical_pixels(pixel_is_on, OLED_WIDTH, OLED_HEIGHT)
-
 
 def pack_pil_image_to_7bit_stream(pil_monochrome_image: Image.Image) -> bytearray | None:
     """
@@ -211,22 +192,13 @@ def pack_pil_image_to_7bit_stream(pil_monochrome_image: Image.Image) -> bytearra
     except Exception as e:
         print(f"ERROR (oled_renderer.pack_pil_image_to_7bit_stream): Exception during packing: {e}")
         return None
-# --- END ADD NEW FUNCTION ---
 
-# Renamed `get_bitmap_for_text` to `render_text_to_packed_buffer` to match expected name.
-# Kept a wrapper for backward compatibility if any internal part of oled_renderer still uses old name.
 def get_bitmap_for_text(text: str, scroll_offset_x: int = 0, target_line_idx: int = 0) -> bytearray:
     """Wrapper for backward compatibility if needed. Prefers render_text_to_packed_buffer."""
-    # target_line_idx is not directly used by the new render_text_to_packed_buffer's primary logic.
-    # For single line text, it's effectively 0.
-    # If multi-line was intended, render_text_to_packed_buffer would need changes.
-    # print("WARNING (oled_renderer): get_bitmap_for_text is deprecated, use render_text_to_packed_buffer.")
     return render_text_to_packed_buffer(text, offset_x=scroll_offset_x, center_if_not_scrolling=(scroll_offset_x==0))
-
 
 def get_blank_packed_bitmap() -> bytearray:
     return bytearray(PACKED_BITMAP_SIZE_BYTES)
-
 
 def _generate_fire_packed_stream_from_logical_pixels(pixel_accessor_func, width, height) -> bytearray:
     packed_7bit_stream = bytearray(PACKED_BITMAP_SIZE_BYTES)
@@ -245,7 +217,6 @@ def _generate_fire_packed_stream_from_logical_pixels(pixel_accessor_func, width,
     return packed_7bit_stream
 
 def generate_fire_startup_animation(width=OLED_WIDTH, height=OLED_HEIGHT) -> list[bytearray]:
-    # ... (Your existing animation logic - kept as is for brevity) ...
     all_frames_packed = []
     center_x, center_y = width // 2, height // 2
     num_pulse_frames = 8; max_pulse_radius = min(center_x, center_y) - 2
@@ -309,7 +280,6 @@ def generate_fire_startup_animation(width=OLED_WIDTH, height=OLED_HEIGHT) -> lis
     print(f"INFO (oled_renderer): Generated {len(all_frames_packed)} frames for new startup animation.")
     return all_frames_packed
 
-
 def _unpack_fire_7bit_stream_to_logical_image(packed_stream: bytearray, width: int, height: int) -> Image.Image:
     logical_image = Image.new('1', (width, height), 0); pixels = logical_image.load()
     for logical_y in range(height):
@@ -324,24 +294,17 @@ def _unpack_fire_7bit_stream_to_logical_image(packed_stream: bytearray, width: i
     return logical_image
 
 if __name__ == '__main__':
-    # ... (Your existing __main__ test block, make sure it uses the new function names if needed) ...
     print(f"Font: {_FONT_OBJECT.font.family if _FONT_OBJECT and hasattr(_FONT_OBJECT, 'font') else 'None'}, Size: {_FONT_OBJECT.size if _FONT_OBJECT else 'N/A'}")
-    
     animation_frames = generate_fire_startup_animation(OLED_WIDTH, OLED_HEIGHT)
-    # ... (rest of your test saving previews) ...
-    
-    # Test new text rendering function
     text_frame_new = render_text_to_packed_buffer("Test New", offset_x=10, center_if_not_scrolling=False)
     if text_frame_new:
         img_vis_text_new = _unpack_fire_7bit_stream_to_logical_image(text_frame_new, OLED_WIDTH, OLED_HEIGHT)
         img_vis_text_new.save("oled_text_preview_new_render.png")
         print(f"Saved 'oled_text_preview_new_render.png'")
-
     text_frame_centered = render_text_to_packed_buffer("Centered", center_if_not_scrolling=True)
     if text_frame_centered:
         img_vis_text_centered = _unpack_fire_7bit_stream_to_logical_image(text_frame_centered, OLED_WIDTH, OLED_HEIGHT)
         img_vis_text_centered.save("oled_text_preview_centered.png")
         print(f"Saved 'oled_text_preview_centered.png'")
-
     width_test = get_text_actual_width("Test Width")
     print(f"Calculated width for 'Test Width': {width_test} pixels")
