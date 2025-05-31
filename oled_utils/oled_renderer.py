@@ -9,11 +9,14 @@ OLED_WIDTH = 128
 OLED_HEIGHT = 64
 PACKED_BITMAP_SIZE_BYTES = 1176
 A_BIT_MUTATE = [
-    [13, 19, 25, 31, 37, 43, 49], [0,  20, 26, 32,
-                                   38, 44, 50], [1,  7,  27, 33, 39, 45, 51],
-    [2,  8,  14, 34, 40, 46, 52], [3,  9,  15, 21,
-                                   41, 47, 53], [4,  10, 16, 22, 28, 48, 54],
-    [5,  11, 17, 23, 29, 35, 55], [6,  12, 18, 24, 30, 36, 42]
+    [13, 19, 25, 31, 37, 43, 49], 
+    [0,  20, 26, 32, 38, 44, 50], 
+    [1,  7,  27, 33, 39, 45, 51],
+    [2,  8,  14, 34, 40, 46, 52], 
+    [3,  9,  15, 21, 41, 47, 53], 
+    [4,  10, 16, 22, 28, 48, 54],
+    [5,  11, 17, 23, 29, 35, 55], 
+    [6,  12, 18, 24, 30, 36, 42]
 ]
 _FONT_OBJECT: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
 CUSTOM_FONT_FILENAME = "TomThumb.ttf"
@@ -39,12 +42,11 @@ except ImportError as e_utils:
         print(f"DEBUG (oled_renderer.py): Using FALLBACK resource_path_func. Path for '{relative_path_from_project_root}' -> '{fallback_path}'")
         return fallback_path
     print(f"WARNING (oled_renderer): Using fallback resource_path_func. This might not be reliable for all scenarios.")
-# --- End simplified import ---
 
 try:
     # Try common system monospaced fonts
     font_name_fallbacks = ["Consolas", "Menlo",
-                           "DejaVu Sans Mono", "Liberation Mono"]
+                        "DejaVu Sans Mono", "Liberation Mono"]
     if not _SECONDARY_TEXT_FONT_OBJECT:
         _SECONDARY_TEXT_FONT_OBJECT = ImageFont.load_default()
 except Exception as e:
@@ -73,12 +75,12 @@ except (IOError, OSError) as e:
         f"WARNING (oled_renderer): Custom font '{CUSTOM_FONT_FILENAME}' loading failed ({e}). Falling back to system/default.")
     try:
         font_name_fallbacks = ["Consolas", "Menlo",
-                               "DejaVu Sans Mono", "Liberation Mono"]
+                            "DejaVu Sans Mono", "Liberation Mono"]
         if sys.platform == "darwin":
             font_name_fallbacks = ["Menlo", "Monaco"] + font_name_fallbacks
         elif "linux" in sys.platform:
             font_name_fallbacks = ["DejaVu Sans Mono",
-                                   "Liberation Mono"] + font_name_fallbacks
+                                "Liberation Mono"] + font_name_fallbacks
         font_loaded = False
         for fname in font_name_fallbacks:
             try:
@@ -130,9 +132,9 @@ def get_text_actual_width(text: str, font_to_use: ImageFont.FreeTypeFont | Image
         return int(len(text) * avg_char_width)
 
 def render_text_to_packed_buffer(text: str, 
-                                 font_override: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None, 
-                                 offset_x: int = 0, 
-                                 center_if_not_scrolling: bool = True) -> bytearray:
+                                font_override: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None, 
+                                offset_x: int = 0, 
+                                center_if_not_scrolling: bool = True) -> bytearray:
     """
     Renders text to the 7-bit packed buffer for the Akai Fire OLED.
     """
