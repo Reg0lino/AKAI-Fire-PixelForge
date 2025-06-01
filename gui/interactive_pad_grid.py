@@ -41,10 +41,7 @@ class InteractivePadGridFrame(QFrame):
     pad_context_menu_requested_from_button = pyqtSignal(
         object, int, int, QPoint)  # PadButton_obj, row, col, local_pos
     pad_single_left_click_action_requested = pyqtSignal(int, int)  # row, col
-    # <<< NEW SIGNALS FOR PAINT STROKES >>>
-    # row, col, button_type (of initial pad)
     paint_stroke_started = pyqtSignal(int, int, Qt.MouseButton)
-    # button_type that ended the stroke
     paint_stroke_ended = pyqtSignal(Qt.MouseButton)
 
     def __init__(self, parent=None):
@@ -60,7 +57,6 @@ class InteractivePadGridFrame(QFrame):
         self.pad_grid_layout = QGridLayout()
         self.pad_grid_layout.setSpacing(PAD_GRID_SPACING)
         self.pad_grid_layout.setContentsMargins(0,0,0,0)
-
         for r_idx in range(GRID_ROWS):
             for c_idx in range(GRID_COLS):
                 pad_button = PadButton(row=r_idx, col=c_idx, parent=self)
@@ -68,9 +64,7 @@ class InteractivePadGridFrame(QFrame):
                 pad_button.single_click_action.connect(self._handle_pad_button_single_left_click)
                 self._pad_buttons[(r_idx, c_idx)] = pad_button
                 self.pad_grid_layout.addWidget(pad_button, r_idx, c_idx)
-        
         self.setLayout(self.pad_grid_layout)
-
         margins = self.pad_grid_layout.contentsMargins()
         grid_width = (GRID_COLS * PAD_BUTTON_WIDTH) + ((GRID_COLS -1) * PAD_GRID_SPACING if GRID_COLS > 0 else 0) + margins.left() + margins.right()
         grid_height = (GRID_ROWS * PAD_BUTTON_HEIGHT) + ((GRID_ROWS -1) * PAD_GRID_SPACING if GRID_ROWS > 0 else 0) + margins.top() + margins.bottom()
@@ -95,7 +89,6 @@ class InteractivePadGridFrame(QFrame):
         button_type = event.button()
         pad_button_widget = self._get_pad_at_event_pos(event)
         action_taken = False
-
         if button_type == Qt.MouseButton.LeftButton or button_type == Qt.MouseButton.RightButton:
             # print(f"GRID DEBUG: mousePressEvent - Button: {button_type}") # <<< ADD DEBUG
             if button_type == Qt.MouseButton.LeftButton:
@@ -104,7 +97,6 @@ class InteractivePadGridFrame(QFrame):
             else: 
                 self._is_right_dragging = True
                 self._is_left_dragging = False
-
             if pad_button_widget:
                 # print(f"GRID DEBUG: mousePressEvent - Emitting paint_stroke_started for pad ({pad_button_widget.row},{pad_button_widget.col})") # <<< ADD DEBUG
                 self.paint_stroke_started.emit(pad_button_widget.row, pad_button_widget.col, button_type)
@@ -123,7 +115,6 @@ class InteractivePadGridFrame(QFrame):
         action_taken_on_release = False
         button_released = event.button()
         # print(f"GRID DEBUG: mouseReleaseEvent - Button: {button_released}, LeftDragging: {self._is_left_dragging}, RightDragging: {self._is_right_dragging}") # <<< ADD DEBUG
-
         if button_released == Qt.MouseButton.LeftButton and self._is_left_dragging:
             self._is_left_dragging = False
             self._last_actioned_pad_coords = None
@@ -141,11 +132,11 @@ class InteractivePadGridFrame(QFrame):
             event.accept()
         else:
             super().mouseReleaseEvent(event)
+
     def mouseMoveEvent(self, event: QMouseEvent):
         # This is InteractivePadGridFrame's mouseMoveEvent
         pad_button_widget = self._get_pad_at_event_pos(event)
         action_taken_on_move = False
-
         if self._is_left_dragging and (event.buttons() & Qt.MouseButton.LeftButton):
             if pad_button_widget:
                 current_coords = (pad_button_widget.row, pad_button_widget.col)
@@ -165,7 +156,6 @@ class InteractivePadGridFrame(QFrame):
             else: # Moving over spacing
                 self._last_actioned_pad_coords = None
             action_taken_on_move = True
-
         if action_taken_on_move:
             event.accept()
         else:
@@ -190,7 +180,7 @@ class InteractivePadGridFrame(QFrame):
                 style_parts.append(f"color: {text_color};")
                 hover_border_color = text_color
             final_style = f"QPushButton#PadButton {{{';'.join(style_parts)}}}" \
-                          f"QPushButton#PadButton:hover {{border: 1px solid {hover_border_color};}}"
+                            f"QPushButton#PadButton:hover {{border: 1px solid {hover_border_color};}}"
             button.setStyleSheet(final_style)
 
     def get_current_grid_colors_hex(self) -> list[str]:

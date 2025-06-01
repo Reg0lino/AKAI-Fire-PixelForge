@@ -1,23 +1,22 @@
 # AKAI_Fire_RGB_Controller/gui/main_window.py
+from appdirs import user_config_dir
 import sys
 import json
 import os
-# import glob # Not strictly needed by current MainWindow logic, can be removed if not used elsewhere
 import re
 import time
-# user_data_dir not currently used by MainWindow directly
-from appdirs import user_config_dir
 
-# --- Qt Imports ---
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QGroupBox, QLabel, QPushButton, QComboBox, QSizePolicy, QSpacerItem,
-    QStatusBar, QMenu, QMessageBox, QDial, QFrame
+    QStatusBar, QMenu, QMessageBox, QDial, QFrame, QDialog
 )
+
+USER_PRESETS_APP_FOLDER_NAME = "Akai Fire RGB Controller User Presets"
 from PyQt6.QtCore import Qt, QTimer, QSize, pyqtSignal, QPoint, QEvent
 from PyQt6.QtGui import (
     QColor, QPalette, QAction, QMouseEvent, QKeySequence, QIcon, QPixmap,
-    QImage, QPainter, QCloseEvent, QFontDatabase
+    QImage, QPainter, QCloseEvent, QKeyEvent
 )
 
 # --- Project-specific Imports ---
@@ -25,7 +24,7 @@ try:
     from ..utils import get_resource_path
 except ImportError:
     from utils import get_resource_path
-    # print("MainWindow INFO: Used fallback import for utils.get_resource_path.")
+    print("MainWindow INFO: Used fallback import for utils.get_resource_path.")
 
 try:
     from oled_utils import oled_renderer
@@ -34,17 +33,44 @@ except ImportError:
     print("MainWindow WARNING: oled_renderer module not found. OLED mirror/startup may be affected.")
     MAIN_WINDOW_OLED_RENDERER_AVAILABLE = False
 
-    class oled_renderer_placeholder_mw:
+try:
+    from doom_feature.doom_game_controller import (
+        DoomGameController, RaycasterEngine, PLAYER_MAX_HP,
+        PAD_DOOM_FORWARD, PAD_DOOM_BACKWARD,
+        PAD_DOOM_STRAFE_LEFT, PAD_DOOM_STRAFE_RIGHT,
+        PAD_DOOM_TURN_LEFT_MAIN, PAD_DOOM_TURN_RIGHT_MAIN,
+        PAD_DOOM_TURN_LEFT_ALT, PAD_DOOM_TURN_RIGHT_ALT,
+        PAD_DOOM_RUN, PAD_DOOM_SHOOT
+    )
+    print("MW INFO: Successfully imported DoomGameController, RaycasterEngine, and DOOM Pad Constants.")
+    DOOM_MODULE_LOADED = True
+except ImportError as e:
+    print(
+        f"MW WARNING: Could not import from doom_feature.doom_game_controller: {e}. DOOM feature will be non-functional.")
+
+try:
+    from doom_feature.doom_game_controller import DoomGameController, RaycasterEngine, PLAYER_MAX_HP
+    print("MW INFO: Successfully imported DoomGameController and RaycasterEngine from doom_feature.doom_game_controller.")
+    DOOM_MODULE_LOADED = True
+except ImportError as e:
+    print(
+        f"MW WARNING: Could not import from doom_feature.doom_game_controller: {e}. DOOM feature will be non-functional.")
+    DOOM_MODULE_LOADED = False
+
+from .oled_customizer_dialog import OLEDCustomizerDialog
+from .app_guide_dialog import AppGuideDialog
+from .doom_instructions_dialog import DoomInstructionsDialog
+class oled_renderer_placeholder_mw:
         OLED_WIDTH = 128
         OLED_HEIGHT = 64
         @staticmethod
         def generate_fire_startup_animation(width=128, height=64): return []
-
         @staticmethod
         def _unpack_fire_7bit_stream_to_logical_image(
             packed_stream, width, height): return None
-    if 'oled_renderer' not in globals() or globals().get('oled_renderer') is None:
-        oled_renderer = oled_renderer_placeholder_mw()
+# Ensure oled_renderer is defined if not already available
+if 'oled_renderer' not in globals() or globals().get('oled_renderer') is None:
+    oled_renderer = oled_renderer_placeholder_mw()
 
 from .color_picker_manager import ColorPickerManager
 from .static_layouts_manager import StaticLayoutsManager
@@ -67,10 +93,7 @@ except ImportError:
 
     class ScreenSamplerCore:
         DEFAULT_ADJUSTMENTS = {'brightness': 1.0, 'contrast': 1.0,
-                               'saturation': 1.0, 'hue_shift': 0.0}  # ensure float for hue
-
-from .oled_customizer_dialog import OLEDCustomizerDialog
-from .app_guide_dialog import AppGuideDialog # <<< ADD THIS IMPORT
+                            'saturation': 1.0, 'hue_shift': 0.0}  # ensure float for hue
 
 # --- Constants ---
 INITIAL_WINDOW_WIDTH = 1100
@@ -83,12 +106,8 @@ OLED_MIRROR_WIDTH = 128
 OLED_MIRROR_HEIGHT = 64
 OLED_MIRROR_SCALE = 1.2
 OLED_CONFIG_FILENAME = "oled_config.json"
-# Fallback values for oled_config.json if file is missing or keys are absent
 DEFAULT_OLED_ACTIVE_GRAPHIC_FALLBACK_PATH: str | None = None
 DEFAULT_OLED_SCROLL_DELAY_MS_FALLBACK: int = 180
-# These font fallbacks are for cases where an item's JSON *itself* is missing font info,
-# or if MainWindow needs to display some generic text not covered by ODM's specific fonts.
-# OLEDDisplayManager has its own more robust internal fallbacks for item rendering.
 DEFAULT_OLED_FONT_FAMILY_FALLBACK: str = "Arial"
 DEFAULT_OLED_FONT_SIZE_PX_FALLBACK: int = 20
 USER_OLED_PRESETS_DIR_NAME = "OLEDCustomPresets"
@@ -166,8 +185,6 @@ class MainWindow(QMainWindow):
     ANIMATOR_SPEED_KNOB_STEP = 1
 
 # --- GROUP 1: CORE HELPER METHODS CALLED EARLY BY __init__ ---
-    # (Methods that don't create UI widgets directly but are needed for config/state)
-
     def _get_presets_base_dir_path(self) -> str:
         return get_resource_path(PRESETS_BASE_DIR_NAME)
 
@@ -192,7 +209,7 @@ class MainWindow(QMainWindow):
                     config = json.load(f)
                 self.active_graphic_item_relative_path = config.get("active_graphic_item_path",
                                                                     config.get("default_startup_item_path",
-                                                                               DEFAULT_OLED_ACTIVE_GRAPHIC_FALLBACK_PATH))
+                                                                                DEFAULT_OLED_ACTIVE_GRAPHIC_FALLBACK_PATH))
                 self.oled_global_scroll_delay_ms = config.get(
                     "global_scroll_delay_ms", DEFAULT_OLED_SCROLL_DELAY_MS_FALLBACK)
                 self.current_cued_text_item_path = config.get(
@@ -271,7 +288,6 @@ class MainWindow(QMainWindow):
         return target_path
 
     def _scan_available_oled_items(self) -> list[dict]:
-        # ... (definition as provided previously, ensuring self.available_oled_items_cache is initialized/cleared) ...
         if not hasattr(self, 'available_oled_items_cache'):
             self.available_oled_items_cache = []
         self.available_oled_items_cache.clear()
@@ -310,10 +326,8 @@ class MainWindow(QMainWindow):
         return self.available_oled_items_cache
 
     def _load_oled_item_data(self, relative_item_path: str | None) -> dict | None:
-        # ... (your existing implementation) ...
         if not relative_item_path:
             return None
-        # Should be set by __init__ before this is callable via _load_and_apply_active_graphic
         if not hasattr(self, 'user_oled_presets_base_path'):
             print(
                 "MW CRITICAL: user_oled_presets_base_path not set before _load_oled_item_data.")
@@ -332,7 +346,6 @@ class MainWindow(QMainWindow):
         return None
 
     def _load_and_apply_active_graphic(self):
-        # ... (your existing implementation, using self.active_graphic_item_relative_path) ...
         if not self.oled_display_manager:
             print("MW CRITICAL: ODM None in _load_and_apply_active_graphic.")
             return
@@ -344,7 +357,6 @@ class MainWindow(QMainWindow):
             self.oled_display_manager.set_active_graphic(None)
 
     def _on_builtin_oled_startup_animation_finished(self):
-        # ... (your existing implementation - likely just 'pass') ...
         pass
 
     def ensure_user_dirs_exist(self):
@@ -366,8 +378,6 @@ class MainWindow(QMainWindow):
                     f"MW WARNING: Could not create user directory '{path}': {e}")
 
 # --- GROUP 2: UI BUILDING HELPER METHODS ---
-    # (Methods that create and return QWidgets/QLayouts, or populate them)
-
     def _init_ui_layout(self):
         """
         Initializes the main window layout structure:
@@ -378,20 +388,16 @@ class MainWindow(QMainWindow):
         - Status bar
         """
         print("MW DEBUG: _init_ui_layout START") # For tracing
-
         # 1. Create the central widget and set it on the QMainWindow
         self.central_widget_main = QWidget()
         self.setCentralWidget(self.central_widget_main)
         print(f"MW DEBUG: _init_ui_layout - Central widget created: {self.central_widget_main}")
-
-
         # 2. Create the main application layout (QHBoxLayout) for the central widget
         # This will hold the left and right panels.
         self.main_app_layout = QHBoxLayout(self.central_widget_main) # Set layout directly on central_widget_main
         self.main_app_layout.setSpacing(10)
         self.main_app_layout.setContentsMargins(5, 5, 5, 5) # Small margins around the entire app content
         print(f"MW DEBUG: _init_ui_layout - Main app layout (QHBoxLayout) created: {self.main_app_layout}")
-
         # 3. --- Left Panel Setup ---
         # Create a QWidget to act as the container for the left panel's content
         self.left_panel_widget = QWidget()
@@ -400,11 +406,9 @@ class MainWindow(QMainWindow):
         self.left_panel_layout = QVBoxLayout(self.left_panel_widget) # Set layout on the left_panel_widget
         self.left_panel_layout.setContentsMargins(0, 0, 0, 0) # No margins within the left panel itself
         self.left_panel_layout.setSpacing(8) # Spacing between items in the left panel
-        
         # Add the left_panel_widget (which now has its QVBoxLayout) to the main_app_layout
         self.main_app_layout.addWidget(self.left_panel_widget, 2)  # Stretch factor 2 (takes 2/3 of available width)
         print(f"MW DEBUG: _init_ui_layout - Left panel widget and layout created, added to main layout. Layout: {self.left_panel_layout}")
-
         # 4. --- Right Panel Setup ---
         # Create a QWidget for the right panel
         self.right_panel_widget = QWidget()
@@ -413,22 +417,18 @@ class MainWindow(QMainWindow):
         self.right_panel_layout_v = QVBoxLayout(self.right_panel_widget) # Set layout on the right_panel_widget
         # self.right_panel_layout_v.setContentsMargins(0,0,0,0) # Optional: if you want margins inside right panel
         # self.right_panel_layout_v.setSpacing(8)               # Optional: spacing for items in right panel
-        
         # Set size constraints for the right panel
         self.right_panel_widget.setMinimumWidth(380) 
         self.right_panel_widget.setMaximumWidth(420) 
         self.right_panel_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding) # Fixed width, expanding height
-        
         # Add the right_panel_widget to the main_app_layout
         self.main_app_layout.addWidget(self.right_panel_widget, 1)  # Stretch factor 1 (takes 1/3 of available width)
         print(f"MW DEBUG: _init_ui_layout - Right panel widget and layout created, added to main layout. Layout: {self.right_panel_layout_v}")
-
         # 5. --- Status Bar ---
         self.status_bar = QStatusBar() # Create a QStatusBar instance
         self.setStatusBar(self.status_bar) # Set it as the main window's status bar
         self.status_bar.showMessage("Ready. Please connect to AKAI Fire.") # Initial message
         print(f"MW DEBUG: _init_ui_layout - Status bar created and set: {self.status_bar}")
-
         print("MW DEBUG: _init_ui_layout COMPLETE")
 
     def _create_hardware_top_strip(self) -> QGroupBox:
@@ -441,29 +441,23 @@ class MainWindow(QMainWindow):
         # Fixed height, but expanding width
         top_strip_group.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-
         top_strip_main_layout = QHBoxLayout(top_strip_group)
         top_strip_main_layout.setContentsMargins(6, 2, 6, 2)
         top_strip_main_layout.setSpacing(5)
-
         # --- Common Sizes ---
         knob_size = 42
         flat_button_size = QSize(36, 10)
         icon_button_size = QSize(28, 28)
         play_pause_icon_label_size = QSize(20, 20)  # Will be refined by pixmap
         triangle_label_style = "font-size: 9pt; color: #B0B0B0; font-weight: bold;"
-
-        # <<< NEW: Add initial stretch to center the content block >>>
         top_strip_main_layout.addStretch(1)
-        # --- END NEW ---
-
         # --- Section 1: Four Main Knobs ---
         section1_knobs_widget = QWidget()
         section1_knobs_layout_INTERNAL = QHBoxLayout(section1_knobs_widget)
         section1_knobs_layout_INTERNAL.setContentsMargins(0, 0, 0, 0)
         section1_knobs_layout_INTERNAL.setSpacing(8)
         knob_info = [("knob_volume_top_right", "Volume"), ("knob_pan_top_right", "Pan"),
-                     ("knob_filter_top_right", "Filter"), ("knob_resonance_top_right", "Resonance")]
+                    ("knob_filter_top_right", "Filter"), ("knob_resonance_top_right", "Resonance")]
         for attr_name, tooltip_text in knob_info:
             knob_v_container = QVBoxLayout()
             knob_v_container.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -479,7 +473,6 @@ class MainWindow(QMainWindow):
             section1_knobs_layout_INTERNAL.addLayout(knob_v_container)
         top_strip_main_layout.addWidget(
             section1_knobs_widget, 0, Qt.AlignmentFlag.AlignVCenter)
-
         # --- Section 2: PATTERN UP/DOWN Buttons ---
         pattern_buttons_widget = QWidget()
         pattern_buttons_layout_INTERNAL = QVBoxLayout(pattern_buttons_widget)
@@ -512,7 +505,6 @@ class MainWindow(QMainWindow):
         top_strip_main_layout.addWidget(
             pattern_buttons_widget, 0, Qt.AlignmentFlag.AlignVCenter)
         top_strip_main_layout.addSpacing(4)
-
         # --- Section 3: OLED Display Container ---
         self.oled_container_widget_ref = QWidget()
         oled_container_layout = QVBoxLayout(self.oled_container_widget_ref)
@@ -543,7 +535,6 @@ class MainWindow(QMainWindow):
         oled_container_layout.addWidget(self.oled_display_mirror_widget)
         top_strip_main_layout.addWidget(
             self.oled_container_widget_ref, 0, Qt.AlignmentFlag.AlignVCenter)
-
         # --- Section 3.5: OLED Play/Pause Icon Label ---
         self.oled_play_pause_icon_label = QLabel()
         self.oled_play_pause_icon_label.setObjectName("OLEDPlayPauseIconLabel")
@@ -580,7 +571,6 @@ class MainWindow(QMainWindow):
         top_strip_main_layout.addWidget(
             self.oled_play_pause_icon_label, 0, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
         top_strip_main_layout.addSpacing(5)
-
         # --- Section 4: Browser Button ---
         self.button_browser_top_right = QPushButton("")
         self.button_browser_top_right.setObjectName("BrowserButton")
@@ -590,7 +580,6 @@ class MainWindow(QMainWindow):
         top_strip_main_layout.addWidget(
             self.button_browser_top_right, 0, Qt.AlignmentFlag.AlignVCenter)
         top_strip_main_layout.addSpacing(5)
-
         # --- Section 5: SELECT Knob ---
         select_knob_container_widget = QWidget()
         select_knob_container_vbox_INTERNAL = QVBoxLayout(
@@ -608,7 +597,6 @@ class MainWindow(QMainWindow):
         top_strip_main_layout.addWidget(
             select_knob_container_widget, 0, Qt.AlignmentFlag.AlignVCenter)
         top_strip_main_layout.addSpacing(5)
-
         # --- Section 6: GRID L/R Buttons ---
         grid_buttons_widget = QWidget()
         grid_buttons_widget.setSizePolicy(
@@ -654,50 +642,34 @@ class MainWindow(QMainWindow):
             triangle_right_label, 0, Qt.AlignmentFlag.AlignVCenter)
         top_strip_main_layout.addWidget(
             grid_buttons_widget, 0, Qt.AlignmentFlag.AlignVCenter)
-
         # <<< ENSURE: Final stretch to center the content block >>>
         top_strip_main_layout.addStretch(1)
-
         return top_strip_group
 
     def _position_oled_toggle_icon(self):
         if not self.oled_play_pause_icon_label or \
-           not self.oled_display_mirror_widget or \
-           not self.oled_container_widget_ref:  # Ensure container exists
+            not self.oled_display_mirror_widget or \
+            not self.oled_container_widget_ref:  # Ensure container exists
             # print("MW DEBUG: Cannot position OLED toggle icon, widgets missing.")
             return
-
         if not self.oled_container_widget_ref.isVisible() or not self.oled_display_mirror_widget.isVisible():
             # print("MW DEBUG: Cannot position OLED toggle icon, parent or mirror not visible yet.")
             # QTimer.singleShot(50, self._position_oled_toggle_icon) # Retry shortly
             return
-
         # Get geometry of the mirror *within the oled_container_widget_ref*
         mirror_geom_in_container = self.oled_display_mirror_widget.geometry()
-
         icon_width = self.oled_play_pause_icon_label.width()
         icon_height = self.oled_play_pause_icon_label.height()
-
         # Position at bottom-right of the mirror, with a small offset if desired
         offset_x = 2  # Small offset from the very edge
         offset_y = 2
-
         target_x = mirror_geom_in_container.right() - icon_width - offset_x
         target_y = mirror_geom_in_container.bottom() - icon_height - offset_y
-
         self.oled_play_pause_icon_label.move(target_x, target_y)
         self.oled_play_pause_icon_label.raise_()  # Ensure it's on top
         self.oled_play_pause_icon_label.show()
         # print(f"MW DEBUG: Positioned OLED toggle icon at ({target_x}, {target_y}) relative to its container.")
 
-    # You might need to call this if the window is resized significantly,
-    # or if the top_strip_group's size changes.
-    # For simplicity, we'll call it once after the window is shown.
-    # If top_strip_group has a fixed height, one-time positioning might be okay.
-    # def resizeEvent(self, event: QResizeEvent): # If overriding MainWindow's resize
-    #     super().resizeEvent(event)
-    #     self._position_oled_toggle_icon()
-    
     def _setup_oled_mirror_clickable(self):
         """Makes the OLED mirror QLabel clickable to open the customizer."""
         if hasattr(self, 'oled_display_mirror_widget') and self.oled_display_mirror_widget:
@@ -718,7 +690,6 @@ class MainWindow(QMainWindow):
         pad_grid_outer_container = QWidget()
         pad_grid_container_layout = QVBoxLayout(pad_grid_outer_container)
         pad_grid_container_layout.setContentsMargins(0, 0, 0, 0)
-
         self.pad_grid_frame = InteractivePadGridFrame(parent=self)
         pad_grid_container_layout.addWidget(
             self.pad_grid_frame, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
@@ -728,13 +699,11 @@ class MainWindow(QMainWindow):
         """Creates the QGroupBox for MIDI Input selection."""
         input_connection_group = QGroupBox("🔌 MIDI Input (from Fire)")
         input_layout = QHBoxLayout(input_connection_group)
-
         self.input_port_combo_direct_ref = QComboBox()
         # print(f"DEBUG MW: _create_midi_input_section - input_port_combo ID: {id(self.input_port_combo_direct_ref)}") # Optional
         self.input_port_combo_direct_ref.setPlaceholderText(
             "Select MIDI Input")
         # input_port_combo_direct_ref.currentIndexChanged.connect(...) # Connect in _connect_signals or if specific logic needed here
-
         input_layout.addWidget(QLabel("Input Port:"))
         # ComboBox takes available space
         input_layout.addWidget(self.input_port_combo_direct_ref, 1)
@@ -761,28 +730,23 @@ class MainWindow(QMainWindow):
         self.eyedropper_button.toggled.connect(self._on_eyedropper_button_toggled)
         tool_buttons_layout.addWidget(self.eyedropper_button)                
         return tool_buttons_group
-    
-    def _populate_right_panel(self):
-        """Populates the right panel with MIDI controls, Color Picker, Tools, and Layouts."""
-        # --- MODIFIED GUARD: Check for actual None, not just truthiness ---
-        if self.right_panel_layout_v is None:
-            # --- END MODIFIED GUARD ---
-            print("MW CRITICAL ERROR: _populate_right_panel - self.right_panel_layout_v is LITERALLY None! CANNOT POPULATE.")
-            return
-        # If we reach here, self.right_panel_layout_v is a valid (even if 'falsy' when empty) layout object.
-        # print(f"MW TRACE: _populate_right_panel - START - Layout object IS: {self.right_panel_layout_v} (ID: {id(self.right_panel_layout_v)})")
 
+    def _populate_right_panel(self):
+        if self.right_panel_layout_v is None:
+            print(
+                "MW CRITICAL ERROR: _populate_right_panel - self.right_panel_layout_v is None!")
+            return
+        print(f"MW TRACE: _populate_right_panel - START")
         # --- MIDI Connection Group (Output) ---
         connection_group = QGroupBox("🔌 MIDI Output")
-        # This should be fine as QGroupBox becomes parent
         connection_layout = QHBoxLayout(connection_group)
         self.port_combo_direct_ref = QComboBox()
         self.port_combo_direct_ref.setPlaceholderText("Select MIDI Output")
-        if hasattr(self, '_on_port_combo_changed'):  # Check if method exists before connecting
+        if hasattr(self, '_on_port_combo_changed'):
             self.port_combo_direct_ref.currentIndexChanged.connect(
                 self._on_port_combo_changed)
         self.connect_button_direct_ref = QPushButton("Connect")
-        if hasattr(self, 'toggle_connection'):  # Check if method exists
+        if hasattr(self, 'toggle_connection'):
             self.connect_button_direct_ref.clicked.connect(
                 self.toggle_connection)
         self.connect_button_direct_ref.setEnabled(False)
@@ -790,65 +754,52 @@ class MainWindow(QMainWindow):
         connection_layout.addWidget(self.port_combo_direct_ref, 1)
         connection_layout.addWidget(self.connect_button_direct_ref)
         self.right_panel_layout_v.addWidget(connection_group)
-
         # --- MIDI Input Group ---
         if hasattr(self, '_create_midi_input_section'):
             midi_input_gb = self._create_midi_input_section()
             if midi_input_gb:
                 self.right_panel_layout_v.addWidget(midi_input_gb)
-            else:
-                print("MW WARNING: _create_midi_input_section returned None.")
-        else:
-            # self.right_panel_layout_v.addWidget(QLabel("Error: MIDI Input UI Missing")) # Avoid adding error labels to UI for now
-            print("MW WARNING: _create_midi_input_section method missing.")
-
         # --- Color Picker Manager UI ---
         if self.color_picker_manager:
             self.right_panel_layout_v.addWidget(self.color_picker_manager)
-        else:
-            print("MW WARNING: ColorPickerManager not available to add to right panel.")
-
         # --- Quick Tools Group Box ---
         if hasattr(self, '_init_direct_controls_right_panel'):
             quick_tools_widget = self._init_direct_controls_right_panel()
             if quick_tools_widget:
-                self.quick_tools_group_ref = quick_tools_widget  # Assignment
+                self.quick_tools_group_ref = quick_tools_widget
                 self.right_panel_layout_v.addWidget(self.quick_tools_group_ref)
-            else:
-                print("MW WARNING: _init_direct_controls_right_panel returned None.")
-        else:
-            # self.right_panel_layout_v.addWidget(QLabel("Error: Quick Tools UI Missing"))
-            print("MW WARNING: _init_direct_controls_right_panel method missing.")
-
         # --- Static Layouts Manager UI ---
         if self.static_layouts_manager:
             self.right_panel_layout_v.addWidget(self.static_layouts_manager)
-        else:
-            print("MW WARNING: StaticLayoutsManager not available to add to right panel.")
-
-        # --- App Guide Button ---
-        app_guide_button_container = QWidget() # Use a container for better layout control if needed
-        app_guide_button_layout = QHBoxLayout(app_guide_button_container)
-        app_guide_button_layout.setContentsMargins(0, 10, 0, 0) # Add some top margin
-        
-        # Or use an icon: QPushButton("🚀")
+        # --- Container for Bottom Buttons (App Guide & DOOM) ---
+        bottom_buttons_container_widget = QWidget()
+        bottom_buttons_outer_layout = QVBoxLayout(
+            bottom_buttons_container_widget)
+        bottom_buttons_outer_layout.setContentsMargins(0, 10, 0, 0)
+        actual_buttons_hbox = QHBoxLayout()
+        actual_buttons_hbox.addStretch(1)
         self.app_guide_button = QPushButton("🚀 App Guide && Hotkey List")
         self.app_guide_button.setToolTip("Open the App Guide and Hotkey List")
-        self.app_guide_button.setObjectName("AppGuideButton") # For potential specific styling
-        # Set a policy that allows it to be a reasonable size but not stretch excessively
-        self.app_guide_button.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
-        self.app_guide_button.clicked.connect(self._open_app_guide_dialog) # Connect to new slot
-
-        app_guide_button_layout.addStretch(1) # Push button to the right
-        app_guide_button_layout.addWidget(self.app_guide_button)
-        app_guide_button_layout.addStretch(1) # Center the button (or remove one stretch to keep it right)
-        
-        self.right_panel_layout_v.addWidget(app_guide_button_container)
-
-
+        self.app_guide_button.setObjectName("AppGuideButton")
+        self.app_guide_button.setSizePolicy(
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
+        self.app_guide_button.clicked.connect(self._open_app_guide_dialog)
+        actual_buttons_hbox.addWidget(self.app_guide_button)
+        actual_buttons_hbox.addSpacing(10)
+        self.button_lazy_doom = QPushButton("👹 LazyDOOM")
+        self.button_lazy_doom.setToolTip(
+            "Launch the LazyDOOM on OLED experience!")
+        self.button_lazy_doom.setObjectName("LazyDoomButton")
+        self.button_lazy_doom.setSizePolicy(
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
+        self.button_lazy_doom.clicked.connect(self._toggle_doom_mode)
+        actual_buttons_hbox.addWidget(self.button_lazy_doom)
+        actual_buttons_hbox.addStretch(1)
+        bottom_buttons_outer_layout.addLayout(actual_buttons_hbox)
+        self.right_panel_layout_v.addWidget(bottom_buttons_container_widget)
+        # --- END Bottom Buttons ---
         self.right_panel_layout_v.addStretch(1)
         print(f"MW TRACE: _populate_right_panel - FINISHED")
-        # --- END OF _populate_right_panel ---
 
     def _populate_left_panel(self):
         """Populates the left panel with the hardware top strip, pad grid, animator UI, and sampler UI."""
@@ -857,7 +808,6 @@ class MainWindow(QMainWindow):
             return
         print(
             f"MW TRACE: _populate_left_panel - START - Layout object IS: {self.left_panel_layout} (ID: {id(self.left_panel_layout)})")
-
         # 1. Add Hardware Top Strip
         if hasattr(self, '_create_hardware_top_strip'):
             hardware_top_strip_widget = self._create_hardware_top_strip()
@@ -870,7 +820,6 @@ class MainWindow(QMainWindow):
             print("MW ERROR: _create_hardware_top_strip method is missing.")
             self.left_panel_layout.addWidget(
                 QLabel("Error: Hardware Top Strip Missing"))
-
         # 2. Add Pad Grid Section
         if hasattr(self, '_create_pad_grid_section'):
             pad_grid_container = self._create_pad_grid_section()
@@ -883,7 +832,6 @@ class MainWindow(QMainWindow):
             print("MW ERROR: _create_pad_grid_section method is missing.")
             self.left_panel_layout.addWidget(
                 QLabel("Error: Pad Grid Section Missing"))
-
         # 3. Add AnimatorManagerWidget UI
         if self.animator_manager:
             # Stretch factor 1 (IMPORTANT)
@@ -893,7 +841,6 @@ class MainWindow(QMainWindow):
                 "MW WARNING: AnimatorManager not instantiated, cannot add its UI to left panel.")
             self.left_panel_layout.addWidget(
                 QLabel("Error: Animator UI Missing"))
-
         # 4. Add ScreenSamplerManager UI
         if self.screen_sampler_manager:
             sampler_ui_widget = self.screen_sampler_manager.get_ui_widget()
@@ -910,7 +857,6 @@ class MainWindow(QMainWindow):
                 "MW WARNING: ScreenSamplerManager not instantiated, cannot add its UI to left panel.")
             self.left_panel_layout.addWidget(
                 QLabel("Error: Sampler Manager Missing"))
-
         # Removed addStretch(1) to allow AnimatorManagerWidget to take all remaining space.
         print(f"MW TRACE: _populate_left_panel - FINISHED")
 
@@ -946,41 +892,56 @@ class MainWindow(QMainWindow):
             self._oled_nav_item_count = self.current_oled_nav_target_widget.get_navigation_item_count()
 
     def _connect_signals(self):
-        """Connects signals from various UI components and managers to their handlers in MainWindow."""
-        # print("MW TRACE: _connect_signals CALLED.")
-
+        print("MW TRACE: _connect_signals CALLED.")
+        # --- AkaiFireController raw pad/button events ---
+        if self.akai_controller and hasattr(self.akai_controller, 'fire_button_event'):
+            try:
+                self.akai_controller.fire_button_event.disconnect(
+                    self._handle_fire_pad_event_INTERNAL)
+            except TypeError:
+                pass
+            except Exception as e_disc_fbe:
+                print(
+                    f"MW WARNING: Error trying to disconnect fire_button_event: {e_disc_fbe}")
+            self.akai_controller.fire_button_event.connect(
+                self._handle_fire_pad_event_INTERNAL)
+            print(
+                "MW TRACE: Connected akai_controller.fire_button_event to _handle_fire_pad_event_INTERNAL.")
+        elif not self.akai_controller:
+            print(
+                "MW WARNING: _connect_signals - self.akai_controller is None. Cannot connect fire_button_event.")
+        elif not hasattr(self.akai_controller, 'fire_button_event'):
+            print(
+                "MW WARNING: _connect_signals - self.akai_controller does not have fire_button_event.")
         # InteractivePadGridFrame signals
         if self.pad_grid_frame:
-           self.pad_grid_frame.pad_action_requested.connect(
-               self._handle_grid_pad_action)
-           self.pad_grid_frame.pad_context_menu_requested_from_button.connect(
-               self.show_pad_context_menu)
-           self.pad_grid_frame.pad_single_left_click_action_requested.connect(
-               self._handle_grid_pad_single_left_click)
-
-           if self.animator_manager:
-               try:
-                   self.pad_grid_frame.paint_stroke_started.disconnect(
-                       self.animator_manager.on_paint_stroke_started)
-                   self.pad_grid_frame.paint_stroke_ended.disconnect(
-                       self.animator_manager.on_paint_stroke_ended)
-               except TypeError:
-                   pass
-
-               self.pad_grid_frame.paint_stroke_started.connect(
-                   self.animator_manager.on_paint_stroke_started
-               )
-               self.pad_grid_frame.paint_stroke_ended.connect(
-                   self.animator_manager.on_paint_stroke_ended
-               )
-
+            self.pad_grid_frame.pad_action_requested.connect(
+                self._handle_grid_pad_action)
+            self.pad_grid_frame.pad_context_menu_requested_from_button.connect(
+                self.show_pad_context_menu)
+            self.pad_grid_frame.pad_single_left_click_action_requested.connect(
+                self._handle_grid_pad_single_left_click)
+            if self.animator_manager:  # Ensure animator_manager exists
+                try:  # Disconnect before connecting to avoid duplicates
+                    self.pad_grid_frame.paint_stroke_started.disconnect(
+                        self.animator_manager.on_paint_stroke_started)
+                    self.pad_grid_frame.paint_stroke_ended.disconnect(
+                        self.animator_manager.on_paint_stroke_ended)
+                except TypeError:
+                    pass  # Signals were not connected
+                except Exception as e_disc_paint:
+                    print(
+                        f"MW WARNING: Error disconnecting paint stroke signals: {e_disc_paint}")
+                self.pad_grid_frame.paint_stroke_started.connect(
+                self.animator_manager.on_paint_stroke_started)
+                self.pad_grid_frame.paint_stroke_ended.connect(
+                self.animator_manager.on_paint_stroke_ended)
         # Color Picker Manager signals
         if self.color_picker_manager:
-           self.color_picker_manager.final_color_selected.connect(
-               self._handle_final_color_selection_from_manager)
-           self.color_picker_manager.status_message_requested.connect(
-               self.status_bar.showMessage)
-
+            self.color_picker_manager.final_color_selected.connect(
+                self._handle_final_color_selection_from_manager)
+            self.color_picker_manager.status_message_requested.connect(
+                self.status_bar.showMessage)
         # Static Layouts Manager signals
         if self.static_layouts_manager:
             self.static_layouts_manager.apply_layout_data_requested.connect(
@@ -989,7 +950,6 @@ class MainWindow(QMainWindow):
                 self._provide_grid_colors_for_static_save)
             self.static_layouts_manager.status_message_requested.connect(
                 self.status_bar.showMessage)
-
         # Screen Sampler Manager signals
         if self.screen_sampler_manager:
             self.screen_sampler_manager.sampled_colors_for_display.connect(
@@ -1009,7 +969,6 @@ class MainWindow(QMainWindow):
                 self._on_sampler_monitor_cycled_for_oled)
             self.screen_sampler_manager.sampler_adjustments_changed.connect(
                 self._on_sampler_adjustments_updated_for_knobs)
-
         # AnimatorManagerWidget Signals
         if self.animator_manager:
             self.animator_manager.active_frame_data_for_display.connect(
@@ -1024,25 +983,20 @@ class MainWindow(QMainWindow):
                 self._on_animator_playback_status_for_oled)
             self.animator_manager.animator_playback_active_status_changed.connect(
                 self._on_animator_playback_status_changed_for_knobs)
-
-            # <<< CONNECTED NEW SIGNAL HERE >>>
             self.animator_manager.undo_redo_state_changed.connect(
                 self._on_animator_undo_redo_state_changed)
-            # --- END OF NEW CONNECTION ---
-
             self.animator_manager.clipboard_state_changed.connect(
                 self._on_animator_clipboard_state_changed)
             self.animator_manager.request_sampler_disable.connect(
                 self._handle_request_sampler_disable)
             self.animator_manager.request_load_sequence_with_prompt.connect(
                 self._handle_animator_request_load_prompt)
-
         # HardwareInputManager Signals
         if self.hardware_input_manager:
             if hasattr(self.hardware_input_manager, 'physical_encoder_rotated'):
                 self.hardware_input_manager.physical_encoder_rotated.connect(
                     self._on_physical_encoder_rotated)
-            if self.animator_manager:
+            if self.animator_manager:  # Ensure animator_manager exists before connecting signals to it
                 self.hardware_input_manager.request_animator_play_pause.connect(
                     self.animator_manager.action_play_pause_toggle)
                 self.hardware_input_manager.request_animator_stop.connect(
@@ -1059,7 +1013,7 @@ class MainWindow(QMainWindow):
                 self._on_request_toggle_screen_sampler)
             self.hardware_input_manager.request_cycle_sampler_monitor.connect(
                 self._on_request_cycle_sampler_monitor)
-            if hasattr(self.hardware_input_manager, 'oled_pattern_up_pressed'):
+            if hasattr(self.hardware_input_manager, 'oled_pattern_up_pressed'):  # For OLED item cueing
                 self.hardware_input_manager.oled_pattern_up_pressed.connect(
                     self._handle_oled_pattern_up)
             if hasattr(self.hardware_input_manager, 'oled_pattern_down_pressed'):
@@ -1068,33 +1022,95 @@ class MainWindow(QMainWindow):
             if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
                 self.hardware_input_manager.oled_browser_activate_pressed.connect(
                     self._handle_oled_browser_activate)
-
         # OLEDDisplayManager Signals
         if self.oled_display_manager:
-            if self.akai_controller:
-                try:
+            if self.akai_controller:  # Ensure akai_controller exists
+                try:  # Disconnect before connecting
                     self.oled_display_manager.request_send_bitmap_to_fire.disconnect(
                         self.akai_controller.oled_send_full_bitmap)
-                except TypeError:
-                    pass
-                self.oled_display_manager.request_send_bitmap_to_fire.connect(
-                    self.akai_controller.oled_send_full_bitmap)
-            if self.oled_display_mirror_widget:
-                try:
                     self.oled_display_manager.request_send_bitmap_to_fire.disconnect(
                         self._update_oled_mirror)
                 except TypeError:
                     pass
+                except Exception as e_disc_oled:
+                    print(
+                        f"MW WARNING: Error disconnecting OLED signals: {e_disc_oled}")
+                self.oled_display_manager.request_send_bitmap_to_fire.connect(
+                    self.akai_controller.oled_send_full_bitmap)
+            if self.oled_display_mirror_widget:  # Ensure mirror widget exists
                 self.oled_display_manager.request_send_bitmap_to_fire.connect(
                     self._update_oled_mirror)
             if hasattr(self.oled_display_manager, 'active_graphic_pause_state_changed'):
-                try:
+                try:  # Disconnect before connecting
                     self.oled_display_manager.active_graphic_pause_state_changed.disconnect(
                         self._update_oled_play_pause_button_ui)
                 except TypeError:
                     pass
+                except Exception as e_disc_pause_ui:
+                    print(
+                        f"MW WARNING: Error disconnecting pause UI signal: {e_disc_pause_ui}")
                 self.oled_display_manager.active_graphic_pause_state_changed.connect(
                     self._update_oled_play_pause_button_ui)
+        print("MW TRACE: _connect_signals FINISHED.")
+
+    def keyPressEvent(self, event: QKeyEvent):
+        # Existing print for MW_PAD_ROUTER in _handle_fire_pad_event_INTERNAL will show routing
+        # print(f"MW_KEY_PRESS: Key {event.key()}, Text '{event.text()}', isAutoRepeat: {event.isAutoRepeat()}, DOOM_ACTIVE: {self.is_doom_mode_active}") # Optional global key press debug
+        if self.is_doom_mode_active and self.doom_game_controller and DOOM_MODULE_LOADED:
+            doom_key_map = {
+                Qt.Key.Key_W: PAD_DOOM_FORWARD, 
+                Qt.Key.Key_S: PAD_DOOM_BACKWARD,
+                Qt.Key.Key_A: PAD_DOOM_STRAFE_LEFT, 
+                Qt.Key.Key_D: PAD_DOOM_STRAFE_RIGHT,
+                Qt.Key.Key_Q: PAD_DOOM_TURN_LEFT_MAIN, 
+                Qt.Key.Key_E: PAD_DOOM_TURN_RIGHT_MAIN,
+                Qt.Key.Key_Left: PAD_DOOM_TURN_LEFT_ALT, 
+                Qt.Key.Key_Right: PAD_DOOM_TURN_RIGHT_ALT,
+                Qt.Key.Key_F: PAD_DOOM_SHOOT, 
+                Qt.Key.Key_Shift: PAD_DOOM_RUN
+            }
+            if not event.isAutoRepeat() and event.key() in doom_key_map:
+                # print(f"MW_KEY_PRESS_DOOM: Forwarding key {event.key()} to DGC as True") # DEBUG
+                self.doom_game_controller.handle_pad_event(doom_key_map[event.key()], True) 
+                event.accept() 
+                return 
+        super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event: QKeyEvent):
+        # print(f"MW_KEY_RELEASE: Key {event.key()}, Text '{event.text()}', isAutoRepeat: {event.isAutoRepeat()}, DOOM_ACTIVE: {self.is_doom_mode_active}") # DEBUG THIS
+        if self.is_doom_mode_active and self.doom_game_controller and DOOM_MODULE_LOADED:
+            doom_key_map = {
+                Qt.Key.Key_W: PAD_DOOM_FORWARD, 
+                Qt.Key.Key_S: PAD_DOOM_BACKWARD,
+                Qt.Key.Key_A: PAD_DOOM_STRAFE_LEFT, 
+                Qt.Key.Key_D: PAD_DOOM_STRAFE_RIGHT,
+                Qt.Key.Key_Q: PAD_DOOM_TURN_LEFT_MAIN, 
+                Qt.Key.Key_E: PAD_DOOM_TURN_RIGHT_MAIN,
+                Qt.Key.Key_Left: PAD_DOOM_TURN_LEFT_ALT, 
+                Qt.Key.Key_Right: PAD_DOOM_TURN_RIGHT_ALT,
+                Qt.Key.Key_F: PAD_DOOM_SHOOT, 
+                Qt.Key.Key_Shift: PAD_DOOM_RUN
+            }
+            if not event.isAutoRepeat() and event.key() in doom_key_map:
+                # print(f"MW_KEY_RELEASE_DOOM: Forwarding key {event.key()} to DGC as False") # DEBUG
+                self.doom_game_controller.handle_pad_event(doom_key_map[event.key()], False) 
+                event.accept()
+                return
+        super().keyReleaseEvent(event)
+
+    def _handle_fire_pad_event_INTERNAL(self, note: int, is_pressed: bool):
+        """
+        Internal handler for ALL Akai Fire pad/button events from AkaiFireController.
+        Routes to DOOM controller if active, otherwise handles normal app interactions
+        (or delegates to HardwareInputManager for specific buttons).
+        """
+        # print(
+            # f"MW_PAD_ROUTER: Received Note {note} (0x{note:02X}), Pressed {is_pressed}, DOOM_ACTIVE: {self.is_doom_mode_active}")
+        if self.is_doom_mode_active and self.doom_game_controller:
+            # print(f"MW_PAD_ROUTER: Routing to DoomGameController.") # DEBUG
+            self.doom_game_controller.handle_pad_event(note, is_pressed)
+            return  # Event consumed by DOOM mode
+        pass  # Placeholder for non-DOOM general pad event handling if any
 
     def _update_oled_play_pause_button_ui(self, is_paused: bool):
         """
@@ -1103,12 +1119,10 @@ class MainWindow(QMainWindow):
         """
         if not hasattr(self, 'oled_play_pause_icon_label') or not self.oled_play_pause_icon_label:
             return
-
         # Enable/disable based on connection state (should be handled by _update_global_ui_interaction_states)
         # But ensure here as well for robustness
         is_connected = self.akai_controller.is_connected() if hasattr(self, 'akai_controller') and self.akai_controller else False
         self.oled_play_pause_icon_label.setEnabled(is_connected)
-
         # Icon display logic (single icon for both states, but tooltip changes)
         icon_to_display_path = "resources/icons/play-pause.png"
         current_pixmap = self.oled_play_pause_icon_label.pixmap()
@@ -1136,7 +1150,6 @@ class MainWindow(QMainWindow):
                     self.oled_play_pause_icon_label.setText("P/P")
             except Exception:
                 self.oled_play_pause_icon_label.setText("P/P")
-
         # Tooltip reflects the current state
         if is_paused:
             self.oled_play_pause_icon_label.setToolTip("Resume OLED Active Graphic (Click)")
@@ -1152,14 +1165,12 @@ class MainWindow(QMainWindow):
             f"Undo last sequence edit ({QKeySequence(QKeySequence.StandardKey.Undo).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.undo_action.triggered.connect(self.action_animator_undo)
         self.addAction(self.undo_action) # Ensure it's added for global shortcut
-
         self.redo_action = QAction("↷ Redo Sequence Edit", self)  # Icon added
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         self.redo_action.setToolTip(
             f"Redo last undone sequence edit ({QKeySequence(QKeySequence.StandardKey.Redo).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.redo_action.triggered.connect(self.action_animator_redo)
         self.addAction(self.redo_action) # Ensure it's added for global shortcut
-
         # Animator Frame Operations (using icons from animator.controls_widget)
         self.copy_action = QAction(ICON_COPY + " Copy Frame(s)", self)
         self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
@@ -1167,21 +1178,18 @@ class MainWindow(QMainWindow):
             f"Copy selected frame(s) ({QKeySequence(QKeySequence.StandardKey.Copy).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.copy_action.triggered.connect(self.action_animator_copy_frames)
         self.addAction(self.copy_action)
-        
         self.cut_action = QAction(ICON_CUT + " Cut Frame(s)", self)
         self.cut_action.setShortcut(QKeySequence.StandardKey.Cut)
         self.cut_action.setToolTip(
             f"Cut selected frame(s) ({QKeySequence(QKeySequence.StandardKey.Cut).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.cut_action.triggered.connect(self.action_animator_cut_frames)
         self.addAction(self.cut_action)
-        
         self.paste_action = QAction(ICON_DUPLICATE + " Paste Frame(s)", self)
         self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
         self.paste_action.setToolTip(
             f"Paste frame(s) from clipboard ({QKeySequence(QKeySequence.StandardKey.Paste).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.paste_action.triggered.connect(self.action_animator_paste_frames)
         self.addAction(self.paste_action)
-
         self.duplicate_action = QAction(
             ICON_DUPLICATE + " Duplicate Frame(s)", self)
         self.duplicate_action.setShortcut(QKeySequence(
@@ -1191,14 +1199,12 @@ class MainWindow(QMainWindow):
         self.duplicate_action.triggered.connect(
             self.action_animator_duplicate_frames)
         self.addAction(self.duplicate_action)
-
         self.delete_action = QAction(ICON_DELETE + " Delete Frame(s)", self)
         self.delete_action.setShortcut(QKeySequence.StandardKey.Delete)
         self.delete_action.setToolTip(f"Delete selected frame(s) (Del)")
         self.delete_action.triggered.connect(
             self.action_animator_delete_frames)
         self.addAction(self.delete_action)
-
         self.add_blank_global_action = QAction(
             ICON_ADD_BLANK + " Add Blank Frame", self)
         self.add_blank_global_action.setShortcut(QKeySequence(
@@ -1208,7 +1214,6 @@ class MainWindow(QMainWindow):
         self.add_blank_global_action.triggered.connect(
             self.action_animator_add_blank_frame)
         self.addAction(self.add_blank_global_action)
-        
         # Sequence File Operations
         self.new_sequence_action = QAction("✨ New Sequence", self)
         self.new_sequence_action.setShortcut(QKeySequence.StandardKey.New)
@@ -1217,7 +1222,6 @@ class MainWindow(QMainWindow):
         self.new_sequence_action.triggered.connect(
             lambda: self.action_animator_new_sequence(prompt_save=True))
         self.addAction(self.new_sequence_action)
-
         self.save_sequence_as_action = QAction("💾 Save Sequence As...", self)
         self.save_sequence_as_action.setShortcut(
             QKeySequence.StandardKey.SaveAs)
@@ -1226,7 +1230,6 @@ class MainWindow(QMainWindow):
         self.save_sequence_as_action.triggered.connect(
             self.action_animator_save_sequence_as)
         self.addAction(self.save_sequence_as_action)
-        
         # Eyedropper Toggle
         self.eyedropper_action = QAction("💧 Eyedropper Mode", self)
         self.eyedropper_action.setShortcut(
@@ -1237,7 +1240,6 @@ class MainWindow(QMainWindow):
         self.eyedropper_action.triggered.connect(
             self.toggle_eyedropper_mode)
         self.addAction(self.eyedropper_action)
-        
         # Animator Play/Pause Global Shortcut
         self.play_pause_action = QAction("Play/Pause Sequence", self)
         self.play_pause_action.setShortcut(
@@ -1247,10 +1249,9 @@ class MainWindow(QMainWindow):
         self.play_pause_action.triggered.connect(
             self.action_animator_play_pause_toggle)
         self.addAction(self.play_pause_action)
-        
         # Initial UI state update for actions (many will be disabled initially)
         self._update_global_ui_interaction_states()
-        
+
     def populate_midi_ports(self):
         """Populates the MIDI output port selection QComboBox."""
         if self.port_combo_direct_ref is None:
@@ -1271,8 +1272,8 @@ class MainWindow(QMainWindow):
             fire_port_idx = -1
             for i, port_name in enumerate(ports):  # Find "Fire" or "Akai" port
                 if isinstance(port_name, str) and \
-                   ("fire" in port_name.lower() or "akai" in port_name.lower()) and \
-                   "midiin" not in port_name.lower():  # Exclude input ports
+                    ("fire" in port_name.lower() or "akai" in port_name.lower()) and \
+                    "midiin" not in port_name.lower():  # Exclude input ports
                     fire_port_idx = i
                     break
             if fire_port_idx != -1:
@@ -1340,7 +1341,7 @@ class MainWindow(QMainWindow):
         if self.port_combo_direct_ref: self.port_combo_direct_ref.setEnabled(not is_out_conn)
         if self.input_port_combo_direct_ref: self.input_port_combo_direct_ref.setEnabled(not is_in_conn)        
         if self.screen_sampler_manager: # Enable/disable sampler UI based on connection
-             self.screen_sampler_manager.set_overall_enabled_state(is_out_conn, is_out_conn) # Base enable, specific button enable also in global states
+            self.screen_sampler_manager.set_overall_enabled_state(is_out_conn, is_out_conn) # Base enable, specific button enable also in global states
         QTimer.singleShot(0, self._update_global_ui_interaction_states) # Refresh all UI element states
 
     def _update_contextual_knob_configs(self):
@@ -1440,55 +1441,75 @@ class MainWindow(QMainWindow):
                 self.gui_knob4.setValue(64)
                 # self.gui_knob4.valueChanged.connect(self._on_global_resonance_knob_changed) # Future
                 print("MW TRACE: Knob 4 configured for GLOBAL RESONANCE/UNASSIGNED.")
-
         # --- Global UI State Management ---
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
-
+        # --- NEW: If DOOM mode is active, most other things are disabled ---
+        if self.is_doom_mode_active:
+            if self.animator_manager:
+                self.animator_manager.set_overall_enabled_state(False)
+            if self.screen_sampler_manager:
+                self.screen_sampler_manager.update_ui_for_global_state(
+                    False, False)
+            if self.pad_grid_frame:
+                self.pad_grid_frame.setEnabled(False)
+            if self.color_picker_manager:
+                self.color_picker_manager.set_enabled(False)
+            if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
+                self.quick_tools_group_ref.setEnabled(False)
+            if self.static_layouts_manager:
+                self.static_layouts_manager.set_enabled_state(False)
+            # Keep "Exit LazyDOOM" button enabled, disable "App Guide"
+            if self.button_lazy_doom:
+                # Can only exit if connected? Or always? Let's say always.
+                self.button_lazy_doom.setEnabled(is_connected)
+            if self.app_guide_button:
+                self.app_guide_button.setEnabled(False)
+            # Disable menu actions related to animator, etc.
+            if hasattr(self, 'new_sequence_action'):
+                self.new_sequence_action.setEnabled(False)
+            # ... disable other animator QActions ...
+            if hasattr(self, 'eyedropper_action'):
+                self.eyedropper_action.setEnabled(False)
+            if hasattr(self, 'play_pause_action'):
+                self.play_pause_action.setEnabled(False)
+            # ... etc. for all actions that conflict with DOOM mode
+            return  # Skip normal UI state logic if DOOM is active
         is_anim_playing = False
         if self.animator_manager and self.animator_manager.active_sequence_model:
             is_anim_playing = self.animator_manager.active_sequence_model.get_is_playing()
-
         is_sampler_on = False
         if self.screen_sampler_manager:
             is_sampler_on = self.screen_sampler_manager.is_sampling_active()
-
         can_use_animator = is_connected and not is_sampler_on
         can_paint_direct = is_connected and not is_sampler_on and not is_anim_playing
         can_toggle_sampler = is_connected and not is_anim_playing
-
         # Animator Manager and related QActions
         if self.animator_manager:
             self.animator_manager.set_overall_enabled_state(can_use_animator)
             has_frames = False
             has_sel = False
-
-            # --- CORRECTED: Explicitly cast to bool ---
+            # ---  Explicitly cast to bool ---
             can_undo_anim = bool(
                 self.animator_manager.active_sequence_model._undo_stack) if self.animator_manager.active_sequence_model else False
             can_redo_anim = bool(
                 self.animator_manager.active_sequence_model._redo_stack) if self.animator_manager.active_sequence_model else False
-            # --- END CORRECTION ---
-
             if self.animator_manager.active_sequence_model:
                 has_frames = self.animator_manager.active_sequence_model.get_frame_count() > 0
             if self.animator_manager.sequence_timeline_widget:
                 has_sel = len(
                     self.animator_manager.sequence_timeline_widget.get_selected_item_indices()) > 0
             has_clip = bool(self.animator_manager.frame_clipboard)
-
             # Global QActions for Animator
             if hasattr(self, 'new_sequence_action') and self.new_sequence_action:
                 self.new_sequence_action.setEnabled(can_use_animator)
             if hasattr(self, 'save_sequence_as_action') and self.save_sequence_as_action:
                 self.save_sequence_as_action.setEnabled(
                     can_use_animator and has_frames)
-
             if hasattr(self, 'undo_action') and self.undo_action:
                 self.undo_action.setEnabled(can_use_animator and can_undo_anim)
             if hasattr(self, 'redo_action') and self.redo_action:
                 self.redo_action.setEnabled(can_use_animator and can_redo_anim)
-
             if hasattr(self, 'copy_action') and self.copy_action:
                 self.copy_action.setEnabled(can_use_animator and has_sel)
             if hasattr(self, 'cut_action') and self.cut_action:
@@ -1504,12 +1525,10 @@ class MainWindow(QMainWindow):
                     can_use_animator and has_frames)
             if hasattr(self, 'add_blank_global_action') and self.add_blank_global_action:
                 self.add_blank_global_action.setEnabled(can_use_animator)
-
         # Screen Sampler Manager
         if self.screen_sampler_manager:
             self.screen_sampler_manager.update_ui_for_global_state(
                 is_connected, can_toggle_sampler)
-
         # Pad Grid and Direct Painting Tools
         if hasattr(self, 'pad_grid_frame') and self.pad_grid_frame:
             self.pad_grid_frame.setEnabled(can_paint_direct)
@@ -1519,28 +1538,26 @@ class MainWindow(QMainWindow):
             self.quick_tools_group_ref.setEnabled(can_paint_direct)
         if hasattr(self, 'eyedropper_button') and self.eyedropper_button:
             self.eyedropper_button.setEnabled(can_paint_direct)
-
         is_eyedropper_active = hasattr(
             self, 'is_eyedropper_mode_active') and self.is_eyedropper_mode_active
         if hasattr(self, 'eyedropper_action') and self.eyedropper_action:
             self.eyedropper_action.setEnabled(can_paint_direct)
             self.eyedropper_action.setChecked(is_eyedropper_active)
-
         if hasattr(self, 'static_layouts_manager') and self.static_layouts_manager:
             self.static_layouts_manager.set_enabled_state(can_paint_direct)
-
         if hasattr(self, 'oled_play_pause_icon_label') and self.oled_play_pause_icon_label:
             self.oled_play_pause_icon_label.setEnabled(is_connected)
             if is_connected and self.oled_display_manager:
                 self._update_oled_play_pause_button_ui(
                     self.oled_display_manager.is_active_graphic_paused())
-
+        if self.button_lazy_doom:
+            self.button_lazy_doom.setEnabled(is_connected)
+        if self.app_guide_button:
+            self.app_guide_button.setEnabled(True)  # Or based on connection
 # init here
-
     def __init__(self):
         super().__init__()
         print("MW DEBUG: MainWindow __init__ START")
-
         # WINDOW TITLE & ICON
         self.setWindowTitle("AKAI Fire RGB Customizer")
         self.setGeometry(100, 100, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT)
@@ -1548,7 +1565,6 @@ class MainWindow(QMainWindow):
             self._set_window_icon()
         else:
             print("MW CRITICAL ERROR: _set_window_icon method missing!")
-
         # --- PATH INITIALIZATION ---
         print("MW DEBUG: Initializing paths...")
         if hasattr(self, '_get_presets_base_dir_path'):
@@ -1557,7 +1573,6 @@ class MainWindow(QMainWindow):
             print("MW CRITICAL ERROR: _get_presets_base_dir_path method missing!")
             # Fallback to prevent further crashes
             self.bundled_presets_base_path = "error_path_bundle"
-
         # Module-level function
         self.user_documents_presets_path = get_user_documents_presets_path()
         self.user_oled_presets_base_path = os.path.join(
@@ -1571,26 +1586,22 @@ class MainWindow(QMainWindow):
         os.makedirs(self.user_oled_anim_items_path, exist_ok=True)
         print("MW DEBUG: Paths initialized.")
         # --- END PATH INITIALIZATION ---
-
         # --- OLED CONFIGURATION & STATE ---
         print("MW DEBUG: Initializing OLED config attributes...")
         self.active_graphic_item_relative_path: str | None = None
         self.oled_global_scroll_delay_ms: int = DEFAULT_OLED_SCROLL_DELAY_MS_FALLBACK
         self.current_cued_text_item_path: str | None = None
         self.current_cued_anim_item_path: str | None = None
-
         if hasattr(self, '_scan_available_app_fonts'):
             self.available_app_fonts_cache: list[str] = self._scan_available_app_fonts(
             )
         else:
             print("MW CRITICAL ERROR: _scan_available_app_fonts method missing!")
             self.available_app_fonts_cache = []
-
         if hasattr(self, '_load_oled_config'):
             self._load_oled_config()
         else:
             print("MW CRITICAL ERROR: _load_oled_config method missing!")
-
         self.available_oled_items_cache: list[dict] = []
         if hasattr(self, '_scan_available_oled_items'):
             self._scan_available_oled_items()
@@ -1598,7 +1609,6 @@ class MainWindow(QMainWindow):
             print("MW CRITICAL ERROR: _scan_available_oled_items method missing!")
         print("MW DEBUG: OLED config attributes initialized and config loaded.")
         # --- END OLED CONFIGURATION & STATE ---
-
         # --- CORE APPLICATION COMPONENTS ---
         print("MW DEBUG: Initializing core application components...")
         self.akai_controller = AkaiFireController(auto_connect=False)
@@ -1608,7 +1618,6 @@ class MainWindow(QMainWindow):
         self.is_animator_playing: bool = False
         print("MW DEBUG: Core application components initialized.")
         # --- END CORE APPLICATION COMPONENTS ---
-
         # --- OLED NAVIGATION STATE ---
         print("MW DEBUG: Initializing OLED navigation state...")
         self.current_oled_nav_target_name: str = self.OLED_NAVIGATION_FOCUS_OPTIONS[0]
@@ -1621,8 +1630,10 @@ class MainWindow(QMainWindow):
         self._oled_nav_debounce_timer.setInterval(300)
         self._is_hardware_nav_action_in_progress: bool = False
         print("MW DEBUG: OLED navigation state initialized.")
-        # --- END OLED NAVIGATION STATE ---
-
+        # lazyDoom
+        self.is_doom_mode_active: bool = False
+        self.doom_game_controller = None  # Will hold the DoomGameController instance
+        self.button_lazy_doom: QPushButton | None = None  # For the new button
         # --- INSTANTIATE MANAGERS ---
         print("MW DEBUG: Instantiating managers...")
         self.color_picker_manager = ColorPickerManager(
@@ -1642,10 +1653,8 @@ class MainWindow(QMainWindow):
         self.screen_sampler_manager = ScreenSamplerManager(
             presets_base_path=self.bundled_presets_base_path,
             animator_manager_ref=self.animator_manager, parent=self)
-
         self.oled_display_manager: OLEDDisplayManager | None = None
         self.hardware_input_manager: HardwareInputManager | None = None
-
         print(f"MW DEBUG: AkaiController instance: {self.akai_controller}")
         if self.akai_controller:
             print("MW DEBUG: AkaiController exists, attempting to create OLEDDisplayManager & HardwareInputManager.")
@@ -1656,7 +1665,6 @@ class MainWindow(QMainWindow):
             )
             print(
                 f"MW DEBUG: OLEDDisplayManager created: {self.oled_display_manager}")
-
             self.hardware_input_manager = HardwareInputManager(
                 akai_fire_controller_ref=self.akai_controller, parent=self
             )
@@ -1668,10 +1676,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self, "Fatal Error", "AkaiFireController instance could not be created. App will exit.")
             sys.exit("Fatal Error: AkaiFireController could not be initialized.")
-
         print("MW DEBUG: Managers instantiated.")
-        # --- END INSTANTIATE MANAGERS ---
-
         # --- Initialize OLED Display Manager settings and Active Graphic ---
         print("MW DEBUG: Initializing OLEDDisplayManager settings.")
         if self.oled_display_manager:
@@ -1681,13 +1686,11 @@ class MainWindow(QMainWindow):
             else:
                 print(
                     "MW CRITICAL ERROR: OLEDDisplayManager missing update_global_text_item_scroll_delay!")
-
             if hasattr(self, '_load_and_apply_active_graphic'):
                 self._load_and_apply_active_graphic()
             else:
                 print(
                     "MW CRITICAL ERROR: _load_and_apply_active_graphic method missing!")
-
             if hasattr(self, '_on_builtin_oled_startup_animation_finished') and callable(self._on_builtin_oled_startup_animation_finished):
                 self.oled_display_manager.builtin_startup_animation_finished.connect(
                     self._on_builtin_oled_startup_animation_finished)
@@ -1697,7 +1700,6 @@ class MainWindow(QMainWindow):
                     "MW CRITICAL ERROR: _on_builtin_oled_startup_animation_finished slot is MISSING or not callable!")
         else:
             print("MainWindow CRITICAL: OLEDDisplayManager is None before setting scroll/graphic, cannot proceed with OLED init.")
-
         # --- UI ELEMENT REFERENCES (Initialize to None, will be populated by UI setup methods) ---
         print("MW DEBUG: Initializing UI element references to None.")
         self.central_widget_main: QWidget | None = None
@@ -1734,27 +1736,22 @@ class MainWindow(QMainWindow):
             self.ensure_user_dirs_exist()
         else:
             print("MW CRITICAL ERROR: ensure_user_dirs_exist method missing!")
-
         # --- MAIN UI SETUP ---
         print("MW DEBUG: Calling _init_ui_layout...")
         if hasattr(self, '_init_ui_layout'):
             self._init_ui_layout()
         else:
             print("MW CRITICAL ERROR: _init_ui_layout method missing!")
-
         print("MW DEBUG: Calling _populate_left_panel...")
         if hasattr(self, '_populate_left_panel'):
             self._populate_left_panel()
         else:
             print("MW CRITICAL ERROR: _populate_left_panel method missing!")
-
         print("MW DEBUG: Calling _populate_right_panel...")
         if hasattr(self, '_populate_right_panel'):
             self._populate_right_panel()
         else:
             print("MW CRITICAL ERROR: _populate_right_panel method missing!")
-        # --- END MAIN UI SETUP ---
-
         # --- GLOBAL BRIGHTNESS & KNOB SETUP ---
         print("MW DEBUG: Setting up global brightness and knobs...")
         self.global_pad_brightness: float = 1.0
@@ -1767,57 +1764,44 @@ class MainWindow(QMainWindow):
             self._setup_global_brightness_knob()
         else:
             print("MW CRITICAL ERROR: _setup_global_brightness_knob method missing!")
-        # --- END GLOBAL BRIGHTNESS & KNOB SETUP ---
-
         # --- TIMERS & FINAL SETUP ---
         print("MW DEBUG: Setting up timers and final configurations...")
         self._stop_action_issued_for_oled: bool = False
         # Keep this if _show_knob_feedback_on_oled uses it
         self._KNOB_FEEDBACK_OLED_DURATION_MS = 1500
-
         if hasattr(self, '_update_current_oled_nav_target_widget'):
             self._update_current_oled_nav_target_widget()
         else:
             print(
                 "MW CRITICAL ERROR: _update_current_oled_nav_target_widget method missing!")
-
         if hasattr(self, '_connect_signals'):
             self._connect_signals()
         else:
             print("MW CRITICAL ERROR: _connect_signals method missing!")
         print("MW DEBUG: _connect_signals expected to be CALLED from __init__.")
-
         if hasattr(self, '_create_edit_actions'):
             self._create_edit_actions()
         else:
             print("MW CRITICAL ERROR: _create_edit_actions method missing!")
-
         if hasattr(self, 'populate_midi_ports'):
             self.populate_midi_ports()
         else:
             print("MW CRITICAL ERROR: populate_midi_ports method missing!")
-
         if hasattr(self, 'populate_midi_input_ports'):
             self.populate_midi_input_ports()
         else:
             print("MW CRITICAL ERROR: populate_midi_input_ports method missing!")
-
         if hasattr(self, 'update_connection_status'):
             self.update_connection_status()
         else:
             print("MW CRITICAL ERROR: update_connection_status method missing!")
-
         # QTimer.singleShot calls ensure these run after __init__ is mostly complete
         if hasattr(self, '_update_contextual_knob_configs'):
             QTimer.singleShot(0, self._update_contextual_knob_configs)
         else:
             print("MW CRITICAL ERROR: _update_contextual_knob_configs method missing!")
-
-        # <<< NEW: Schedule one-time positioning of the toggle icon >>>
         if hasattr(self, '_position_oled_toggle_icon'):
-             QTimer.singleShot(100, self._position_oled_toggle_icon) # Small delay to ensure layout is settled
-        # --- END NEW ---
-
+            QTimer.singleShot(100, self._position_oled_toggle_icon) # Small delay to ensure layout is settled
         if hasattr(self, '_update_global_ui_interaction_states'):
             QTimer.singleShot(0, self._update_global_ui_interaction_states)
         else:
@@ -1826,25 +1810,20 @@ class MainWindow(QMainWindow):
         print("MW DEBUG: MainWindow __init__ COMPLETE.")
         # --- END TIMERS & FINAL SETUP ---
 
-# In class MainWindow(QMainWindow):
-
     def eventFilter(self, obj, event: QEvent):
         # General debug (remove general print for less noise once specific object filtering works)
         # print(f"MW eventFilter: obj={type(obj).__name__} (name: {obj.objectName() if obj.objectName() else 'N/A'}), event_type={event.type()}")
-
         # --- Click on OLED Mirror ---
         if hasattr(self, 'oled_display_mirror_widget') and self.oled_display_mirror_widget and \
-           obj == self.oled_display_mirror_widget:
+            obj == self.oled_display_mirror_widget:
             if event.type() == QEvent.Type.MouseButtonPress:
                 # event IS ALREADY a QMouseEvent here
                 if event.button() == Qt.MouseButton.LeftButton:  # Access button directly
                     self._open_oled_customizer_dialog()
                     return True
-
         # --- Click on OLED Play/Pause Icon Label ---
         if hasattr(self, 'oled_play_pause_icon_label') and self.oled_play_pause_icon_label and \
-           obj == self.oled_play_pause_icon_label:
-
+            obj == self.oled_play_pause_icon_label:
             # Only print detailed status for MouseButtonPress for this object to reduce noise
             if event.type() == QEvent.Type.MouseButtonPress:
                 # print(
@@ -1853,7 +1832,6 @@ class MainWindow(QMainWindow):
                 is_visible_status = self.oled_play_pause_icon_label.isVisible()
                 print(
                     f"  IconLabel Status: Enabled={is_enabled_status}, Visible={is_visible_status}, Geom={self.oled_play_pause_icon_label.geometry()}")
-
             if event.type() == QEvent.Type.MouseButtonPress:
                 # event IS ALREADY a QMouseEvent here
                 if event.button() == Qt.MouseButton.LeftButton:
@@ -1866,38 +1844,225 @@ class MainWindow(QMainWindow):
                     else:
                         print("  IconLabel is DISABLED, click ignored.")
                         return True
-                # else: # Optional: print(f"  IconLabel OtherButton ({event.button()}) clicked, ignoring.")
-            # elif event.type() == QEvent.Type.Enter: # Corresponds to hover start for QSS
-            #     print(f"MW eventFilter DEBUG: Enter event for oled_play_pause_icon_label")
-            # elif event.type() == QEvent.Type.Leave: # Corresponds to hover end for QSS
-            #     print(f"MW eventFilter DEBUG: Leave event for oled_play_pause_icon_label")
-
         return super().eventFilter(obj, event)
 
     def _on_oled_global_settings_changed(self,
-                                         new_active_graphic_item_path: str | None,
-                                         new_global_scroll_delay_ms: int):
+                                        new_active_graphic_item_path: str | None,
+                                        new_global_scroll_delay_ms: int):
         """
         Called when OLEDCustomizerDialog emits global_settings_changed.
         Updates MainWindow's state, saves config, and re-applies Active Graphic.
         """
         # print(
         #     f"MW INFO: OLED global settings changed. New Active Graphic path: '{new_active_graphic_item_path}', Scroll delay: {new_global_scroll_delay_ms}ms")
-
         self.active_graphic_item_relative_path = new_active_graphic_item_path
         self.oled_global_scroll_delay_ms = new_global_scroll_delay_ms
-
         self._save_oled_config()  # Save new settings
-
         if self.oled_display_manager:
             # Update global scroll speed for text items in OLEDDisplayManager
             self.oled_display_manager.update_global_text_item_scroll_delay(
                 self.oled_global_scroll_delay_ms)
-
             # Reload and apply the (potentially new) Active Graphic
             self._load_and_apply_active_graphic()  # This calls set_active_graphic on ODM
-
         self._scan_available_oled_items()  # Refresh library cache
+
+    def _toggle_doom_mode(self):
+        if not DOOM_MODULE_LOADED: # Check if the module actually loaded
+            QMessageBox.warning(self, "Feature Unavailable", 
+                                "LazyDOOM module could not be loaded. Please check console for errors.")
+            if self.button_lazy_doom: self.button_lazy_doom.setEnabled(False) # Disable button if module fails
+            return
+        if self.is_doom_mode_active:
+            self._exit_doom_mode()
+        else:
+            self._enter_doom_mode()
+
+    def _enter_doom_mode(self):
+        print("MW INFO: Attempting to enter LazyDOOM mode...")
+        if not self.akai_controller or not self.akai_controller.is_connected():
+            QMessageBox.warning(self, "DOOM Mode Error", "Akai Fire is not connected. Please connect first.")
+            return
+        instructions_dialog = DoomInstructionsDialog(self)
+        dialog_result = instructions_dialog.exec()
+        instructions_dialog.deleteLater() # Clean up dialog
+        if dialog_result != QDialog.DialogCode.Accepted: # User clicked "Back to PixelForge" or closed
+            print("MW INFO: LazyDOOM cancelled by user from instructions dialog.")
+            return 
+        print("MW INFO: Proceeding to enter DOOM mode after instructions.")
+        self.is_doom_mode_active = True
+        # Disable Conflicting Features
+        if self.animator_manager:
+            if self.animator_manager.active_sequence_model and self.animator_manager.active_sequence_model.get_is_playing():
+                self.animator_manager.action_stop() 
+            if hasattr(self.animator_manager, 'set_interactive'):
+                self.animator_manager.set_interactive(False)
+            else: self.animator_manager.setEnabled(False)
+        if self.screen_sampler_manager:
+            if self.screen_sampler_manager.is_sampling_active():
+                self.screen_sampler_manager.stop_sampling_thread()
+            if hasattr(self.screen_sampler_manager, 'set_interactive'):
+                self.screen_sampler_manager.set_interactive(False)
+            elif self.screen_sampler_manager.get_ui_widget(): 
+                self.screen_sampler_manager.get_ui_widget().setEnabled(False)
+        if self.static_layouts_manager:
+            if hasattr(self.static_layouts_manager, 'set_interactive'):
+                self.static_layouts_manager.set_interactive(False)
+            else: self.static_layouts_manager.setEnabled(False) 
+        if self.color_picker_manager:
+            self.color_picker_manager.setEnabled(False)
+        if self.pad_grid_frame:
+            self.pad_grid_frame.setEnabled(False) 
+        if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
+            self.quick_tools_group_ref.setEnabled(False)
+        if self.oled_display_manager:
+            self.oled_display_manager.begin_external_oled_override()
+        try:
+            # Ensure self.doom_game_controller is None before creating a new one
+            if self.doom_game_controller is not None:
+                print("MW WARNING: Previous DoomGameController instance found, attempting to clean up.")
+                self.doom_game_controller.stop_game()
+                self.doom_game_controller.deleteLater()
+                self.doom_game_controller = None
+            self.doom_game_controller = DoomGameController(self.akai_controller, parent=self) # parent=self for Qt ownership
+            self.doom_game_controller.frame_ready_for_oled_signal.connect(self._handle_doom_frame_for_display)
+            self.doom_game_controller.game_over_signal.connect(self._handle_doom_game_over)
+            self.doom_game_controller.start_game()
+            print("MW INFO: DoomGameController started successfully.")
+        except Exception as e_dgc:
+            print(f"MW CRITICAL: Failed to initialize or start DoomGameController: {e_dgc}")
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "DOOM Error", f"Could not start LazyDOOM: {e_dgc}")
+            self._exit_doom_mode() 
+            return
+        if self.button_lazy_doom:
+            self.button_lazy_doom.setText("⏪ Exit LazyDOOM")
+        self.status_bar.showMessage("LazyDOOM Mode Active! 👹", 0) 
+        self._update_global_ui_interaction_states() 
+
+    def _exit_doom_mode(self):
+        print("MW INFO: Exiting LazyDOOM mode...")
+        if self.doom_game_controller:
+            print("MW INFO: Stopping DoomGameController...")
+            self.doom_game_controller.stop_game()
+            try:
+                self.doom_game_controller.frame_ready_for_oled_signal.disconnect(
+                    self._handle_doom_frame_for_display)
+                self.doom_game_controller.game_over_signal.disconnect(
+                    self._handle_doom_game_over)
+            except TypeError:
+                print(
+                    "MW INFO: Signals for DoomGameController were not connected or already disconnected (during exit).")
+            except Exception as e_disconnect:
+                print(
+                    f"MW WARNING: Error disconnecting DoomGameController signals during exit: {e_disconnect}")
+            self.doom_game_controller.deleteLater()
+            self.doom_game_controller = None
+            print("MW INFO: DoomGameController stopped and cleaned up.")
+        self.is_doom_mode_active = False
+        if self.oled_display_manager:
+            self.oled_display_manager.end_external_oled_override()
+        # Re-enable Conflicting Features
+        if self.animator_manager:
+            if hasattr(self.animator_manager, 'set_interactive'):
+                self.animator_manager.set_interactive(True)
+            else:
+                self.animator_manager.setEnabled(True)
+            print("MW INFO: Animator re-enabled.")
+        if self.screen_sampler_manager:
+            if hasattr(self.screen_sampler_manager, 'set_interactive'):
+                self.screen_sampler_manager.set_interactive(True)
+            elif self.screen_sampler_manager.get_ui_widget():
+                self.screen_sampler_manager.get_ui_widget().setEnabled(True)
+            print("MW INFO: Screen Sampler re-enabled.")
+        if self.static_layouts_manager:
+            if hasattr(self.static_layouts_manager, 'set_interactive'):
+                self.static_layouts_manager.set_interactive(True)
+            else:
+                self.static_layouts_manager.setEnabled(True)
+            print("MW INFO: Static Layouts re-enabled.")
+        if self.color_picker_manager:
+            self.color_picker_manager.setEnabled(True)
+            print("MW INFO: Color Picker re-enabled.")
+        if self.pad_grid_frame:
+            self.pad_grid_frame.setEnabled(True)
+            print("MW INFO: Pad Grid Frame re-enabled.")
+        if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
+            self.quick_tools_group_ref.setEnabled(True)
+            print("MW INFO: Quick Tools re-enabled.")
+        if self.akai_controller and self.akai_controller.is_connected():
+            if self.animator_manager and self.animator_manager.active_sequence_model:
+                print("MW INFO: Restoring animator pad display...")
+                try:
+                    edit_frame_index = self.animator_manager.active_sequence_model.get_current_edit_frame_index()
+                    # Assuming SequenceModel has get_frame_colors(index)
+                    current_frame_colors = self.animator_manager.active_sequence_model.get_frame_colors(
+                        edit_frame_index)
+                    if current_frame_colors:
+                        self.apply_colors_to_main_pad_grid(
+                            current_frame_colors, update_hw=True, is_sampler_output=False)
+                        print(
+                            f"MW INFO: Restored animator frame {edit_frame_index} to pads.")
+                    else:
+                        print(
+                            "MW INFO: No current animator frame colors to restore, clearing pads.")
+                        self.akai_controller.clear_all_pads()
+                except AttributeError as e_attr:
+                    print(
+                        f"MW ERROR: AttributeError restoring animator pad state: {e_attr}. SequenceModel might be missing an expected method.")
+                    self.akai_controller.clear_all_pads()  # Fallback
+                except Exception as e_restore_anim:
+                    print(
+                        f"MW WARNING: Generic error restoring animator pad state on DOOM exit: {e_restore_anim}")
+                    self.akai_controller.clear_all_pads()  # Fallback
+            elif self.akai_controller and self.akai_controller.is_connected():
+                print(
+                    "MW INFO: No active animator sequence, clearing pads on DOOM exit.")
+                self.akai_controller.clear_all_pads()
+        if self.button_lazy_doom:
+            self.button_lazy_doom.setText("👹 LazyDOOM")
+        self.status_bar.showMessage("Ready.", 0)
+        self._update_global_ui_interaction_states()
+        print("MW INFO: LazyDOOM mode exited.")
+
+    def _handle_doom_frame_for_display(self, packed_frame: bytes): # Slot expects bytes
+        if not self.is_doom_mode_active: 
+            return
+        # --- ADDED CHECK ---
+        if packed_frame is None:
+            print("MW_DEBUG_DOOM_FRAME: Received None for packed_frame. Not sending to controller or mirror.")
+            return
+        if not isinstance(packed_frame, bytes):
+            print(f"MW_DEBUG_DOOM_FRAME: Received packed_frame of wrong type: {type(packed_frame)}. Expected bytes.")
+            return
+        if len(packed_frame) != 1176: # Assuming PACKED_BITMAP_SIZE_BYTES is 1176
+            print(f"MW_DEBUG_DOOM_FRAME: Received packed_frame with incorrect length: {len(packed_frame)}. Expected 1176.")
+            # Optionally, still try to send to mirror if you want to see what unpacking does with it
+            # self._update_oled_mirror(packed_frame) # Risky if length is wrong for unpacker
+            return 
+        if self.akai_controller and self.akai_controller.is_connected():
+            self.akai_controller.oled_send_full_bitmap(packed_frame) # This is where the error was seen
+        if hasattr(self, '_update_oled_mirror'):
+            self._update_oled_mirror(packed_frame)
+
+    def _handle_doom_game_over(self, message: str, is_win: bool):
+        """
+        Slot for DoomGameController's game_over_signal.
+        Handles MainWindow's response to the game ending, primarily by updating the status bar.
+        The OLED display and restart prompt are managed by DoomGameController.
+        """
+        if not self.is_doom_mode_active: 
+            print("MW WARNING: _handle_doom_game_over called when DOOM mode not active. Ignoring.")
+            return
+        print(f"MW: DOOM Game Over received! Message: '{message}', Win: {is_win}")
+        # Update MainWindow's status bar with the game result for a few seconds.
+        self.status_bar.showMessage(f"LazyDOOM: {message}", 7000) 
+        if is_win:
+            print("MW: Player WON LazyDOOM!")
+            pass 
+        else: # Player lost
+            print(f"MW: Player lost LazyDOOM.")
+            pass # MainWindow acknowledges the loss.
 
     def _open_oled_customizer_dialog(self):
         self._scan_available_oled_items()
@@ -1947,25 +2112,17 @@ class MainWindow(QMainWindow):
         """
         if self.oled_display_manager:
             # print(f"MW TRACE: Requesting OLED feedback: '{feedback_text}'") # Optional debug
-
-            # The _KNOB_FEEDBACK_OLED_DURATION_MS is defined in MainWindow.__init__
-            # It controls how long this specific type of feedback stays.
-            # scroll_if_needed=False because knob feedback values are typically very short.
-            # If they could be long, set to True.
             self.oled_display_manager.show_system_message(
                 text=feedback_text,
                 duration_ms=self._KNOB_FEEDBACK_OLED_DURATION_MS,
                 scroll_if_needed=False
             )
-
             # The _oled_knob_feedback_timer and _revert_oled_after_knob_feedback
             # are no longer needed in MainWindow, as OLEDDisplayManager.show_system_message
             # handles its own timed revert mechanism internally.
         else:
             print(
                 "MW WARNING: OLEDDisplayManager not available for _show_knob_feedback_on_oled.")
-
-# In class MainWindow(QMainWindow):
 
     def _update_oled_and_title_on_sequence_change(self, is_modified: bool, sequence_name: str | None):
         """
@@ -1975,7 +2132,6 @@ class MainWindow(QMainWindow):
         """
         base_title = "AKAI Fire PixelForge" # <<< Assuming you've updated your app name
         effective_title_name = "Untitled" # Default for title bar
-
         if sequence_name and sequence_name.strip() and sequence_name.lower() != "new sequence":
             effective_title_name = sequence_name
         
@@ -1983,20 +2139,16 @@ class MainWindow(QMainWindow):
         if is_modified:
             title += "*"
         self.setWindowTitle(title)
-
         if self.oled_display_manager:
             oled_message_text = None
             duration_ms = 2000  # Default duration
             scroll_needed = True # Default scroll behavior
-
-            # <<< NEW LOGIC for "New Sequence" case >>>
             if sequence_name and sequence_name.lower() == "new sequence":
                 oled_message_text = "New Seq" # Or just "New"
                 if is_modified: # Usually a new sequence becomes modified quickly
                     oled_message_text += "*"
                 duration_ms = 1200  # Shorter duration for this quick cue
                 scroll_needed = False # "New Seq*" is short, no scroll needed
-            # --- END NEW LOGIC ---
             elif sequence_name and sequence_name.strip(): # Existing named sequence
                 oled_message_text = f"Seq: {sequence_name}"
                 if is_modified:
@@ -2007,7 +2159,6 @@ class MainWindow(QMainWindow):
                 oled_message_text = "Seq: Untitled"
                 if is_modified:
                     oled_message_text += "*"
-            
             if oled_message_text:
                 self.oled_display_manager.show_system_message(
                     text=oled_message_text,
@@ -2015,37 +2166,26 @@ class MainWindow(QMainWindow):
                     scroll_if_needed=scroll_needed
                 )
             elif self.oled_display_manager._active_graphic_item_type != "image_animation" and \
-                 not self.oled_display_manager.is_active_graphic_paused(): # Check if not paused
-                # No valid sequence name to display as a temp message,
-                # and the active graphic is not an animation (which would just continue),
-                # and the active graphic is not manually paused.
-                # This means we should ensure the OLED reverts to its current active graphic
-                # or the app default if no active graphic is set.
+                not self.oled_display_manager.is_active_graphic_paused(): # Check if not paused
                 self.oled_display_manager.set_active_graphic( # This re-evaluates and plays
                     self.oled_display_manager._active_graphic_item_data
                 )
-                
-                
+
     def _handle_paint_black_button(self):
         """
         Handles the 'Set Black' button click from Quick Tools.
         Sets the current painting color to black.
         """
         if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
-            # Optional: Decide if this button should also stop the sampler
-            # self.screen_sampler_manager.stop_sampling_thread() 
-            # self.status_bar.showMessage("Sampler stopped by 'Set Black' action.", 2000)
-            pass # For now, let it just change the color, user can stop sampler separately
+            pass 
         black_color = QColor("black")
-        self.selected_qcolor = black_color # Update MainWindow's selected color
+        self.selected_qcolor = black_color 
         if self.color_picker_manager:
-            # Tell ColorPickerManager to update its UI to reflect black is now selected
             self.color_picker_manager.set_current_selected_color(black_color, source="paint_black_button")        
         self.status_bar.showMessage("Active painting color set to: Black (Off)", 2500)
 
     def _init_animator_and_sampler_ui_left_panel(self):
         """Initializes and adds Animator and Screen Sampler UIs to the left panel."""
-        # --- Animator Manager Widget ---
         self.animator_manager = AnimatorManagerWidget(
             user_sequences_base_path=os.path.join(self.user_documents_presets_path, "sequences", "user"),
             sampler_recordings_path=os.path.join(self.user_documents_presets_path, "sequences", "sampler_recordings"),
@@ -2086,23 +2226,16 @@ class MainWindow(QMainWindow):
         if not self.akai_controller or not self.akai_controller.is_connected():
             self.status_bar.showMessage("Connect to Akai Fire first to apply layout.", 2500)
             return
-
         # Stop any ongoing processes like sampler or animator playback
         if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
             self.screen_sampler_manager.stop_sampling_thread()
             self.status_bar.showMessage("Sampler stopped by applying static layout.", 2000)       
         if self.animator_manager and self.animator_manager.active_sequence_model and \
-           self.animator_manager.active_sequence_model.get_is_playing():
+            self.animator_manager.active_sequence_model.get_is_playing():
             self.animator_manager.action_stop() # Stop animator playback
             self.status_bar.showMessage("Animation stopped by applying static layout.", 2000)
-        # Apply colors to the main GUI grid and hardware
-        # When applying a static layout, it should not bypass global brightness by default
         self.apply_colors_to_main_pad_grid(colors_hex, update_hw=True, is_sampler_output=False)        
-        # If an animator sequence is currently active, also update its current edit frame
-        # with this static layout. This makes the static layout the content of the current frame.
         if self.animator_manager and self.animator_manager.active_sequence_model:
-            # This updates the model, which should then emit signals to update the timeline display
-            # and mark the sequence as modified.
             self.animator_manager.active_sequence_model.update_all_pads_in_current_edit_frame(colors_hex)
             self.status_bar.showMessage("Static layout applied to pads and current animator frame.", 2500)
         else:
@@ -2114,11 +2247,9 @@ class MainWindow(QMainWindow):
         Dispatches to global brightness, sampler adjustment, or animator speed logic.
         """
         # print(f"MW TRACE: _on_physical_encoder_rotated - Encoder ID: {encoder_id}, Delta: {delta}, AnimatorPlaying: {self.is_animator_playing}, SamplerActive: {self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False}") # Optional
-
         target_knob: QDial | None = None
         step: int = 0
         handler_to_call = None # Stores the method to call after updating GUI knob
-
         # Determine context and target knob/handler
         if self.is_animator_playing:
             if encoder_id == 4: # Knob 4 -> Animator Speed
@@ -2193,40 +2324,6 @@ class MainWindow(QMainWindow):
         if not sampler_is_active and not animator_is_playing and self.pad_grid_frame:
             current_colors_hex = self.pad_grid_frame.get_current_grid_colors_hex()
             self.apply_colors_to_main_pad_grid(current_colors_hex, update_hw=True, is_sampler_output=False)
-
-    def _on_sampler_brightness_knob_changed(self, gui_knob_value: int): # Value is 0-400
-        if self.screen_sampler_manager:
-            # Map GUI knob value (0-400) to sampler factor (e.g., 0.0 to 4.0)
-            # Sampler factor = GUI knob value / 100.0
-            sampler_factor = gui_knob_value / 100.0 
-            # Clamp to typical sampler range if necessary, e.g., min 0.1 or 0.0
-            sampler_factor = max(0.0, sampler_factor) # Ensure non-negative            
-            self.screen_sampler_manager.update_sampler_adjustment('brightness', sampler_factor)
-            if self.gui_knob1:
-                self.gui_knob1.setToolTip(f"Sampler: Brightness ({sampler_factor:.2f}x)")
-
-    def _on_sampler_saturation_knob_changed(self, gui_knob_value: int): # Value is 0-400
-        if self.screen_sampler_manager:
-            sampler_factor = gui_knob_value / 100.0
-            sampler_factor = max(0.0, sampler_factor)
-            self.screen_sampler_manager.update_sampler_adjustment('saturation', sampler_factor)
-            if self.gui_knob2:
-                self.gui_knob2.setToolTip(f"Sampler: Saturation ({sampler_factor:.2f}x)")
-
-    def _on_sampler_contrast_knob_changed(self, gui_knob_value: int): # Value is 0-400
-        if self.screen_sampler_manager:
-            sampler_factor = gui_knob_value / 100.0
-            sampler_factor = max(0.0, sampler_factor)
-            self.screen_sampler_manager.update_sampler_adjustment('contrast', sampler_factor)
-            if self.gui_knob3:
-                self.gui_knob3.setToolTip(f"Sampler: Contrast ({sampler_factor:.2f}x)")
-
-    def _on_sampler_hue_knob_changed(self, gui_knob_value: int): # Value is -180 to 180
-        if self.screen_sampler_manager:
-            # Value is already in degrees
-            self.screen_sampler_manager.update_sampler_adjustment('hue_shift', float(gui_knob_value))
-            if self.gui_knob4:
-                self.gui_knob4.setToolTip(f"Sampler: Hue Shift ({gui_knob_value:+d}°)")
 
     def _on_sampler_activity_changed_for_knobs(self, sampler_is_active: bool):
         """
@@ -2329,29 +2426,23 @@ class MainWindow(QMainWindow):
         """Updates OLED with temporary Play/Pause/Stop message based on animator status."""
         if not self.oled_display_manager:
             return
-        
         oled_message_text = None
         message_duration_ms = 1000  # Standard duration for these short cues
-        
         if is_playing:
             oled_message_text = "PLAY"
         else:
-            # Check the _stop_action_issued_for_oled flag to distinguish between Pause and Stop
-            # This flag should be set to True in your action_animator_stop method right before
-            # the animator's stop action is called, and reset here o5r after the message.
             if self._stop_action_issued_for_oled:
                 oled_message_text = "STOP"
                 self._stop_action_issued_for_oled = False # Reset flag after using it
             else:
                 oled_message_text = "PAUSE"
-        
         if oled_message_text:
             self.oled_display_manager.show_system_message(
                 text=oled_message_text,
                 duration_ms=message_duration_ms,
                 scroll_if_needed=False # These cues are short, no scroll needed
             )
-    
+
     def _some_method_that_triggers_animator_stop(self):
         if self.animator_manager:
             # Set the flag BEFORE telling the animator to stop,
@@ -2360,12 +2451,12 @@ class MainWindow(QMainWindow):
             self._stop_action_issued_for_oled = True
             self.animator_manager.action_stop()
             # The _on_animator_playback_status_for_oled slot will then correctly show "■ STOP"
-            
+
     def _handle_hardware_animator_stop_request(self):
         if self.animator_manager:
             self._stop_action_issued_for_oled = True
             self.animator_manager.action_stop()
-            
+
     def clear_all_hardware_and_gui_pads(self):
         """
         Clears all hardware pads to black and also clears the current
@@ -2377,21 +2468,15 @@ class MainWindow(QMainWindow):
             return        
         # Stop any ongoing processes that might interfere or immediately repaint
         if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
-             self.screen_sampler_manager.stop_sampling_thread()
-             self.status_bar.showMessage("Sampler stopped by Clear Pads action.", 2000)        
+            self.screen_sampler_manager.stop_sampling_thread()
+            self.status_bar.showMessage("Sampler stopped by Clear Pads action.", 2000)        
         if self.animator_manager and self.animator_manager.active_sequence_model and \
-           self.animator_manager.active_sequence_model.get_is_playing():
+            self.animator_manager.active_sequence_model.get_is_playing():
             self.animator_manager.action_stop() # Stop animator playback
             self.status_bar.showMessage("Animation stopped by Clear Pads action.", 2000)
-        # Clear the GUI pad grid (this also sends black to hardware if update_hw=True)
-        # When clearing all, we don't need to consider it "sampler_output" for brightness bypass
         self.clear_main_pad_grid_ui(update_hw=True, is_sampler_output=False) 
-        # If an animator sequence is active, also clear the pads in its current edit frame
         if self.animator_manager and self.animator_manager.active_sequence_model:
-            # This makes the current animator frame visually blank in the timeline
             self.animator_manager.active_sequence_model.clear_pads_in_current_edit_frame()
-            # The active_frame_data_for_display signal from the model should then update the main grid,
-            # but clear_main_pad_grid_ui already did that. This ensures model consistency.
         self.status_bar.showMessage("All pads and current GUI view cleared to black.", 2500)
 
     def _handle_request_sampler_disable(self):
@@ -2414,7 +2499,6 @@ class MainWindow(QMainWindow):
         The Active Graphic will resume after the temporary cue.
         """
         # print(f"MW TRACE: _on_sampler_activity_changed - Sampler Active: {is_active}") # Optional
-
         if self.oled_display_manager:
             if is_active:  # Sampler just started
                 monitor_name_part = "Mon: ?"  # Default
@@ -2436,7 +2520,6 @@ class MainWindow(QMainWindow):
                             except:
                                 pass
                         monitor_name_part = f"Mon: {name_part}"
-
                 message_text = f"Sampler ON ({monitor_name_part})"
                 self.oled_display_manager.show_system_message(
                     text=message_text,
@@ -2449,15 +2532,13 @@ class MainWindow(QMainWindow):
                     duration_ms=2000,  # Show for 2 seconds
                     scroll_if_needed=True
                 )
-
         # Stop animator if sampler starts
         if is_active and self.animator_manager:
             self.animator_manager.action_stop()
-
         # Restore animator's current frame to the grid if sampler just stopped AND animator is not playing
         elif not is_active:
             if self.animator_manager and self.animator_manager.active_sequence_model and \
-               not self.animator_manager.active_sequence_model.get_is_playing():
+                not self.animator_manager.active_sequence_model.get_is_playing():
                 edit_idx = self.animator_manager.active_sequence_model.get_current_edit_frame_index()
                 colors = self.animator_manager.active_sequence_model.get_frame_colors(
                     edit_idx)
@@ -2465,10 +2546,7 @@ class MainWindow(QMainWindow):
             elif not self.animator_manager or not self.animator_manager.active_sequence_model:
                 # If no animator sequence active, ensure grid is cleared or shows static default
                 self._on_animator_frame_data_for_display(None)
-
-        # Update general UI enable/disable states
         self._update_global_ui_interaction_states()
-        # Reconfigure knobs based on new sampler state
         self._update_contextual_knob_configs()
 
     def _toggle_oled_active_graphic_pause(self):
@@ -2485,10 +2563,6 @@ class MainWindow(QMainWindow):
             self.oled_display_manager.pause_active_graphic()
             self.oled_manual_override_active_state = True # User manually set to PAUSE
             # print("MW DEBUG: Manually requested PAUSE OLED, override state = True (User wants Pause)")
-        # The button UI (icon/text) will be updated by the 
-        # oled_display_manager.active_graphic_pause_state_changed signal
-        # calling self._update_oled_play_pause_button_ui.
-
 
     def _handle_final_color_selection_from_manager(self, color: QColor):
         """
@@ -2499,7 +2573,7 @@ class MainWindow(QMainWindow):
             self.selected_qcolor = color
             # print(f"MW DEBUG: Final color selected from manager: {color.name()}") # Optional debug
             if self.status_bar: # Check if status_bar exists
-                 self.status_bar.showMessage(f"Active painting color set to: {color.name().upper()}", 3000)
+                self.status_bar.showMessage(f"Active painting color set to: {color.name().upper()}", 3000)
         # else: # Optional
             # print(f"MW WARNING: Invalid color received from ColorPickerManager: {color}")
             # if self.status_bar:
@@ -2512,29 +2586,18 @@ class MainWindow(QMainWindow):
         reconfigures the contextual knob functions.
         """
         print(f"MW TRACE: _on_animator_playback_status_changed_for_knobs: Animator playing = {is_playing}") # Optional
-        
-        # Update MainWindow's state variable that tracks animator playback
         self.is_animator_playing = is_playing 
-        
-        # Re-evaluate and set knob functions based on the new animator state
-        # (and current sampler state).
         self._update_contextual_knob_configs()
 
     def _update_oled_mirror(self, packed_bitmap_data_7bit: bytearray):
         """Updates the on-screen OLED mirror widget."""
         # print(
-            # <<< ADD
             # f"MW DEBUG: _update_oled_mirror CALLED. Data length: {len(packed_bitmap_data_7bit) if packed_bitmap_data_7bit else 'None'}")
-
         # if not self.oled_display_mirror_widget:
-            # <<< ADD
             # print("MW DEBUG: _update_oled_mirror - Mirror widget is None, returning.")
             # return
-
         if not (MAIN_WINDOW_OLED_RENDERER_AVAILABLE and hasattr(oled_renderer, '_unpack_fire_7bit_stream_to_logical_image')):
-            # <<< ADD
             # print("MW DEBUG: _update_oled_mirror - Renderer or unpack function not available.")
-            # ... (your existing fallback drawing for "Renderer N/A") ...
             blank_pixmap = QPixmap(self.oled_display_mirror_widget.size())
             blank_pixmap.fill(Qt.GlobalColor.darkGray)
             painter = QPainter(blank_pixmap)
@@ -2544,30 +2607,20 @@ class MainWindow(QMainWindow):
                 max(6, int(self.oled_display_mirror_widget.height() / 8)))
             painter.setFont(font)
             painter.drawText(blank_pixmap.rect(),
-                             Qt.AlignmentFlag.AlignCenter, "Renderer N/A")
+                            Qt.AlignmentFlag.AlignCenter, "Renderer N/A")
             painter.end()
             self.oled_display_mirror_widget.setPixmap(blank_pixmap)
             return
-
         try:
-            # <<< ADD
             # print("MW DEBUG: _update_oled_mirror - Attempting to unpack stream...")
             pil_image_logical = oled_renderer._unpack_fire_7bit_stream_to_logical_image(
                 packed_bitmap_data_7bit, OLED_MIRROR_WIDTH, OLED_MIRROR_HEIGHT
             )
-
             if pil_image_logical:
-                # <<< ADD                print( f"MW DEBUG: _update_oled_mirror - Unpacked to PIL Image: Mode={pil_image_logical.mode}, Size={pil_image_logical.size}")
-                # Optional: Save the intermediate PIL image for one frame to inspect it
-                # if not hasattr(self, '_debug_mirror_saved'):
-                #     pil_image_logical.save("debug_mirror_pil_frame.png")
-                #     self._debug_mirror_saved = True
-
                 pil_image_rgb = pil_image_logical.convert("RGB")
                 data = pil_image_rgb.tobytes("raw", "RGB")
                 qimage = QImage(data, pil_image_rgb.width,
                                 pil_image_rgb.height, QImage.Format.Format_RGB888)
-
                 if not qimage.isNull():
                     #  print("MW DEBUG: _update_oled_mirror - QImage conversion successful.")
                     q_pixmap = QPixmap.fromImage(qimage)
@@ -2579,7 +2632,6 @@ class MainWindow(QMainWindow):
                     self.oled_display_mirror_widget.setPixmap(scaled_pixmap)
                     # print("MW DEBUG: _update_oled_mirror - Pixmap set on mirror.") # Can be very noisy
                 else:
-                    # <<< ADD
                     # print(
                     #    "MW WARNING: _update_oled_mirror - QImage isNull after conversion.")
                     blank_pixmap = QPixmap(
@@ -2587,19 +2639,15 @@ class MainWindow(QMainWindow):
                     blank_pixmap.fill(Qt.GlobalColor.black)
                     self.oled_display_mirror_widget.setPixmap(blank_pixmap)
             else:
-                # <<< ADD
                 # print(
                 #     "MW WARNING: _update_oled_mirror - _unpack_fire_7bit_stream_to_logical_image returned None.")
                 blank_pixmap = QPixmap(self.oled_display_mirror_widget.size())
-                # Different color for this failure
                 blank_pixmap.fill(Qt.GlobalColor.darkBlue)
                 self.oled_display_mirror_widget.setPixmap(blank_pixmap)
         except Exception as e:
-            # <<< ADD
             # print(f"MW ERROR: Exception in _update_oled_mirror: {e}")
             import traceback
-            traceback.print_exc()  # <<< ADD
-            # ... (your existing error handling pixmap) ...
+            traceback.print_exc()  
             error_pixmap = QPixmap(self.oled_display_mirror_widget.size())
             error_pixmap.fill(Qt.GlobalColor.darkRed)
             # Ensure QPainter is imported in MainWindow
@@ -2610,7 +2658,7 @@ class MainWindow(QMainWindow):
                 max(6, int(self.oled_display_mirror_widget.height() / 7)))
             painter.setFont(font)
             painter.drawText(error_pixmap.rect(),
-                             Qt.AlignmentFlag.AlignCenter, "Mirror Err")
+                            Qt.AlignmentFlag.AlignCenter, "Mirror Err")
             painter.end()
             self.oled_display_mirror_widget.setPixmap(error_pixmap)
 
@@ -2618,17 +2666,9 @@ class MainWindow(QMainWindow):
         """
         Creates and shows the AppGuideDialog.
         """
-        # Check if a dialog is already open to prevent multiple instances (optional)
-        # For a simple guide, it's often okay to create a new one each time.
-
         guide_dialog = AppGuideDialog(self)  # Pass self as parent
-        # guide_dialog.set_guide_content(APP_GUIDE_HTML_CONTENT) # Content is already in dialog's __init__
         guide_dialog.exec()  # Show as a modal dialog
-        # exec() blocks until dialog is closed. Use show() for non-modal.
-
-        # Clean up the dialog after it's closed if it was modal and created on the fly
         guide_dialog.deleteLater()
-
 
     def _on_animator_undo_redo_state_changed(self, can_undo: bool, can_redo: bool):
         if self.undo_action: self.undo_action.setEnabled(can_undo)
@@ -2645,32 +2685,39 @@ class MainWindow(QMainWindow):
         # print(f"DEBUG MW: _update_fire_transport_leds - Animator playing: {is_animator_playing}. (Play/Stop LEDs are forced OFF by AkaiFireController)") # Optional        
         pass
 
-    # --- Delegating Methods for QActions to AnimatorManagerWidget ---  
     def action_animator_undo(self):
         if self.animator_manager: self.animator_manager.action_undo()
+
     def action_animator_redo(self):
         if self.animator_manager: self.animator_manager.action_redo()
+
     def action_animator_copy_frames(self):
         if self.animator_manager: self.animator_manager.action_copy_frames()
+
     def action_animator_cut_frames(self):
         if self.animator_manager: self.animator_manager.action_cut_frames()
+
     def action_animator_paste_frames(self):
         if self.animator_manager: self.animator_manager.action_paste_frames()
+
     def action_animator_duplicate_frames(self):
         if self.animator_manager: self.animator_manager.action_duplicate_selected_frames()
+
     def action_animator_delete_frames(self):
         if self.animator_manager: self.animator_manager.action_delete_selected_frames()
+
     def action_animator_add_blank_frame(self): # For global QAction
         if self.animator_manager: self.animator_manager.action_add_frame("blank") # Default add
+
     def action_animator_new_sequence(self, prompt_save=True): # For global QAction
         if self.animator_manager:
             # Handle "save current modified" prompt here in MainWindow
             if prompt_save and self.animator_manager.active_sequence_model and \
-               self.animator_manager.active_sequence_model.is_modified:
+                self.animator_manager.active_sequence_model.is_modified:
                 reply = QMessageBox.question(self, "Unsaved Changes",
-                                             f"Animation '{self.animator_manager.active_sequence_model.name}' has unsaved changes. Save now?",
-                                             QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
-                                             QMessageBox.StandardButton.Cancel)
+                                            f"Animation '{self.animator_manager.active_sequence_model.name}' has unsaved changes. Save now?",
+                                            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                            QMessageBox.StandardButton.Cancel)
                 if reply == QMessageBox.StandardButton.Save:
                     save_successful = self.animator_manager.action_save_sequence_as() # AMW handles dialog
                     if not save_successful: # User might cancel Save As dialog
@@ -2688,30 +2735,21 @@ class MainWindow(QMainWindow):
     def action_animator_play_pause_toggle(self):
         if self.animator_manager:
             self.animator_manager.action_play_pause_toggle() 
-            # --- REMOVE OR COMMENT OUT THIS LINE ---
-            # self.clear_led_suppression_and_update() 
-            # --- END REMOVE/COMMENT ---
-            
-            # If _update_fire_transport_leds has other side effects beyond just LEDs
-            # (which it currently doesn't seem to), you might call it directly.
-            # But if its only job was LED control and LEDs are forced off, this isn't strictly needed.
-            # For robustness, let's call it, as animator_playback_active_status_changed is connected to it
-            # and this ensures state consistency if its role expands.
             if self.animator_manager.active_sequence_model:
-                 self._update_fire_transport_leds(self.animator_manager.active_sequence_model.get_is_playing())
+                self._update_fire_transport_leds(self.animator_manager.active_sequence_model.get_is_playing())
             else:
-                 self._update_fire_transport_leds(False)
+                self._update_fire_transport_leds(False)
 
     def _handle_animator_request_load_prompt(self, filepath_to_load: str):
         """Handles AnimatorManager's request to load, prompting for save if needed."""
         if not self.animator_manager: return
         proceed_with_load = True 
         if self.animator_manager.active_sequence_model and \
-           self.animator_manager.active_sequence_model.is_modified:
+            self.animator_manager.active_sequence_model.is_modified:
             reply = QMessageBox.question(self, "Unsaved Animator Changes",
-                                         f"Animation '{self.animator_manager.active_sequence_model.name}' has unsaved changes.\nSave before loading new sequence?",
-                                         QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
-                                         QMessageBox.StandardButton.Cancel) 
+                                        f"Animation '{self.animator_manager.active_sequence_model.name}' has unsaved changes.\nSave before loading new sequence?",
+                                        QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                        QMessageBox.StandardButton.Cancel) 
             if reply == QMessageBox.StandardButton.Save:
                 if not self.animator_manager.action_save_sequence_as(): proceed_with_load = False
             elif reply == QMessageBox.StandardButton.Cancel: proceed_with_load = False 
@@ -2726,11 +2764,11 @@ class MainWindow(QMainWindow):
         if not self.animator_manager: return
         proceed_with_load = True
         if self.animator_manager.active_sequence_model and \
-           self.animator_manager.active_sequence_model.is_modified:
+            self.animator_manager.active_sequence_model.is_modified:
             reply = QMessageBox.question(self, "Unsaved Animator Changes",
-                                         f"Current animation has unsaved changes. Save before loading '{os.path.basename(filepath_to_load)}'?",
-                                         QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
-                                         QMessageBox.StandardButton.Cancel)
+                                        f"Current animation has unsaved changes. Save before loading '{os.path.basename(filepath_to_load)}'?",
+                                        QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                        QMessageBox.StandardButton.Cancel)
             if reply == QMessageBox.StandardButton.Save:
                 if not self.animator_manager.action_save_sequence_as(): proceed_with_load = False
             elif reply == QMessageBox.StandardButton.Cancel: proceed_with_load = False        
@@ -2774,7 +2812,6 @@ class MainWindow(QMainWindow):
             else: self.status_bar.showMessage("Eyedropper: Invalid pad color.", 2000)
         else: self.status_bar.showMessage("Eyedropper: Invalid pad index.", 2000)
 
-    # --- Pad Grid Interaction Handlers & Paint Logic ---
     def _handle_grid_pad_action(self, row: int, col: int, mouse_button: Qt.MouseButton):
         if mouse_button == Qt.MouseButton.LeftButton and self.is_eyedropper_mode_active:
             self._pick_color_from_pad(row, col); return 
@@ -2782,7 +2819,7 @@ class MainWindow(QMainWindow):
             self.screen_sampler_manager.stop_sampling_thread()
             self.status_bar.showMessage("Sampler stopped by pad interaction.", 2000)
         if self.animator_manager and self.animator_manager.active_sequence_model and \
-           self.animator_manager.active_sequence_model.get_is_playing():
+            self.animator_manager.active_sequence_model.get_is_playing():
             self.animator_manager.action_stop()
             self.status_bar.showMessage("Animation stopped by pad interaction.", 2000)
         if mouse_button == Qt.MouseButton.LeftButton:
@@ -2822,11 +2859,10 @@ class MainWindow(QMainWindow):
             self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=is_sampler_output)
             # print(f"MW DEBUG: Sent {len(hw_batch)} pad colors to hardware. is_sampler_output={is_sampler_output}") # Optional
 
-    # Ensure clear_main_pad_grid_ui is also present and correctly passes the flag
     def clear_main_pad_grid_ui(self, update_hw=True, is_sampler_output: bool = False):
         if not hasattr(self, 'pad_grid_frame') or not self.pad_grid_frame:
-             # print("MW WARNING: clear_main_pad_grid_ui - pad_grid_frame is None.") # Optional
-             return
+            # print("MW WARNING: clear_main_pad_grid_ui - pad_grid_frame is None.") # Optional
+            return
         self.apply_colors_to_main_pad_grid(
             [QColor("black").name()] * 64, 
             update_hw=update_hw,
@@ -2860,12 +2896,11 @@ class MainWindow(QMainWindow):
         action_set_off = QAction("Set Pad to Black (Off)", self)
         action_set_off.triggered.connect(lambda: self.set_single_pad_black_and_update_model(row, col))
         menu.addAction(action_set_off)
-        # ... (add other context menu actions for pads later if needed) ...
         menu.exec(pad_button_widget.mapToGlobal(local_pos_to_button))
 
     def set_single_pad_black_and_update_model(self, row: int, col: int):
         if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
-             self.screen_sampler_manager.stop_sampling_thread()
+            self.screen_sampler_manager.stop_sampling_thread()
         self.apply_erase_to_pad(row, col, update_model=True)
         self.status_bar.showMessage(f"Pad ({row+1},{col+1}) set to Off.", 1500)
 
@@ -2888,13 +2923,8 @@ class MainWindow(QMainWindow):
             self.undo_action.setEnabled(can_undo)
         if self.redo_action: # Check if QAction exists
             self.redo_action.setEnabled(can_redo)
-        
-        # Also call _update_global_ui_interaction_states as it might affect other things
-        # or re-evaluate the context.
         self._update_global_ui_interaction_states()
 
-
-# --- Handler for GUI Brightness Knob Change ---
     def _on_sampler_brightness_knob_changed(self, gui_knob_value: int):
         if self.screen_sampler_manager:
             sampler_factor = gui_knob_value / 100.0
@@ -2903,7 +2933,6 @@ class MainWindow(QMainWindow):
             tooltip_text = f"Sampler: Brightness ({sampler_factor:.2f}x)"
             if self.gui_knob1:
                 self.gui_knob1.setToolTip(tooltip_text)
-            # --- ADD OLED FEEDBACK ---
             oled_feedback_text = f"Br: {sampler_factor:.2f}x"
             self._show_knob_feedback_on_oled(oled_feedback_text)
 
@@ -2915,11 +2944,8 @@ class MainWindow(QMainWindow):
             tooltip_text = f"Sampler: Saturation ({sampler_factor:.2f}x)"
             if self.gui_knob2:
                 self.gui_knob2.setToolTip(tooltip_text)
-
-            # --- ADD OLED FEEDBACK ---
             oled_feedback_text = f"Sat: {sampler_factor:.2f}x"  # Or "S: ..."
             self._show_knob_feedback_on_oled(oled_feedback_text)
-            # --- END ADD ---
 
     def _on_sampler_contrast_knob_changed(self, gui_knob_value: int):
         if self.screen_sampler_manager:
@@ -2948,20 +2974,17 @@ class MainWindow(QMainWindow):
         if self._oled_nav_debounce_timer.isActive():
             return
         self._oled_nav_debounce_timer.start()
-
         current_focus_idx = self.OLED_NAVIGATION_FOCUS_OPTIONS.index(
             self.current_oled_nav_target_name)
         new_focus_idx = (current_focus_idx + direction + len(
             self.OLED_NAVIGATION_FOCUS_OPTIONS)) % len(self.OLED_NAVIGATION_FOCUS_OPTIONS)
         self.current_oled_nav_target_name = self.OLED_NAVIGATION_FOCUS_OPTIONS[new_focus_idx]
         self._update_current_oled_nav_target_widget()
-
         nav_target_display_name = "Unknown Panel"
         if self.current_oled_nav_target_name == "animator":
             nav_target_display_name = "Animator Focus"  # Or just "Animator"
         elif self.current_oled_nav_target_name == "static_layouts":
             nav_target_display_name = "Layouts Focus"  # Or just "Static Layouts"
-
         if self.oled_display_manager:
             self.oled_display_manager.show_system_message(
                 text=nav_target_display_name,
@@ -2973,26 +2996,22 @@ class MainWindow(QMainWindow):
     def _handle_select_encoder_turned(self, delta: int):
         """Handles SELECT knob rotation for item navigation, shows temporary item name cue."""
         if not self.current_oled_nav_target_widget or \
-           not (self.akai_controller and self.akai_controller.is_connected()) or \
-           not hasattr(self.current_oled_nav_target_widget, 'set_navigation_current_item_by_logical_index') or \
-           not hasattr(self.current_oled_nav_target_widget, 'get_navigation_item_text_at_logical_index'):
+            not (self.akai_controller and self.akai_controller.is_connected()) or \
+            not hasattr(self.current_oled_nav_target_widget, 'set_navigation_current_item_by_logical_index') or \
+            not hasattr(self.current_oled_nav_target_widget, 'get_navigation_item_text_at_logical_index'):
             return
-
         if self._oled_nav_item_count == 0:
             nav_target_display_name = "Animator" if self.current_oled_nav_target_name == "animator" else "Layouts"
             if self.oled_display_manager:
                 self.oled_display_manager.show_system_message(
                     f"{nav_target_display_name}: (empty)", 1500, scroll_if_needed=False)
             return
-
         self._oled_nav_interaction_active = True
-
         new_logical_index = (
             self.current_oled_nav_item_logical_index + delta) % self._oled_nav_item_count
         if new_logical_index < 0:
             new_logical_index += self._oled_nav_item_count
         self.current_oled_nav_item_logical_index = new_logical_index
-
         selected_item_text_with_prefix = "Error"
         try:
             selected_item_text_with_prefix = self.current_oled_nav_target_widget.set_navigation_current_item_by_logical_index(
@@ -3001,14 +3020,12 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(
                 f"MW ERROR: Navigating item in {self.current_oled_nav_target_name}: {e}")
-
         if self.oled_display_manager:
             clean_item_text = selected_item_text_with_prefix
             for prefix in ["[Prefab] ", "[Sampler] ", "[User] "]:
                 if clean_item_text.startswith(prefix):
                     clean_item_text = clean_item_text[len(prefix):]
                     break
-
             self.oled_display_manager.show_system_message(
                 text=clean_item_text,
                 duration_ms=1000,  # Short duration, updates frequently with knob turns
@@ -3018,19 +3035,16 @@ class MainWindow(QMainWindow):
     def _handle_select_encoder_pressed(self):
         """Handles SELECT knob press to apply/load item, shows temporary confirmation cue."""
         if not self.current_oled_nav_target_widget or \
-           not (self.akai_controller and self.akai_controller.is_connected()) or \
-           not hasattr(self.current_oled_nav_target_widget, 'trigger_navigation_current_item_action') or \
-           not hasattr(self.current_oled_nav_target_widget, 'get_navigation_item_text_at_logical_index'):
+            not (self.akai_controller and self.akai_controller.is_connected()) or \
+            not hasattr(self.current_oled_nav_target_widget, 'trigger_navigation_current_item_action') or \
+            not hasattr(self.current_oled_nav_target_widget, 'get_navigation_item_text_at_logical_index'):
             return
-
         if self._oled_nav_item_count == 0:
             if self.oled_display_manager:
                 self.oled_display_manager.show_system_message(
                     "(No item)", 1500, scroll_if_needed=False)
             return
-
         self._is_hardware_nav_action_in_progress = True
-
         item_text_to_apply_raw = "Selected Item"
         try:
             item_text_to_apply_raw = self.current_oled_nav_target_widget.get_navigation_item_text_at_logical_index(
@@ -3039,27 +3053,22 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(
                 f"MW ERROR: Getting item text for select press in {self.current_oled_nav_target_name}: {e}")
-
         item_text_to_apply_clean = item_text_to_apply_raw
         for prefix in ["[Prefab] ", "[Sampler] ", "[User] "]:
             if item_text_to_apply_clean.startswith(prefix):
                 item_text_to_apply_clean = item_text_to_apply_clean[len(
                     prefix):]
                 break
-
         action_verb = "Loading" if self.current_oled_nav_target_name == "animator" else "Applying"
-
         if self.oled_display_manager:
             confirm_item_name_part = item_text_to_apply_clean[:15] + "..." if len(
                 item_text_to_apply_clean) > 15 else item_text_to_apply_clean
             full_confirmation_message = f"{action_verb}: {confirm_item_name_part}"
-
             self.oled_display_manager.show_system_message(
                 text=full_confirmation_message,
                 duration_ms=1800,
                 scroll_if_needed=True
             )
-
         try:
             self.current_oled_nav_target_widget.trigger_navigation_current_item_action()
         except Exception as e:
@@ -3068,7 +3077,6 @@ class MainWindow(QMainWindow):
             if self.oled_display_manager:
                 self.oled_display_manager.show_system_message(
                     "Action Error", 1500, scroll_if_needed=False)
-
         self._oled_nav_interaction_active = False
         QTimer.singleShot(2000, self._finalize_navigation_action_ui_feedback)  # _finalize will ensure Active Graphic resumes
 
@@ -3078,24 +3086,19 @@ class MainWindow(QMainWindow):
     def _handle_oled_pattern_up(self):
         """Handles PATTERN UP for cueing next OLED item, shows temporary cue."""
         if not self.oled_display_manager or not (self.akai_controller and self.akai_controller.is_connected()): return
-
         if not self.available_oled_items_cache:
             self.oled_display_manager.show_system_message("No Items", 1500, scroll_if_needed=False)
             return
-
         current_idx = -1
         # Ensure self.current_cued_item_path is initialized in __init__ if not already
         if not hasattr(self, 'current_cued_item_path'): self.current_cued_item_path = None
-
         if self.current_cued_item_path:
             try:
                 current_idx = [item['path'] for item in self.available_oled_items_cache].index(self.current_cued_item_path)
             except ValueError: current_idx = -1 
-
         new_idx = (current_idx + 1) % len(self.available_oled_items_cache)
         cued_item = self.available_oled_items_cache[new_idx]
         self.current_cued_item_path = cued_item['path'] 
-    
         item_name_to_show = cued_item['name']
         item_type_label = cued_item['type'][:1].upper() # "T" or "A"
         
@@ -3113,20 +3116,17 @@ class MainWindow(QMainWindow):
         if not self.available_oled_items_cache:
             self.oled_display_manager.show_system_message("No Items", 1500, scroll_if_needed=False)
             return
-
         current_idx = 0 
         if not hasattr(self, 'current_cued_item_path'): self.current_cued_item_path = None
         if self.current_cued_item_path:
             try:
                 current_idx = [item['path'] for item in self.available_oled_items_cache].index(self.current_cued_item_path)
             except ValueError: current_idx = 0 
-
         new_idx = (current_idx - 1 + len(self.available_oled_items_cache)) % len(self.available_oled_items_cache)
         cued_item = self.available_oled_items_cache[new_idx]
         self.current_cued_item_path = cued_item['path']
         item_name_to_show = cued_item['name']
         item_type_label = cued_item['type'][:1].upper()
-
         self.oled_display_manager.show_system_message(
             text=f"Cue ({item_type_label}): {item_name_to_show}",
             duration_ms=2000,
@@ -3137,15 +3137,12 @@ class MainWindow(QMainWindow):
     def _handle_oled_browser_activate(self):
         """Handles BROWSER button to set cued item as Active Graphic, shows temp confirmation."""
         if not self.oled_display_manager or not (self.akai_controller and self.akai_controller.is_connected()): return
-
         item_path_to_activate = getattr(self, 'current_cued_item_path', None)
         
         if not item_path_to_activate:
             self.oled_display_manager.show_system_message("Nothing Cued", 1500, scroll_if_needed=False)
             return
-
         item_data = self._load_oled_item_data(item_path_to_activate)
-
         if item_data:
             item_name = item_data.get("item_name", "Item")
             item_type_label = item_data.get('type', '?')[:1].upper()
@@ -3153,7 +3150,6 @@ class MainWindow(QMainWindow):
             self.active_graphic_item_relative_path = item_path_to_activate 
             self.oled_display_manager.set_active_graphic(item_data) 
             self._save_oled_config() 
-
             self.oled_display_manager.show_system_message(
                 text=f"Active ({item_type_label}): {item_name}",
                 duration_ms=1500,
@@ -3169,9 +3165,6 @@ class MainWindow(QMainWindow):
             return
         # print("MW TRACE: _on_request_toggle_screen_sampler calling toggle_sampling_state.") # Optional
         self.screen_sampler_manager.toggle_sampling_state()
-        # The sampling_activity_changed signal from ScreenSamplerManager will trigger
-        # _on_sampler_activity_changed, which now handles setting/clearing the
-        # persistent OLED override. No need for a QTimer here to call _update_sampler_oled_feedback.
 
     def _on_request_cycle_sampler_monitor(self):
         """Handles hardware button press to cycle to the next sampler monitor."""
@@ -3183,7 +3176,7 @@ class MainWindow(QMainWindow):
             if self.oled_display_manager and hasattr(self.oled_display_manager, 'show_temporary_message'):
                 self.oled_display_manager.show_temporary_message("Enable Sampler", "to cycle monitors", 1500)
             else:
-                 self.status_bar.showMessage("Enable sampler first to cycle monitors.", 2000)
+                self.status_bar.showMessage("Enable sampler first to cycle monitors.", 2000)
             return
         # print("MW TRACE: _on_request_cycle_sampler_monitor called.") # Optional
         self.screen_sampler_manager.cycle_target_monitor()
@@ -3193,7 +3186,6 @@ class MainWindow(QMainWindow):
         """Shows a temporary OLED message when the sampler monitor is cycled."""
         if not self.oled_display_manager:
             return
-
         display_name_part = new_monitor_name
         # Attempt to shorten "Monitor X (WxH)" to just "Monitor X" or "X"
         match = re.match(r"(Monitor\s*\d+)", display_name_part)
@@ -3204,7 +3196,6 @@ class MainWindow(QMainWindow):
                 display_name_part = display_name_part.split("(")[0].strip()
             except:
                 pass
-
         self.oled_display_manager.show_system_message(
             text=f"Monitor: {display_name_part}",
             duration_ms=2000,
@@ -3238,8 +3229,8 @@ class MainWindow(QMainWindow):
         if self.oled_display_manager:
             # If a sequence is active, its name should be shown. Otherwise, default.
             if self.animator_manager and self.animator_manager.active_sequence_model and \
-               self.animator_manager.active_sequence_model.name and \
-               self.animator_manager.active_sequence_model.name != "New Sequence":
+                self.animator_manager.active_sequence_model.name and \
+                self.animator_manager.active_sequence_model.name != "New Sequence":
                 is_mod = self.animator_manager.active_sequence_model.is_modified
                 seq_name = self.animator_manager.active_sequence_model.name
                 self._update_oled_and_title_on_sequence_change(is_mod, seq_name) # Let this handle "Untitled"
@@ -3272,13 +3263,11 @@ class MainWindow(QMainWindow):
                 out_port and out_port != "No MIDI output ports found")
             can_connect_in = bool(
                 in_port and in_port != "No MIDI input ports found") if self.input_port_combo_direct_ref else False
-
             if not can_connect_out:
                 self.status_bar.showMessage(
                     "Please select a valid MIDI output port.", 3000)
                 self.update_connection_status()  # Update button states
                 return
-
             if self.akai_controller.connect(out_port, in_port if can_connect_in else None):
                 self.status_bar.showMessage(
                     f"Successfully connected to {out_port}.", 2500)
@@ -3302,14 +3291,12 @@ class MainWindow(QMainWindow):
                                         self._on_builtin_oled_startup_animation_finished()
                                     else:  # Fallback if slot somehow missing after fixes
                                         self.oled_display_manager._apply_current_oled_state()
-
                             else:  # OLED Renderer not available for MainWindow
                                 print(
                                     "MW WARNING: OLED Renderer not available in MainWindow, skipping built-in startup visual.")
                                 self._has_played_initial_builtin_oled_animation = True  # Mark as "played"
                                 # Directly apply active graphic or default state
                                 self.oled_display_manager._apply_current_oled_state()
-
                         except Exception as e_anim:
                             print(
                                 f"MW ERROR: Could not generate/start OLED built-in startup animation: {e_anim}")
@@ -3319,60 +3306,186 @@ class MainWindow(QMainWindow):
                             # Fallback: ensure OLED manager shows its current intended state
                             self.oled_display_manager._apply_current_oled_state()
                     else:
-                        # Reconnected, built-in animation already played once.
-                        # OLEDDisplayManager should restore its state.
-                        # Calling _apply_current_oled_state() ensures it tries to display
-                        # the persistent override, active graphic, or app default.
                         print(
                             "MW INFO: MIDI Reconnected. Triggering OLED state refresh.")
                         self.oled_display_manager._apply_current_oled_state()
             else:
                 QMessageBox.warning(
                     self, "Connection Failed", f"Could not connect MIDI output to {out_port}.")
-
         self.update_connection_status()  # Update UI based on new connection state
 
-    def closeEvent(self, event: QMouseEvent): # QMouseEvent is not correct, should be QCloseEvent
-                                            # from PyQt6.QtGui import QCloseEvent (at top)
-                                            # and change signature to event: QCloseEvent
-        # Prompt to save unsaved animator changes
+    def _toggle_doom_mode(self):
+        if not DOOM_MODULE_LOADED: # Check if the module actually loaded
+            QMessageBox.warning(self, "Feature Unavailable", 
+                                "LazyDOOM module could not be loaded. Please check console for errors.")
+            if self.button_lazy_doom: self.button_lazy_doom.setEnabled(False) # Disable button if module fails
+            return
+        if self.is_doom_mode_active:
+            self._exit_doom_mode()
+        else:
+            self._enter_doom_mode()
+
+    def _enter_doom_mode(self):
+        print("MW INFO: Attempting to enter LazyDOOM mode...")
+        if not self.akai_controller or not self.akai_controller.is_connected():
+            QMessageBox.warning(self, "DOOM Mode Error", "Akai Fire is not connected. Please connect first.")
+            return
+        instructions_dialog = DoomInstructionsDialog(self)
+        dialog_result = instructions_dialog.exec()
+        instructions_dialog.deleteLater() # Clean up dialog
+        if dialog_result != QDialog.DialogCode.Accepted: # User clicked "Back to PixelForge" or closed
+            print("MW INFO: LazyDOOM cancelled by user from instructions dialog.")
+            return 
+        print("MW INFO: Proceeding to enter DOOM mode after instructions.")
+        self.is_doom_mode_active = True
+        # Disable Conflicting Features
+        if self.animator_manager:
+            if self.animator_manager.active_sequence_model and self.animator_manager.active_sequence_model.get_is_playing():
+                self.animator_manager.action_stop() 
+            if hasattr(self.animator_manager, 'set_interactive'):
+                self.animator_manager.set_interactive(False)
+            else: self.animator_manager.setEnabled(False)
+        if self.screen_sampler_manager:
+            if self.screen_sampler_manager.is_sampling_active():
+                self.screen_sampler_manager.stop_sampling_thread()
+            if hasattr(self.screen_sampler_manager, 'set_interactive'):
+                self.screen_sampler_manager.set_interactive(False)
+            elif self.screen_sampler_manager.get_ui_widget(): 
+                self.screen_sampler_manager.get_ui_widget().setEnabled(False)
+        if self.static_layouts_manager:
+            if hasattr(self.static_layouts_manager, 'set_interactive'):
+                self.static_layouts_manager.set_interactive(False)
+            else: self.static_layouts_manager.setEnabled(False) 
+        if self.color_picker_manager:
+            self.color_picker_manager.setEnabled(False)
+        if self.pad_grid_frame:
+            self.pad_grid_frame.setEnabled(False) 
+        if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
+            self.quick_tools_group_ref.setEnabled(False)
+        if self.oled_display_manager:
+            self.oled_display_manager.begin_external_oled_override()
+        try:
+            # Ensure self.doom_game_controller is None before creating a new one
+            if self.doom_game_controller is not None:
+                print("MW WARNING: Previous DoomGameController instance found, attempting to clean up.")
+                self.doom_game_controller.stop_game()
+                self.doom_game_controller.deleteLater()
+                self.doom_game_controller = None
+            self.doom_game_controller = DoomGameController(self.akai_controller, parent=self) # parent=self for Qt ownership
+            
+            self.doom_game_controller.frame_ready_for_oled_signal.connect(self._handle_doom_frame_for_display)
+            self.doom_game_controller.game_over_signal.connect(self._handle_doom_game_over)
+            
+            self.doom_game_controller.start_game()
+            print("MW INFO: DoomGameController started successfully.")
+        except Exception as e_dgc:
+            print(f"MW CRITICAL: Failed to initialize or start DoomGameController: {e_dgc}")
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "DOOM Error", f"Could not start LazyDOOM: {e_dgc}")
+            self._exit_doom_mode() 
+            return
+        if self.button_lazy_doom:
+            self.button_lazy_doom.setText("⏪ Exit LazyDOOM")
+        self.status_bar.showMessage("LazyDOOM Mode Active! 👹", 0) 
+        self._update_global_ui_interaction_states() 
+
+    def _exit_doom_mode(self):
+        print("MW INFO: Exiting LazyDOOM mode...")
+        if self.doom_game_controller:
+            print("MW INFO: Stopping DoomGameController...")
+            self.doom_game_controller.stop_game() 
+            try: # Gracefully disconnect signals
+                self.doom_game_controller.frame_ready_for_oled_signal.disconnect(self._handle_doom_frame_for_display)
+                self.doom_game_controller.game_over_signal.disconnect(self._handle_doom_game_over)
+            except TypeError: 
+                print("MW INFO: Signals for DoomGameController were not connected or already disconnected.")
+            except Exception as e_disconnect:
+                print(f"MW WARNING: Error disconnecting DoomGameController signals: {e_disconnect}")
+            self.doom_game_controller.deleteLater() 
+            self.doom_game_controller = None 
+            print("MW INFO: DoomGameController stopped and cleaned up.")
+            self.is_doom_mode_active = False 
+        if self.oled_display_manager:
+            self.oled_display_manager.end_external_oled_override() 
+        # Re-enable Conflicting Features
+        if self.animator_manager:
+            if hasattr(self.animator_manager, 'set_interactive'):
+                self.animator_manager.set_interactive(True)
+            else: self.animator_manager.setEnabled(True)
+        if self.screen_sampler_manager:
+            if hasattr(self.screen_sampler_manager, 'set_interactive'):
+                self.screen_sampler_manager.set_interactive(True)
+            elif self.screen_sampler_manager.get_ui_widget():
+                self.screen_sampler_manager.get_ui_widget().setEnabled(True)
+        if self.static_layouts_manager:
+            if hasattr(self.static_layouts_manager, 'set_interactive'):
+                self.static_layouts_manager.set_interactive(True)
+            else: self.static_layouts_manager.setEnabled(True)
+        if self.color_picker_manager:
+            self.color_picker_manager.setEnabled(True)
+        
+        if self.pad_grid_frame:
+            self.pad_grid_frame.setEnabled(True)
+        
+        if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
+            self.quick_tools_group_ref.setEnabled(True)
+        # Restore Main App Pad Lights
+        if self.akai_controller and self.akai_controller.is_connected():
+            if self.animator_manager and self.animator_manager.active_sequence_model:
+                current_frame_colors = self.animator_manager.active_sequence_model.get_colors_for_current_edit_frame()
+                if current_frame_colors: 
+                    self.apply_colors_to_main_pad_grid(current_frame_colors, update_hw=True, is_sampler_output=False)
+                else: 
+                    self.akai_controller.clear_all_pads()
+            else: 
+                self.akai_controller.clear_all_pads()
+        if self.button_lazy_doom:
+            self.button_lazy_doom.setText("👹 LazyDOOM")
+        self.status_bar.showMessage("Ready.", 0) 
+        self._update_global_ui_interaction_states() 
+        print("MW INFO: LazyDOOM mode exited.")
+
+    def _handle_fire_pad_event_INTERNAL(self, note: int, is_pressed: bool):
+        # print(
+        #     f"MW_PAD_ROUTER: Received Note {note} (0x{note:02X}), Pressed {is_pressed}, DOOM_ACTIVE: {self.is_doom_mode_active}")
+        if self.is_doom_mode_active and self.doom_game_controller:
+            # print(f"MW_PAD_ROUTER: Routing to DoomGameController.") # DEBUG
+            self.doom_game_controller.handle_pad_event(note, is_pressed)
+        else:
+            pass
+
+    def closeEvent(self, event: QCloseEvent): 
+        print("MW TRACE: closeEvent triggered.")
+        if self.is_doom_mode_active:
+            # If DOOM is active, exit it cleanly first before handling main app save prompts
+            print("MW TRACE: DOOM mode active during closeEvent, exiting DOOM mode first.")
+            self._exit_doom_mode() 
+            # Let event processing continue to allow animator save prompt if needed
+        # Prompt to save unsaved animator changes (original logic)
         if self.animator_manager and self.animator_manager.active_sequence_model and \
-           self.animator_manager.active_sequence_model.is_modified:
+            self.animator_manager.active_sequence_model.is_modified:
             reply = QMessageBox.question(self, "Unsaved Animator Changes",
-                                         f"Animation '{self.animator_manager.active_sequence_model.name}' has unsaved changes. Save before exiting?",
-                                         QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
-                                         QMessageBox.StandardButton.Cancel)
+                                        f"Animation '{self.animator_manager.active_sequence_model.name}' has unsaved changes. Save before exiting?",
+                                        QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                        QMessageBox.StandardButton.Cancel)
             if reply == QMessageBox.StandardButton.Save:
-                save_success = self.animator_manager.action_save_sequence_as()
-                if not save_success: event.ignore(); return 
-            elif reply == QMessageBox.StandardButton.Cancel: event.ignore(); return        
+                save_success = self.animator_manager.action_save_sequence_as() # AMW shows dialog
+                if not save_success: 
+                    event.ignore() 
+                    return 
+            elif reply == QMessageBox.StandardButton.Cancel: 
+                event.ignore() 
+                return
+        # Stop other managers and disconnect controller (original logic)
         if self.screen_sampler_manager: self.screen_sampler_manager.on_application_exit()
-        if self.animator_manager: self.animator_manager.stop_current_animation_playback()
+        if self.animator_manager: self.animator_manager.stop_current_animation_playback() # Should be safe to call even if stopped
         if self.color_picker_manager: self.color_picker_manager.save_color_picker_swatches_to_config()        
         if self.oled_display_manager:
             self.oled_display_manager.stop_all_activity() 
-            if self.akai_controller.is_connected():
-                 self.oled_display_manager.clear_display_content() 
-                 # time.sleep(0.05) # Optional for MIDI message to clear       
-        if self.akai_controller.is_connected() or self.akai_controller.is_input_connected():
+            if self.akai_controller and self.akai_controller.is_connected():
+                self.oled_display_manager.clear_display_content() 
+        if self.akai_controller and (self.akai_controller.is_connected() or self.akai_controller.is_input_connected()):
             self.akai_controller.disconnect()        
-        # print("MW INFO: Application close event accepted.") # Optional
-        event.accept()
-
-if __name__ == '__main__':
-    # This block is for testing MainWindow.py independently.
-    # fire_control_app.py is the main entry point for the full application.
-    app = QApplication(sys.argv)    
-    # Attempt to load stylesheet (similar to fire_control_app.py)
-    try:
-        # Construct path to stylesheet relative to this file's location (gui directory)
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root_dir = os.path.dirname(current_dir) # Up one level to project root
-        style_file_path = os.path.join(project_root_dir, "resources", "styles", "style.qss")
-        if os.path.exists(style_file_path):
-            with open(style_file_path, "r") as f_style:
-                app.setStyleSheet(f_style.read())
-        else:
-            print(f"WARNING (MainWindow test): Stylesheet not found at {style_file_path}")
-    except Exception as e_style:
-        print(f"ERROR (MainWindow test): Could not load stylesheet: {e_style}")
+        print("MW INFO: Application closeEvent accepted.")
+        super().closeEvent(event) # Call base class closeEvent

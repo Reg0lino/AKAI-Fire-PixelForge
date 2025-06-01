@@ -161,7 +161,9 @@ class AkaiFireController(QObject):
             self.midi_input_thread.deleteLater()
             self.midi_input_thread = None; self.in_port_name_used = None
             print("AkaiFireController: MIDI Input stopped.")
+
     def is_connected(self): return self.out_port is not None and not self.out_port.closed
+
     def is_input_connected(self): return self.midi_input_thread is not None and self.midi_input_thread.isRunning()
 
     def _send_cc(self, control, value, channel=0):
@@ -187,29 +189,23 @@ class AkaiFireController(QObject):
 
     def set_pad_color(self, row, col, r8, g8, b8):
         if not self.is_connected() or not (0 <= row <= 3 and 0 <= col <= 15): return
-        
         # Apply global brightness factor
         r_adj = int(r8 * self.current_brightness_factor)
         g_adj = int(g8 * self.current_brightness_factor)
         b_adj = int(b8 * self.current_brightness_factor)
-        
         pad_idx = (row * 16) + col
         # Ensure values are clamped after scaling before 7-bit conversion
         r7 = max(0, min(r_adj, 255)) >> 1
         g7 = max(0, min(g_adj, 255)) >> 1
         b7 = max(0, min(b_adj, 255)) >> 1
-        
         self._send_sysex([0x65, 0x00, 0x04, pad_idx, r7, g7, b7])
 
     def set_multiple_pads_color(self, pad_data_list, bypass_global_brightness: bool = False):
         if not self.is_connected() or not pad_data_list: return
         payload = []
         count = 0
-        
         brightness_to_apply = 1.0 if bypass_global_brightness else self.current_brightness_factor
         # print(f"AkaiCtrl TRACE: set_multiple_pads_color using brightness_to_apply: {brightness_to_apply}, bypass_flag: {bypass_global_brightness}")
-
-
         for item in pad_data_list:
             idx, r8, g8, b8 = -1, 0, 0, 0 # Default values
             if len(item) == 4: # Assuming (idx, r, g, b)
@@ -223,26 +219,20 @@ class AkaiFireController(QObject):
                     continue # Skip invalid row/col
             else:
                 continue # Skip malformed item
-
             if idx == -1: continue
-
             # Apply brightness
             r_adj = int(r8 * brightness_to_apply)
             g_adj = int(g8 * brightness_to_apply)
             b_adj = int(b8 * brightness_to_apply)
-
             # Ensure values are clamped after scaling before 7-bit conversion
             r7 = max(0, min(r_adj, 255)) >> 1
             g7 = max(0, min(g_adj, 255)) >> 1
             b7 = max(0, min(b_adj, 255)) >> 1
-            
             payload.extend([idx, r7, g7, b7])
             count += 1
-            
         if not payload: return
         length = count * 4 # Each pad entry is 4 bytes (idx, r, g, b) in the SysEx payload
         self._send_sysex([0x65, (length >> 7) & 0x7F, length & 0x7F] + payload)
-
 
     def clear_all_pads(self):
         if not self.is_connected(): return
@@ -250,7 +240,7 @@ class AkaiFireController(QObject):
 
     def _parse_midi_message(self, msg: mido.Message):
         if msg.type == 'note_on':
-            print(f"DEBUG AkaiFireController: Note ON: {hex(msg.note)}")
+            # print(f"DEBUG AkaiFireController: Note ON: {hex(msg.note)}")  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<THIS IS THE DEBUG CALL TO SEE WHAT IS BEING INPUTTED****************
             self.fire_button_event.emit(msg.note, True)
             if msg.note == FIRE_BUTTON_PLAY: self.play_button_pressed.emit()
             elif msg.note == FIRE_BUTTON_STOP: self.stop_button_pressed.emit()
@@ -272,40 +262,47 @@ class AkaiFireController(QObject):
         if not self.is_connected(): return
         # print(f"HIM DEBUG: Forcing PLAY LED OFF (was asked for state: {state})") # Optional debug
         self._send_cc(control=FIRE_BUTTON_PLAY, value=LED_OFF)
+
     def set_stop_led(self, state: bool): # STOP is Red-only
         """Forces the STOP LED to always be OFF."""
         if not self.is_connected(): return
         # print(f"HIM DEBUG: Forcing STOP LED OFF (was asked for state: {state})") # Optional debug
         self._send_cc(control=FIRE_BUTTON_STOP, value=LED_OFF)
+
     def set_step_led(self, cs: str):
         v=LED_OFF
         if cs=="yellow_high": v=LED_DUAL_COLOR_YELLOW_HIGH
         elif cs=="red_high": v=LED_DUAL_COLOR_SECONDARY_HIGH
         self._send_cc(FIRE_BUTTON_STEP,v)
-        
-    def oled_send_full_bitmap(self, packed_bitmap_data_7bit: bytearray):
-        # --- TRACE PRINT ADDED HERE ---
-        # print(f"AkaiCtrl TRACE: oled_send_full_bitmap CALLED. Connected: {self.is_connected()}, Data len: {len(packed_bitmap_data_7bit) if packed_bitmap_data_7bit is not None else 'None'}")
-        # --- END OF TRACE PRINT ---
 
+    def oled_send_full_bitmap(self, packed_bitmap_data_7bit: bytes | bytearray):
+        # print(f"AkaiCtrl TRACE: oled_send_full_bitmap. Connected: {self.is_connected()}, Type: {type(packed_bitmap_data_7bit)}, Len: {len(packed_bitmap_data_7bit) if packed_bitmap_data_7bit is not None else 'None'}")
         if not self.is_connected():
-            # print("AkaiFireController: OLED: Not connected.") # Original print, can be kept or commented
             return
-        
-        PACKED_LEN = 1176 # Defined in oled_renderer as PACKED_BITMAP_SIZE_BYTES
-        if not isinstance(packed_bitmap_data_7bit, bytearray) or len(packed_bitmap_data_7bit) != PACKED_LEN:
-            print(f"AkaiFireController: OLED: Invalid 7-bit packed data. Expected {PACKED_LEN} B, got {len(packed_bitmap_data_7bit) if isinstance(packed_bitmap_data_7bit, bytearray) else 'N/A'}B.")
+        PACKED_LEN = 1176  # Defined in oled_renderer as PACKED_BITMAP_SIZE_BYTES
+        # Check if data is valid (bytes or bytearray and correct length)
+        if not isinstance(packed_bitmap_data_7bit, (bytes, bytearray)) or \
+            len(packed_bitmap_data_7bit) != PACKED_LEN:
+            data_len_str = 'N/A'
+            actual_type_str = type(packed_bitmap_data_7bit).__name__
+            if packed_bitmap_data_7bit is not None:
+                try:
+                    data_len_str = f"{len(packed_bitmap_data_7bit)}"
+                except TypeError:
+                    pass  # len() not applicable (e.g. if it was an int by mistake)
+            print(
+                f"AkaiFireController: OLED: Invalid 7-bit packed data. Expected {PACKED_LEN} B, got {data_len_str}B. Type: {actual_type_str}")
             return
-        
-        ctrl = [0x00, 0x07, 0x00, 0x7F] # StartBand, EndBand, StartCol, EndCol
-        payload = ctrl + list(packed_bitmap_data_7bit) # Ensure packed_bitmap_data_7bit is converted to list for concatenation
-        len_p = len(payload)
-        len_h, len_l = (len_p >> 7) & 0x7F, len_p & 0x7F
-        sysex_payload = [0x0E, len_h, len_l] + payload # Cmd, LenHH, LenLL, Payload
-        
-        # The _send_sysex method should contain the "DEBUG AkaiFireController: Sending SysEx" print
-        self._send_sysex(sysex_payload)
-
+        ctrl_bytes = [0x00, 0x07, 0x00, 0x7F]
+        payload_data = list(packed_bitmap_data_7bit)
+        full_payload_for_sysex = ctrl_bytes + payload_data
+        payload_length = len(full_payload_for_sysex)
+        # Length bytes for SysEx message (high byte, low byte, 7-bit each)
+        len_h = (payload_length >> 7) & 0x7F
+        len_l = payload_length & 0x7F
+        sysex_command_and_data = [0x0E, len_h, len_l] + full_payload_for_sysex
+        # _send_sysex will wrap this with F0...F7
+        self._send_sysex(sysex_command_and_data)
 
     def _pack_8bit_to_7bit_sysex_data(self, data_8bit: bytearray) -> list[int]:
         # This function is no longer directly used by oled_send_full_bitmap
