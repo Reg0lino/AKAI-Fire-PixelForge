@@ -1,6 +1,46 @@
 # Changelog - Akai Fire PixelForge
 
-## [Version 0.9.1] - 2025-05-29
+## [Version 0.9.2] - 2025-05-29 (Dither Experiment Branch Focus)
+
+This version significantly expands the image processing capabilities for OLED content, introducing new pre-dithering adjustments and a wider array of dithering algorithms for enhanced visual customization.
+
+### ✨ Features & Enhancements
+
+*   **Advanced OLED Image Processing & Dithering Options (`OLEDCustomizerDialog` & `image_processing.py`):**
+    *   🎨 **Gamma Correction:** Added a "Gamma" slider (0.5 to 2.0) to adjust mid-tones of the source image before other processing, allowing for better tonal balance.
+    *   🌫️ **Pre-Dither Blur:** Introduced a "Pre-Dither Blur" slider (0.0 to 2.0 radius for Gaussian blur) to smooth images before dithering, which can reduce noise and create softer dither patterns.
+    *   ✨ **Sharpening:** Added a "Sharpen" slider (0 to 100 strength) to enhance edge details in the source image before dithering, helping to preserve clarity for sprite art and graphics.
+    *   🔊 **Noise Injection:**
+        *   Added "Noise Type" dropdown: "Off", "Pre-Dither (Subtle)", "Post-Dither (Grainy)".
+        *   Added "Noise Amount" slider (0-100%) to control the intensity of injected noise.
+    *   🔢 **Expanded Dithering Algorithms:** The "Monochrome" conversion dropdown now includes:
+        *   **Atkinson Dither:** Provides a sharper, higher-contrast dither often good for graphics.
+        *   **Ordered Dither (Bayer 2x2):** A coarser, retro-style ordered dither.
+        *   **Ordered Dither (Bayer 4x4):** (Previously available)
+        *   **Ordered Dither (Bayer 8x8):** A finer ordered dither for smoother gradations.
+        *   (Floyd-Steinberg and Simple Threshold remain available).
+    *   💪 **Variable Dither Strength:** For error-diffusion algorithms (Floyd-Steinberg, Atkinson), a "Dither Strength" slider (0-100%) is now available. This allows blending between a simple threshold (0%) and the full dithering effect (100%). The slider is conditionally visible when an applicable dither mode is selected.
+    *   ⚙️ **UI Integration:** All new sliders and options are integrated into the "Import & Processing Options" section of the OLED Customizer's animation editor panel. Labels display current values.
+    *   💾 **Preset Compatibility:** New parameters (gamma, blur, noise settings, dither strength) are saved to and loaded from OLED animation item JSON presets.
+*   **DOOM Feature Integration (LazyDOOM):**
+    *   👹 **LazyDOOM Mode:** Integrated a playable version of a DOOM-like game that runs directly on the Akai Fire, utilizing the OLED for display and pads for controls. (Further details on gameplay and specific controls to be added by Reg0lino).
+    *   Includes a startup dialog for instructions and difficulty selection.
+    *   Keyboard controls (WASD, Q/E, F, Shift) are also mapped for DOOM gameplay when active.
+    *   Application enters a dedicated DOOM mode, disabling other UI interactions.
+
+### 🐛 Bug Fixes & Stability
+
+*   **OLED Customizer Dialog Robustness:** Addressed previous `AttributeError` issues related to missing method definitions by ensuring a complete class structure, allowing the dialog to launch and function correctly with all new and existing controls.
+*   **Indentation & Code Structure:** Ensured proper Python indentation and structure for newly added and modified methods within `oled_customizer_dialog.py` and `image_processing.py`.
+
+### 💬 Developer Notes
+
+*   The image processing pipeline in `image_processing.py` has been updated to accommodate the new pre-dithering steps in a logical order: Brightness -> Gamma -> Sharpen -> Contrast -> Pre-Dither Noise -> Invert -> Dither -> Post-Dither Noise.
+*   The conditional visibility of the "Dither Strength" and "Threshold" sliders in the UI is now handled correctly based on the selected monochrome conversion mode.
+
+---
+
+## [Version 0.9.1] - 2025-05-28
 
 This version focuses on critical usability enhancements for the OLED Customizer Dialog, performance improvements in the Animator Studio, and fixes for UI stability and appearance.
 
@@ -68,7 +108,7 @@ This major update focuses on a comprehensive overhaul of the Akai Fire's OLED di
             *   **Resize Modes:** Stretch to Fit, Fit (Keep Aspect & Pad), Crop to Center for the 128x64 OLED.
             *   **Contrast Adjustment:** Pre-dithering contrast enhancement slider.
             *   **Color Inversion:** Option to invert black and white.
-            *   **Monochrome Conversion & Dithering:** Floyd-Steinberg Dither, Simple Threshold (adjustable), Ordered Dither (Bayer 4x4).
+            *   **Monochrome Conversion & Dithering (Initial Set):** Floyd-Steinberg Dither, Simple Threshold (adjustable), Ordered Dither (Bayer 4x4).
         *   Processed images/GIFs are converted into sequences of 1-bit logical frames.
         *   Users can set target playback FPS and loop behavior (Loop Infinitely, Play Once) for animations on the hardware OLED.
         *   GIF metadata (original FPS, loop count) is extracted where available.
@@ -107,7 +147,7 @@ This major update focuses on a comprehensive overhaul of the Akai Fire's OLED di
 ---
 
 ## [Version 0.8.0] - 2025-05-19 - Sampler Stability & Preference Refinement
-*(Details as previously provided)*
+*(Details as previously provided in original changelog)*
 
 ### ✨ Features & Enhancements
 *   Screen Sampler Functionality Restored & Improved (Monitor Selection, Preference Loading, Live Preview).
@@ -122,8 +162,8 @@ This major update focuses on a comprehensive overhaul of the Akai Fire's OLED di
 
 ---
 
-## [Version 0.7.0] - (Date Inferred)
-*(Details as previously provided)*
+## [Version 0.7.0] - (Date Inferred from original changelog)
+*(Details as previously provided in original changelog)*
 
 ### ✨ Features & Enhancements
 *   Sampler Recording Auto-Save & Listing.
@@ -139,7 +179,7 @@ This major update focuses on a comprehensive overhaul of the Akai Fire's OLED di
 ---
 
 ## Previous Versions (Summary - Pre-0.7.0)
-*(Details as previously provided)*
+*(Details as previously provided in original changelog)*
 *   Sampler Recording Framework
 *   Granular Grid Sampling & Monitor View Refinement
 *   Interactive Screen Sampler MVP

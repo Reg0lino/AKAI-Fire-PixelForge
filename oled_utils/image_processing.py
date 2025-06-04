@@ -14,6 +14,32 @@ BAYER_MATRIX_4X4 = np.array([
 ])
 NORMALIZED_BAYER_MATRIX_4X4 = BAYER_MATRIX_4X4 / 16.0
 
+ATKINSON_DISTRIBUTION = [
+    ((1, 0), 1/8), ((2, 0), 1/8),
+    ((-1, 1), 1/8), ((0, 1), 1/8), ((1, 1), 1/8),
+    ((0, 2), 1/8)
+]
+
+# Bayer matrix (2x2)
+BAYER_MATRIX_2X2 = np.array([
+    [0, 2],
+    [3, 1]
+])
+NORMALIZED_BAYER_MATRIX_2X2 = BAYER_MATRIX_2X2 / 4.0
+
+# Bayer matrix (8x8)
+BAYER_MATRIX_8X8 = np.array([
+    [0, 32,  8, 40,  2, 34, 10, 42],
+    [48, 16, 56, 24, 50, 18, 58, 26],
+    [12, 44,  4, 36, 14, 46,  6, 38],
+    [60, 28, 52, 20, 62, 30, 54, 22],
+    [3, 35, 11, 43,  1, 33,  9, 41],
+    [51, 19, 59, 27, 49, 17, 57, 25],
+    [15, 47,  7, 39, 13, 45,  5, 37],
+    [63, 31, 55, 23, 61, 29, 53, 21]
+])
+NORMALIZED_BAYER_MATRIX_8X8 = BAYER_MATRIX_8X8 / 64.0
+
 def logical_frame_to_string_list(pil_image_1bit: Image.Image) -> list[str]:
     """Converts a 128x64 1-bit PIL Image to a list of 64 strings, each 128 chars ('0' or '1')."""
     if pil_image_1bit.mode != '1' or pil_image_1bit.size != TARGET_SIZE:
@@ -30,22 +56,59 @@ def logical_frame_to_string_list(pil_image_1bit: Image.Image) -> list[str]:
         string_list_frame.append(row_string)
     return string_list_frame
 
-# In oled_utils/image_processing.py
+def _apply_atkinson_dither(grayscale_image: Image.Image, dither_strength: float = 1.0) -> Image.Image:
+    """
+    Applies Atkinson dithering to a grayscale PIL Image with variable strength.
+    Returns a 1-bit monochrome PIL Image.
+    dither_strength: 0.0 (threshold) to 1.0 (full Atkinson).
+    """
+    if grayscale_image.mode != 'L':
+        grayscale_image = grayscale_image.convert('L')
 
+    img_np = np.array(grayscale_image, dtype=float)
+    rows, cols = img_np.shape
+
+    for r in range(rows):
+        for c in range(cols):
+            old_pixel = img_np[r, c]
+            new_pixel = 255.0 if old_pixel > 127.5 else 0.0
+            img_np[r, c] = new_pixel
+            quant_error = old_pixel - new_pixel
+
+            # Apply dither strength to the error being distributed
+            error_to_distribute = quant_error * dither_strength
+
+            for dr_dc, weight in ATKINSON_DISTRIBUTION:
+                nc, nr = c + dr_dc[0], r + dr_dc[1]
+                if 0 <= nr < rows and 0 <= nc < cols:
+                    img_np[nr, nc] += error_to_distribute * weight
+
+    final_binary_np = np.where(img_np > 127.5, 255, 0).astype(np.uint8)
+    monochrome_frame = Image.fromarray(final_binary_np, mode='L').convert('1')
+    return monochrome_frame
 
 def process_single_frame(frame: Image.Image,
-                         resize_mode: str,
-                         mono_conversion_mode: str,
-                         threshold_value: int,
-                         invert_colors: bool,
-                         contrast_factor: float) -> Image.Image | None:  # <<< ADDED contrast_factor
-    """Processes a single PIL Image frame to a 128x64 1-bit PIL Image, with contrast adjustment."""
+                        resize_mode: str,
+                        mono_conversion_mode: str,
+                        threshold_value: int,
+                        invert_colors: bool,
+                        contrast_factor: float,
+                        brightness_factor: float,
+                        sharpen_factor: float,  # Value 0-100, 0 = no_op
+                        gamma_value: float,      # Value typically 0.5-2.5, 1.0 = no_op
+                        blur_radius: float,      # Value typically 0.0-2.0, 0.0 = no_op
+                        noise_amount: int,       # Value 0-100 (percentage)
+                        noise_type: str,         # "Off", "Pre-Dither", "Post-Dither"
+                        # Value 0.0-1.0 (for error diffusion)
+                        dither_strength: float
+                        ) -> Image.Image | None:
+    """Processes a single PIL Image frame to a 128x64 1-bit PIL Image, with pre-processing."""
     try:
         # 1. Ensure RGBA for consistent transparency handling
         if frame.mode != 'RGBA':
             frame = frame.convert("RGBA")
 
-        # 2. Resize (Your existing resize logic)
+        # 2. Resize
         processed_frame = frame
         if resize_mode == "Stretch to Fit":
             processed_frame = frame.resize(
@@ -53,77 +116,148 @@ def process_single_frame(frame: Image.Image,
         elif resize_mode == "Fit (Keep Aspect, Pad)":
             img_copy = frame.copy()
             img_copy.thumbnail(TARGET_SIZE, Image.Resampling.LANCZOS)
-            processed_frame = Image.new(
-                "RGBA", TARGET_SIZE, (0, 0, 0, 255))  # Black background
+            processed_frame = Image.new("RGBA", TARGET_SIZE, (0, 0, 0, 255))
             paste_x = (TARGET_SIZE[0] - img_copy.width) // 2
             paste_y = (TARGET_SIZE[1] - img_copy.height) // 2
-            # Ensure alpha channel is used for pasting if source has it
-            processed_frame.paste(
-                img_copy, (paste_x, paste_y), img_copy if img_copy.mode == 'RGBA' else None)
+            processed_frame.paste(img_copy, (paste_x, paste_y), img_copy)
         elif resize_mode == "Crop to Center":
             original_width, original_height = frame.size
             target_aspect = TARGET_SIZE[0] / TARGET_SIZE[1]
             original_aspect = original_width / original_height
             if original_aspect > target_aspect:
-                new_height = TARGET_SIZE[1]
-                new_width = int(new_height * original_aspect)
+                new_height_temp = TARGET_SIZE[1]
+                new_width_temp = int(new_height_temp * original_aspect)
             else:
-                new_width = TARGET_SIZE[0]
-                new_height = int(new_width / original_aspect)
+                new_width_temp = TARGET_SIZE[0]
+                new_height_temp = int(new_width_temp / original_aspect)
             resized_temp = frame.resize(
-                (new_width, new_height), Image.Resampling.LANCZOS)
-            crop_x = (new_width - TARGET_SIZE[0]) / 2
-            crop_y = (new_height - TARGET_SIZE[1]) / 2
+                (new_width_temp, new_height_temp), Image.Resampling.LANCZOS)
+            crop_x = (new_width_temp - TARGET_SIZE[0]) / 2
+            crop_y = (new_height_temp - TARGET_SIZE[1]) / 2
             crop_box = (crop_x, crop_y, crop_x +
                         TARGET_SIZE[0], crop_y + TARGET_SIZE[1])
             processed_frame = resized_temp.crop(crop_box)
-        else:  # Default to Stretch if unknown mode
+        else:  # Default
             processed_frame = frame.resize(
                 TARGET_SIZE, Image.Resampling.LANCZOS)
 
         # 3. Convert to Grayscale
-        grayscale_frame = processed_frame.convert("L")
+        if processed_frame.mode == 'RGBA':
+            background = Image.new("RGB", processed_frame.size, (0, 0, 0))
+            background.paste(processed_frame, mask=processed_frame.split()[3])
+            grayscale_frame = background.convert("L")
+        else:
+            grayscale_frame = processed_frame.convert("L")
 
-        # --- NEW: 3.5. Apply Contrast Adjustment ---
-        # Apply contrast if factor is not 1.0 (no change)
+        # --- Pre-Dithering Adjustments ---
+        # 3.1 Brightness
+        if brightness_factor != 1.0:
+            enhancer = ImageEnhance.Brightness(grayscale_frame)
+            grayscale_frame = enhancer.enhance(brightness_factor)
+
+        # 3.2 Gamma Correction
+        if gamma_value != 1.0:
+            # Create a lookup table for gamma correction
+            gamma_corrected = bytearray(256)
+            for i in range(256):
+                gamma_corrected[i] = int(((i / 255.0) ** gamma_value) * 255.0)
+            grayscale_frame = grayscale_frame.point(gamma_corrected)
+
+        # 3.3 Sharpening
+        if sharpen_factor > 0:  # Assuming sharpen_factor is 0-100, map to a sensible PIL enhance factor
+            # ImageEnhance.Sharpness: 0.0 gives a blurred image, 1.0 gives the original image, and a factor >1.0 gives a sharpened image.
+            # Let's map slider 0-100 to Pillow factor 1.0 - 3.0 (0 = no change, 100 = 2.0x sharpen)
+            pil_sharpen_factor = 1.0 + \
+                (sharpen_factor / 100.0) * 1.0  # Max 2.0x sharpen
+            if pil_sharpen_factor != 1.0:
+                enhancer = ImageEnhance.Sharpness(grayscale_frame)
+                grayscale_frame = enhancer.enhance(pil_sharpen_factor)
+
+        # 3.4 Contrast
         if contrast_factor != 1.0:
-            try:
-                enhancer = ImageEnhance.Contrast(grayscale_frame)
-                grayscale_frame = enhancer.enhance(contrast_factor)
-                # print(f"IPROC DEBUG: Applied contrast factor: {contrast_factor:.2f} to frame.") # Optional
-            except Exception as e_contrast:
-                print(
-                    f"IPROC WARNING: Failed to apply contrast (factor: {contrast_factor:.2f}): {e_contrast}")
-        # --- END NEW ---
+            enhancer = ImageEnhance.Contrast(grayscale_frame)
+            grayscale_frame = enhancer.enhance(contrast_factor)
 
-        # 4. Invert Colors (if checked) - applied AFTER contrast, BEFORE monochrome conversion
+        # 3.5 Pre-Dither Noise (if selected)
+        if noise_type == "Pre-Dither" and noise_amount > 0:
+            img_np = np.array(grayscale_frame, dtype=np.float32)
+            noise_intensity = noise_amount * 2.55  # Scale 0-100 to 0-255 for noise range
+            # Smaller std dev for less extreme noise
+            noise = np.random.normal(0, noise_intensity / 6, img_np.shape)
+            img_np += noise
+            img_np = np.clip(img_np, 0, 255)
+            grayscale_frame = Image.fromarray(
+                img_np.astype(np.uint8), mode='L')
+
+        # 4. Invert Colors (applied after tonal/detail adjustments, before dither)
         if invert_colors:
             grayscale_frame = ImageOps.invert(grayscale_frame)
 
-        # 5. Monochrome Conversion (Your existing dithering logic)
+        # 5. Monochrome Conversion / Dithering
         monochrome_frame: Image.Image
         if mono_conversion_mode == "Floyd-Steinberg Dither":
-            monochrome_frame = grayscale_frame.convert(
-                '1', dither=Image.Dither.FLOYDSTEINBERG)
+            # Pass dither_strength to a modified Floyd-Steinberg if we implement it there
+            # For now, Pillow's built-in doesn't take strength.
+            # We could write a custom Floyd-Steinberg that uses dither_strength.
+            # For simplicity now, it uses full strength via Pillow.
+            # If dither_strength < 1.0, could blend with thresholded image.
+            if dither_strength < 1.0:
+                thresholded_for_blend = grayscale_frame.point(
+                    lambda p: 255 if p > 127.5 else 0, '1')
+                dithered_full = grayscale_frame.convert(
+                    '1', dither=Image.Dither.FLOYDSTEINBERG)
+                monochrome_frame = Image.blend(
+                    thresholded_for_blend, dithered_full, dither_strength)
+            else:
+                monochrome_frame = grayscale_frame.convert(
+                    '1', dither=Image.Dither.FLOYDSTEINBERG)
+
+        elif mono_conversion_mode == "Atkinson Dither":
+            # Assuming _apply_atkinson_dither is modified to accept dither_strength
+            monochrome_frame = _apply_atkinson_dither(
+                grayscale_frame, dither_strength)
+
         elif mono_conversion_mode == "Simple Threshold":
             monochrome_frame = grayscale_frame.point(
                 lambda p: 255 if p > threshold_value else 0, '1')
-        elif mono_conversion_mode == "Ordered Dither (Bayer 4x4)":
+
+        elif mono_conversion_mode.startswith("Ordered Dither"):
+            bayer_matrix_to_use = NORMALIZED_BAYER_MATRIX_4X4
+            if "Bayer 2x2" in mono_conversion_mode:
+                bayer_matrix_to_use = NORMALIZED_BAYER_MATRIX_2X2
+            elif "Bayer 8x8" in mono_conversion_mode:
+                bayer_matrix_to_use = NORMALIZED_BAYER_MATRIX_8X8
+
             gray_np = np.array(grayscale_frame, dtype=np.float32) / 255.0
             output_np = np.zeros_like(gray_np, dtype=np.uint8)
-            bayer_rows, bayer_cols = NORMALIZED_BAYER_MATRIX_4X4.shape
+            bayer_rows, bayer_cols = bayer_matrix_to_use.shape
             for r_idx in range(gray_np.shape[0]):
                 for c_idx in range(gray_np.shape[1]):
-                    if gray_np[r_idx, c_idx] > NORMALIZED_BAYER_MATRIX_4X4[r_idx % bayer_rows, c_idx % bayer_cols]:
+                    if gray_np[r_idx, c_idx] > bayer_matrix_to_use[r_idx % bayer_rows, c_idx % bayer_cols]:
                         output_np[r_idx, c_idx] = 255
-                    # else: output_np[r_idx, c_idx] = 0 # Already initialized to 0
             monochrome_frame = Image.fromarray(
                 output_np, mode='L').convert('1')
-        # Add other dithering methods here as elif blocks in the future
-        else:  # Default to Floyd-Steinberg
-            # print(f"IPROC Warning: Unknown mono_conversion_mode '{mono_conversion_mode}', defaulting to Floyd-Steinberg.")
+        else:
+            print(
+                f"IPROC Warning: Unknown mono_conversion_mode '{mono_conversion_mode}', defaulting to Floyd-Steinberg.")
             monochrome_frame = grayscale_frame.convert(
                 '1', dither=Image.Dither.FLOYDSTEINBERG)
+
+        # 6. Post-Dither Noise (if selected)
+        if noise_type == "Post-Dither" and noise_amount > 0:
+            # Should be 0s and 255s from '1' mode
+            img_np = np.array(monochrome_frame)
+            # noise_amount is 0-100, treat as percentage of pixels to flip
+            num_pixels_to_flip = int((noise_amount / 100.0) * img_np.size)
+            # Get random indices to flip
+            row_indices = np.random.randint(
+                0, img_np.shape[0], size=num_pixels_to_flip)
+            col_indices = np.random.randint(
+                0, img_np.shape[1], size=num_pixels_to_flip)
+            for r, c in zip(row_indices, col_indices):
+                img_np[r, c] = 255 - img_np[r, c]  # Flip 0 to 255 and 255 to 0
+            monochrome_frame = Image.fromarray(
+                img_np, mode='1')  # Mode '1' for binary
 
         return monochrome_frame
 
@@ -133,33 +267,21 @@ def process_single_frame(frame: Image.Image,
         traceback.print_exc()
         return None
 
-# In oled_utils/image_processing.py
-
-
 def process_image_to_oled_data(filepath: str,
-                               resize_mode: str,
-                               mono_conversion_mode: str,
-                               threshold_value: int,
-                               invert_colors: bool,
-                               contrast_factor: float,        # <<< ADDED contrast_factor
-                               max_frames_to_import: int = 0
-                               ) -> tuple[list[list[str]] | None, float | None, int | None]:
-    """
-    Processes an image or GIF into a list of logical OLED frames.
-    Includes contrast adjustment before monochrome conversion.
-
-    Args:
-        filepath: Path to the image or GIF.
-        resize_mode: "Stretch to Fit", "Fit (Keep Aspect, Pad)", "Crop to Center".
-        mono_conversion_mode: Dithering/thresholding mode.
-        threshold_value: Value for simple thresholding (0-255).
-        invert_colors: Boolean, whether to invert black/white.
-        contrast_factor: Float, e.g., 1.0 for no change, >1 for more, <1 for less.
-        max_frames_to_import: Max number of frames to process from a GIF (0 for all).
-
-    Returns:
-        A tuple: (list_of_logical_frames, source_fps, source_loop_count)
-    """
+                                resize_mode: str,
+                                mono_conversion_mode: str,
+                                threshold_value: int,
+                                invert_colors: bool,
+                                contrast_factor: float,
+                                brightness_factor: float,
+                                sharpen_factor: float,
+                                gamma_value: float,
+                                blur_radius: float,
+                                noise_amount: int,
+                                noise_type: str,
+                                dither_strength: float,
+                                max_frames_to_import: int = 0
+                                ) -> tuple[list[list[str]] | None, float | None, int | None]:
     if not os.path.exists(filepath):
         print(f"IPROC Error: File not found at {filepath}")
         return None, None, None
@@ -172,7 +294,6 @@ def process_image_to_oled_data(filepath: str,
         img = Image.open(filepath)
         is_animated = hasattr(img, "is_animated") and img.is_animated
         num_frames = img.n_frames if is_animated else 1
-        # print(f"IPROC Processing '{os.path.basename(filepath)}'. Animated: {is_animated}, Frames: {num_frames}, Contrast: {contrast_factor:.2f}") # Optional
 
         frames_to_process = num_frames
         if is_animated and max_frames_to_import > 0:
@@ -183,10 +304,14 @@ def process_image_to_oled_data(filepath: str,
                 duration_ms = img.info.get('duration', 100)
                 if duration_ms > 0:
                     source_fps = 1000.0 / duration_ms
+                else:
+                    source_fps = 10.0
                 source_loop_count = img.info.get('loop', 0)
             except Exception as e_info:
                 print(
-                    f"IPROC Warning: Could not read GIF duration/loop: {e_info}")
+                    f"IPROC Warning: Could not read GIF duration/loop for '{filepath}': {e_info}. Using defaults.")
+                source_fps = 10.0
+                source_loop_count = 0
 
         for i in range(frames_to_process):
             if is_animated:
@@ -199,7 +324,14 @@ def process_image_to_oled_data(filepath: str,
                 mono_conversion_mode,
                 threshold_value,
                 invert_colors,
-                contrast_factor  # <<< PASS contrast_factor HERE
+                contrast_factor,
+                brightness_factor,
+                sharpen_factor,
+                gamma_value,
+                blur_radius,
+                noise_amount,
+                noise_type,
+                dither_strength
             )
 
             if monochrome_pil_frame:
@@ -207,7 +339,7 @@ def process_image_to_oled_data(filepath: str,
                     logical_frame_to_string_list(monochrome_pil_frame))
             else:
                 print(
-                    f"IPROC Warning: Skipping frame {i} due to processing error.")
+                    f"IPROC Warning: Skipping frame {i} for '{filepath}' due to processing error.")
 
         if not logical_frames_output:
             print(
@@ -216,7 +348,7 @@ def process_image_to_oled_data(filepath: str,
 
         return logical_frames_output, source_fps, source_loop_count
 
-    except FileNotFoundError:  # Should be caught by os.path.exists, but good defense
+    except FileNotFoundError:
         print(
             f"IPROC Error: File not found at {filepath} (during Image.open).")
         return None, None, None
@@ -233,6 +365,130 @@ def process_image_to_oled_data(filepath: str,
 
 
 if __name__ == '__main__':
+    from PIL import ImageDraw, ImageFont
+
+    print("--- Testing Image Processing Utility ---")
+
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    YOUR_STATIC_IMAGE_PATH = os.path.join(PROJECT_ROOT, "my_test_image.png")
+    YOUR_GIF_PATH = os.path.join(PROJECT_ROOT, "my_test_gif.gif")
+    DUMMY_STATIC_IMAGE_PATH = os.path.join(
+        PROJECT_ROOT, "test_static_image_generated_iproc.png")
+    DUMMY_GIF_PATH = os.path.join(
+        PROJECT_ROOT, "test_animation_generated_iproc.gif")
+
+    # (create_dummy_assets_if_needed function can remain as is)
+    def create_dummy_assets_if_needed():
+        assets_actually_created = False
+        if not os.path.exists(YOUR_STATIC_IMAGE_PATH) and not os.path.exists(DUMMY_STATIC_IMAGE_PATH):
+            try:
+                img_static = Image.new("RGB", (200, 100), "teal")
+                draw_static = ImageDraw.Draw(img_static)
+                try:
+                    font = ImageFont.truetype("arial.ttf", 30)
+                except IOError:
+                    font = ImageFont.load_default()
+                draw_static.text((10, 10), "Static!", fill="yellow", font=font)
+                img_static.save(DUMMY_STATIC_IMAGE_PATH)
+                print(f"Created dummy static image: {DUMMY_STATIC_IMAGE_PATH}")
+                assets_actually_created = True
+            except Exception as e:
+                print(f"Could not create dummy static image: {e}")
+        if not os.path.exists(YOUR_GIF_PATH) and not os.path.exists(DUMMY_GIF_PATH):
+            try:
+                frames = []
+                try:
+                    font = ImageFont.truetype("arial.ttf", 18)
+                except IOError:
+                    font = ImageFont.load_default()
+                for i in range(5):
+                    img_gif_frame = Image.new(
+                        "RGB", (100, 50), (255 - i * 40, i * 40, 128))
+                    draw_gif = ImageDraw.Draw(img_gif_frame)
+                    draw_gif.text(
+                        (5, 5), f"Anim {i+1}", fill="white", font=font)
+                    frames.append(img_gif_frame)
+                frames[0].save(DUMMY_GIF_PATH, save_all=True,
+                               append_images=frames[1:], duration=200, loop=0)
+                print(f"Created dummy GIF: {DUMMY_GIF_PATH}")
+                assets_actually_created = True
+            except Exception as e:
+                print(f"Could not create dummy GIF: {e}")
+        return assets_actually_created
+
+    create_dummy_assets_if_needed()
+
+    test_files_to_process = []
+    if os.path.exists(YOUR_STATIC_IMAGE_PATH):
+        test_files_to_process.append(YOUR_STATIC_IMAGE_PATH)
+    elif os.path.exists(DUMMY_STATIC_IMAGE_PATH):
+        test_files_to_process.append(DUMMY_STATIC_IMAGE_PATH)
+    if os.path.exists(YOUR_GIF_PATH):
+        test_files_to_process.append(YOUR_GIF_PATH)
+    elif os.path.exists(DUMMY_GIF_PATH):
+        test_files_to_process.append(DUMMY_GIF_PATH)
+
+    if not test_files_to_process:
+        print("\nNo test files to process.")
+
+    for test_file_path in test_files_to_process:
+        print(f"\n--- Testing with: {os.path.basename(test_file_path)} ---")
+        options_to_test = [
+            {"resize": "Stretch to Fit", "mono": "Floyd-Steinberg Dither", "thresh": 128,
+                "invert": False, "contrast": 1.0, "brightness": 1.0, "sharpen": 0},
+            {"resize": "Fit (Keep Aspect, Pad)", "mono": "Atkinson Dither", "thresh": 128,
+             "invert": False, "contrast": 1.2, "brightness": 1.1, "sharpen": 50},
+            {"resize": "Crop to Center",
+                "mono": "Ordered Dither (Bayer 2x2)", "thresh": 128, "invert": True, "contrast": 1.0, "brightness": 0.9, "sharpen": 0},
+            {"resize": "Stretch to Fit", "mono": "Ordered Dither (Bayer 8x8)", "thresh": 128,
+             "invert": False, "contrast": 1.0, "brightness": 1.0, "sharpen": 100},
+            {"resize": "Fit (Keep Aspect, Pad)", "mono": "Simple Threshold", "thresh": 100,
+             "invert": False, "contrast": 1.0, "brightness": 1.0, "sharpen": 0},
+        ]
+
+        for i, opts in enumerate(options_to_test):
+            print(
+                f"\n  Test Case {i+1}: Resize='{opts['resize']}', Mono='{opts['mono']}', Thresh={opts['thresh']}, Invert={opts['invert']}, Contrast={opts['contrast']:.2f}, Bright={opts['brightness']:.2f}, Sharpen={opts['sharpen']}")
+            logical_frames, fps, loop = process_image_to_oled_data(
+                test_file_path,
+                resize_mode=opts['resize'],
+                mono_conversion_mode=opts['mono'],
+                threshold_value=opts['thresh'],
+                invert_colors=opts['invert'],
+                contrast_factor=opts['contrast'],
+                brightness_factor=opts['brightness'],
+                sharpen_factor=opts['sharpen'],
+                max_frames_to_import=3  # Limit frames for faster testing
+            )
+            if logical_frames:
+                print(
+                    f"    Processed {len(logical_frames)} frames. FPS: {fps}, Loop: {loop}")
+                if logical_frames[0]:
+                    try:
+                        img_out = Image.new('1', TARGET_SIZE)
+                        pixels_out = img_out.load()
+                        for y_idx, row_str in enumerate(logical_frames[0]):
+                            for x_idx, char_val in enumerate(row_str):
+                                pixels_out[x_idx,
+                                            y_idx] = 255 if char_val == '1' else 0
+                        output_filename_base = os.path.basename(
+                            test_file_path).split('.')[0]
+                        output_filename_suffix = opts['mono'].replace(" ", "_").replace(
+                            "(", "").replace(")", "").replace("/", "_")
+                        output_filepath = os.path.join(
+                            PROJECT_ROOT, f"preview_iproc_{output_filename_base}_case{i+1}_{output_filename_suffix}.png")
+                        img_out.save(output_filepath)
+                        print(f"    Saved preview: {output_filepath}")
+                    except Exception as e_save:
+                        print(f"    Could not save preview: {e_save}")
+            else:
+                print("    Processing failed.")
+    # (Cleanup dummy files logic can remain as is)
+    if os.path.exists(DUMMY_STATIC_IMAGE_PATH) and "generated_iproc" in DUMMY_STATIC_IMAGE_PATH:
+        os.remove(DUMMY_STATIC_IMAGE_PATH)
+    if os.path.exists(DUMMY_GIF_PATH) and "generated_iproc" in DUMMY_GIF_PATH:
+        os.remove(DUMMY_GIF_PATH)
+    print("\n--- Image Processing Test Finished ---")
     from PIL import ImageDraw, ImageFont # Add ImageDraw, ImageFont here for dummy asset creation
 
     print("--- Testing Image Processing Utility ---")

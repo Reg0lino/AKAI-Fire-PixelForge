@@ -8,9 +8,9 @@
 
 ## 🎛️ Overview
 
-**Akai Fire PixelForge** (developed by Reg0lino & Gemini AI) is a Python desktop application designed to provide comprehensive control over an Akai Fire MIDI controller. It allows users to customize its 4x16 RGB pad matrix with static color layouts and frame-by-frame animations, and dynamically reflect desktop colors onto the pads using a screen sampler. Critically, it now offers advanced customization of the Akai Fire's 128x64 monochrome OLED display. The application features a modern, dark-themed, and intuitive user interface built with PyQt6.
+**Akai Fire PixelForge** (developed by Reg0lino & Gemini AI) is a Python desktop application designed to provide comprehensive control over an Akai Fire MIDI controller. It allows users to customize its 4x16 RGB pad matrix with static color layouts and frame-by-frame animations, and dynamically reflect desktop colors onto the pads using a screen sampler. Critically, it now offers advanced customization of the Akai Fire's 128x64 monochrome OLED display, including a wide range of image processing options. The application features a modern, dark-themed, and intuitive user interface built with PyQt6.
 
-This project aims to unlock the full visual potential of the Akai Fire, transforming it from just a MIDI controller into a versatile lighting instrument and a rich visual feedback tool, especially through its newly enhanced OLED capabilities.
+This project aims to unlock the full visual potential of the Akai Fire, transforming it from just a MIDI controller into a versatile lighting instrument and a rich visual feedback tool, especially through its newly enhanced OLED capabilities and even includes a playable retro game mode!
 
 ![Image](https://github.com/user-attachments/assets/fcec95de-555b-4066-87a9-aa0419526ef4)
 ![Image](https://github.com/user-attachments/assets/f3bbcca6-abad-454e-b441-ec2d4533f6b0)
@@ -40,16 +40,29 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
 ![Image](https://github.com/user-attachments/assets/bd4aa2e4-a4fb-47e6-909b-2d501bb30c99)
     *   **OLED Content Library Manager:** Create, edit, manage, and save custom "Text Items" and "Image Animation Items" (from static images or GIFs) as JSON presets. Includes live previews and a "Save & Apply" feature. Single-frame image items are now distinctly labeled "(Image)".
     *   **Custom Text Items:** Define text, select system fonts, set size, alignment, and scrolling behavior (with speed/pause overrides).
-    *   **Custom Image & GIF Animations:** Import images/GIFs with processing options (resize, contrast, invert, multiple dithering algorithms like Floyd-Steinberg, Threshold, Bayer). Set playback FPS and loop behavior.
+    *   **Custom Image & GIF Animations:**
+        *   Import images/GIFs with extensive processing options:
+            *   **Pre-Dithering Adjustments:** Sliders for Brightness, Contrast, **Gamma Correction**, and **Sharpening** to fine-tune the image before 1-bit conversion.
+            *   **Monochrome Conversion & Dithering:** A wide selection of algorithms including Floyd-Steinberg, **Atkinson**, Simple Threshold (adjustable), and multiple **Ordered Dithering (Bayer 2x2, 4x4, 8x8)** options.
+            *   **Variable Dither Strength:** For error-diffusion dithers (Floyd-Steinberg, Atkinson), control the intensity of the effect.
+            *   **Noise Injection:** Add "Pre-Dither" or "Post-Dither" noise with adjustable amount for stylistic effects.
+            *   **Pre-Dither Blur:** Apply a blur before dithering for softer results.
+            *   Standard options like Resize Modes and Color Inversion remain.
+        *   Set playback FPS and loop behavior for animations.
     *   **"Active Graphic" System:** Designate any custom item as your persistent default OLED display after the built-in startup visual.
-    *   **Manual Play/Pause for OLED Active Graphic:** A new clickable icon on the main UI allows users to manually pause/resume the OLED's Active Graphic. This can be useful for performance if the OLED animation (especially high FPS) impacts other interactions like pad animator drawing.
+    *   **Manual Play/Pause for OLED Active Graphic:** A new clickable icon on the main UI allows users to manually pause/resume the OLED's Active Graphic.
     *   **Temporary System Messages:** Clear, large "TomThumb" font feedback for hardware actions and status updates, gracefully reverting to the Active Graphic.
     *   **Application Default Message:** A default scrolling message if no Active Graphic is set.
 *   **Hardware Integration & Contextual Control:**
     *   MIDI connection with port selection and auto-detection.
-    *   **Dynamic Knob Control:** Top hardware knobs adapt to control Global Pad Brightness, Sampler Parameters (Brightness, Saturation, Contrast, Hue), or Animator Speed.
+    *   **Dynamic Knob Control:** Top hardware knobs adapt to control Global Pad Brightness, Sampler Parameters, or Animator Speed.
     *   **OLED Feedback:** Real-time feedback for knob turns and system events on the OLED.
     *   **Hardware Button Mapping:** BROWSER/PERFORM for sampler toggle; DRUM for monitor cycle; GRID L/R & SELECT Encoder for UI list navigation; PATTERN UP/DOWN & BROWSER for OLED item cueing/activation.
+*   **👹 LazyDOOM Game Mode!**
+    *   A fully playable retro first-person shooter experience directly on your Akai Fire!
+    *   Uses the OLED for the game view and the pads/buttons for all controls.
+    *   Includes instructions and difficulty selection.
+    *   Can be launched from the main UI. *(Full packaging into a standalone EXE is coming soon! Currently playable when running from source or via the debug executable.)*
 *   **Modern UI & Persistent Settings:** Dark-themed PyQt6 interface, QSS styling. User settings (color swatches, sampler prefs, OLED config) saved.
 *   **Global Hotkeys:** For common animator operations.
 
@@ -63,7 +76,7 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
 *   **Configuration & Presets:** JSON
 *   **Styling:** QSS
 *   **User Directory Management:** `appdirs`
-*   **Packaging:** `PyInstaller`
+*   **Packaging:** `PyInstaller` (Target for releases)
 
 ## 🚀 Getting Started (Standalone Executable - Windows)
 
@@ -104,6 +117,7 @@ This project aims to unlock the full visual potential of the Akai Fire, transfor
 ```
 AKAI-Fire-PixelForge/
 ├── animator/               # Animator logic & UI
+├── doom_feature/           # LazyDOOM game logic & assets
 ├── features/               # Screen sampler core
 ├── gui/                    # Main GUI components (MainWindow, dialogs)
 ├── hardware/               # Akai Fire MIDI communication
@@ -120,18 +134,21 @@ User-generated presets (Animator Sequences, Static Layouts, OLED Items) are save
 ## 🎮 Usage
 
 1.  Launch, connect to Akai Fire (ports should auto-select). OLED shows startup, then Active Graphic.
-2.  **OLED Customization:** Click OLED mirror. Create/edit Text or Image/GIF items. Use "Set as Active Graphic" or "Save & Apply". Manually pause/play OLED via icon next to mirror.
+2.  **OLED Customization:** Click the on-screen OLED mirror. Create/edit Text or Image/GIF items.
+    *   When editing Image/GIF items, explore the "Import & Processing Options":
+        *   Try different **Monochrome** dithering algorithms (Floyd-Steinberg, Atkinson, Ordered Dither variants, Simple Threshold).
+        *   Adjust **Brightness**, **Contrast**, **Gamma**, and **Sharpening** sliders *before* processing to see how they affect the dithered output.
+        *   Experiment with **Dither Strength** (for error diffusion), **Pre-Dither Blur**, and **Noise Injection** for stylistic effects.
+    *   Use "Set as Active Graphic" or "Save & Apply". Manually pause/play OLED via icon next to mirror.
 3.  **Pad Control:** Use Color Picker, Static Layouts, or Animator Studio.
 4.  **Screen Sampler:** Toggle via UI/hardware. Configure region/adjustments. Record animations.
-5.  **Hardware Controls:** Utilize top knobs and buttons for context-sensitive control.
+5.  **LazyDOOM:** Click the "LazyDOOM" button on the right panel to launch the game. Follow on-screen (OLED) and dialog instructions.
+6.  **Hardware Controls:** Utilize top knobs and buttons for context-sensitive control.
 
 ## 📝 TODO / Future Enhancements
 
-*   Additional dithering algorithms (e.g., Atkinson).
-*   Advanced animation editing (interpolation, effects).
-*   More prefab content.
-*   Cross-platform packaging (macOS, Linux).
-*   Investigate Base64 frame storage for large OLED animations.
+*   Package everything into an EXE so you can play my LazyDOOM and check out the new dithering effects. (soon)
+*   Cross-platform packaging (macOS, Linux) for releases.
 
 ## ⚖️ License
 
@@ -146,4 +163,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 *Developed by Reg0lino (RegularRegs)*
-
