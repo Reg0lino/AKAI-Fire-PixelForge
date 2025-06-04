@@ -1442,6 +1442,7 @@ class MainWindow(QMainWindow):
                 # self.gui_knob4.valueChanged.connect(self._on_global_resonance_knob_changed) # Future
                 print("MW TRACE: Knob 4 configured for GLOBAL RESONANCE/UNASSIGNED.")
         # --- Global UI State Management ---
+
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
         # --- NEW: If DOOM mode is active, most other things are disabled ---
@@ -1884,146 +1885,157 @@ class MainWindow(QMainWindow):
             return
         instructions_dialog = DoomInstructionsDialog(self)
         dialog_result = instructions_dialog.exec()
-        instructions_dialog.deleteLater() # Clean up dialog
-        if dialog_result != QDialog.DialogCode.Accepted: # User clicked "Back to PixelForge" or closed
+        selected_difficulty = instructions_dialog.get_selected_difficulty() # Get difficulty
+        instructions_dialog.deleteLater() 
+        if dialog_result != QDialog.DialogCode.Accepted:
             print("MW INFO: LazyDOOM cancelled by user from instructions dialog.")
             return 
-        print("MW INFO: Proceeding to enter DOOM mode after instructions.")
+        print(f"MW INFO: Proceeding to enter DOOM mode. Selected Difficulty: {selected_difficulty}")
         self.is_doom_mode_active = True
-        # Disable Conflicting Features
+        # Disable Conflicting Features (as before)
         if self.animator_manager:
             if self.animator_manager.active_sequence_model and self.animator_manager.active_sequence_model.get_is_playing():
                 self.animator_manager.action_stop() 
-            if hasattr(self.animator_manager, 'set_interactive'):
-                self.animator_manager.set_interactive(False)
+            if hasattr(self.animator_manager, 'set_interactive'): self.animator_manager.set_interactive(False)
             else: self.animator_manager.setEnabled(False)
         if self.screen_sampler_manager:
-            if self.screen_sampler_manager.is_sampling_active():
-                self.screen_sampler_manager.stop_sampling_thread()
-            if hasattr(self.screen_sampler_manager, 'set_interactive'):
-                self.screen_sampler_manager.set_interactive(False)
-            elif self.screen_sampler_manager.get_ui_widget(): 
-                self.screen_sampler_manager.get_ui_widget().setEnabled(False)
+            if self.screen_sampler_manager.is_sampling_active(): self.screen_sampler_manager.stop_sampling_thread()
+            if hasattr(self.screen_sampler_manager, 'set_interactive'): self.screen_sampler_manager.set_interactive(False)
+            elif self.screen_sampler_manager.get_ui_widget(): self.screen_sampler_manager.get_ui_widget().setEnabled(False)
         if self.static_layouts_manager:
-            if hasattr(self.static_layouts_manager, 'set_interactive'):
-                self.static_layouts_manager.set_interactive(False)
+            if hasattr(self.static_layouts_manager, 'set_interactive'): self.static_layouts_manager.set_interactive(False)
             else: self.static_layouts_manager.setEnabled(False) 
-        if self.color_picker_manager:
-            self.color_picker_manager.setEnabled(False)
-        if self.pad_grid_frame:
-            self.pad_grid_frame.setEnabled(False) 
-        if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
-            self.quick_tools_group_ref.setEnabled(False)
-        if self.oled_display_manager:
-            self.oled_display_manager.begin_external_oled_override()
+        if self.color_picker_manager: self.color_picker_manager.setEnabled(False)
+        if self.pad_grid_frame: self.pad_grid_frame.setEnabled(False) 
+        if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref: self.quick_tools_group_ref.setEnabled(False)
+        if self.oled_display_manager: self.oled_display_manager.begin_external_oled_override()
         try:
-            # Ensure self.doom_game_controller is None before creating a new one
             if self.doom_game_controller is not None:
-                print("MW WARNING: Previous DoomGameController instance found, attempting to clean up.")
-                self.doom_game_controller.stop_game()
-                self.doom_game_controller.deleteLater()
-                self.doom_game_controller = None
-            self.doom_game_controller = DoomGameController(self.akai_controller, parent=self) # parent=self for Qt ownership
+                self.doom_game_controller.stop_game(); self.doom_game_controller.deleteLater(); self.doom_game_controller = None
+            # --- Pass selected_difficulty to DoomGameController ---
+            self.doom_game_controller = DoomGameController(self.akai_controller, 
+                                                            initial_difficulty_level=selected_difficulty, 
+                                                            parent=self)
             self.doom_game_controller.frame_ready_for_oled_signal.connect(self._handle_doom_frame_for_display)
             self.doom_game_controller.game_over_signal.connect(self._handle_doom_game_over)
-            self.doom_game_controller.start_game()
+            self.doom_game_controller.start_game() # DGC.start_game() now uses its stored difficulty
             print("MW INFO: DoomGameController started successfully.")
         except Exception as e_dgc:
             print(f"MW CRITICAL: Failed to initialize or start DoomGameController: {e_dgc}")
-            import traceback
-            traceback.print_exc()
+            import traceback; traceback.print_exc()
             QMessageBox.critical(self, "DOOM Error", f"Could not start LazyDOOM: {e_dgc}")
-            self._exit_doom_mode() 
-            return
-        if self.button_lazy_doom:
-            self.button_lazy_doom.setText("⏪ Exit LazyDOOM")
-        self.status_bar.showMessage("LazyDOOM Mode Active! 👹", 0) 
+            self._exit_doom_mode(); return
+        if self.button_lazy_doom: self.button_lazy_doom.setText("⏪ Exit LazyDOOM")
+        self.status_bar.showMessage(f"LazyDOOM Mode Active! ({selected_difficulty}) 👹", 0) 
         self._update_global_ui_interaction_states() 
 
     def _exit_doom_mode(self):
         print("MW INFO: Exiting LazyDOOM mode...")
+
+        # 1. Stop DOOM (if active)
         if self.doom_game_controller:
             print("MW INFO: Stopping DoomGameController...")
             self.doom_game_controller.stop_game()
+
             try:
                 self.doom_game_controller.frame_ready_for_oled_signal.disconnect(
                     self._handle_doom_frame_for_display)
                 self.doom_game_controller.game_over_signal.disconnect(
                     self._handle_doom_game_over)
             except TypeError:
-                print(
-                    "MW INFO: Signals for DoomGameController were not connected or already disconnected (during exit).")
+                # print("MW INFO: Signals for DoomGameController were not connected or already disconnected (during exit).") # Optional
+                pass
             except Exception as e_disconnect:
                 print(
                     f"MW WARNING: Error disconnecting DoomGameController signals during exit: {e_disconnect}")
+
             self.doom_game_controller.deleteLater()
             self.doom_game_controller = None
             print("MW INFO: DoomGameController stopped and cleaned up.")
+
         self.is_doom_mode_active = False
+
+        # 2. OLED Control
         if self.oled_display_manager:
             self.oled_display_manager.end_external_oled_override()
-        # Re-enable Conflicting Features
+            print("MW INFO: OLEDDisplayManager external override ended.")
+
+        # 3. Re-enable Conflicting Features
         if self.animator_manager:
             if hasattr(self.animator_manager, 'set_interactive'):
                 self.animator_manager.set_interactive(True)
             else:
                 self.animator_manager.setEnabled(True)
             print("MW INFO: Animator re-enabled.")
+
         if self.screen_sampler_manager:
             if hasattr(self.screen_sampler_manager, 'set_interactive'):
                 self.screen_sampler_manager.set_interactive(True)
             elif self.screen_sampler_manager.get_ui_widget():
                 self.screen_sampler_manager.get_ui_widget().setEnabled(True)
             print("MW INFO: Screen Sampler re-enabled.")
+
         if self.static_layouts_manager:
             if hasattr(self.static_layouts_manager, 'set_interactive'):
                 self.static_layouts_manager.set_interactive(True)
             else:
                 self.static_layouts_manager.setEnabled(True)
             print("MW INFO: Static Layouts re-enabled.")
+
         if self.color_picker_manager:
             self.color_picker_manager.setEnabled(True)
             print("MW INFO: Color Picker re-enabled.")
+
         if self.pad_grid_frame:
             self.pad_grid_frame.setEnabled(True)
             print("MW INFO: Pad Grid Frame re-enabled.")
+
         if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
             self.quick_tools_group_ref.setEnabled(True)
             print("MW INFO: Quick Tools re-enabled.")
+
+        # 4. Restore Main App Pad Lights
         if self.akai_controller and self.akai_controller.is_connected():
             if self.animator_manager and self.animator_manager.active_sequence_model:
-                print("MW INFO: Restoring animator pad display...")
+                print("MW INFO: Attempting to restore animator pad display...")
                 try:
-                    edit_frame_index = self.animator_manager.active_sequence_model.get_current_edit_frame_index()
-                    # Assuming SequenceModel has get_frame_colors(index)
-                    current_frame_colors = self.animator_manager.active_sequence_model.get_frame_colors(
-                        edit_frame_index)
-                    if current_frame_colors:
-                        self.apply_colors_to_main_pad_grid(
-                            current_frame_colors, update_hw=True, is_sampler_output=False)
-                        print(
-                            f"MW INFO: Restored animator frame {edit_frame_index} to pads.")
+                    # --- THIS IS THE CORRECTED LOGIC ---
+                    current_edit_index = self.animator_manager.active_sequence_model.get_current_edit_frame_index()
+                    if current_edit_index >= 0:  # Ensure index is valid
+                        current_frame_colors = self.animator_manager.active_sequence_model.get_frame_colors(
+                            current_edit_index)
+                        if current_frame_colors:
+                            self.apply_colors_to_main_pad_grid(
+                                current_frame_colors, update_hw=True, is_sampler_output=False)
+                            print(
+                                f"MW INFO: Restored animator frame {current_edit_index} to pads.")
+                        else:
+                            print(
+                                f"MW WARNING: No colors returned for animator frame {current_edit_index}, clearing pads.")
+                            self.akai_controller.clear_all_pads()
                     else:
                         print(
-                            "MW INFO: No current animator frame colors to restore, clearing pads.")
+                            "MW INFO: No valid current edit frame in animator, clearing pads.")
                         self.akai_controller.clear_all_pads()
-                except AttributeError as e_attr:
+                    # --- END CORRECTION ---
+                except AttributeError as e_attr:  # Catch if methods are still named differently
                     print(
-                        f"MW ERROR: AttributeError restoring animator pad state: {e_attr}. SequenceModel might be missing an expected method.")
-                    self.akai_controller.clear_all_pads()  # Fallback
+                        f"MW ERROR: AttributeError restoring animator pad state: {e_attr}. Check SequenceModel method names (e.g., get_current_edit_frame_index, get_frame_colors).")
+                    self.akai_controller.clear_all_pads()
                 except Exception as e_restore_anim:
                     print(
                         f"MW WARNING: Generic error restoring animator pad state on DOOM exit: {e_restore_anim}")
-                    self.akai_controller.clear_all_pads()  # Fallback
+                    self.akai_controller.clear_all_pads()
             elif self.akai_controller and self.akai_controller.is_connected():
                 print(
                     "MW INFO: No active animator sequence, clearing pads on DOOM exit.")
                 self.akai_controller.clear_all_pads()
+
         if self.button_lazy_doom:
             self.button_lazy_doom.setText("👹 LazyDOOM")
         self.status_bar.showMessage("Ready.", 0)
         self._update_global_ui_interaction_states()
-        print("MW INFO: LazyDOOM mode exited.")
+        print("MW INFO: LazyDOOM mode exited completely.")
 
     def _handle_doom_frame_for_display(self, packed_frame: bytes): # Slot expects bytes
         if not self.is_doom_mode_active: 
@@ -3313,138 +3325,6 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(
                     self, "Connection Failed", f"Could not connect MIDI output to {out_port}.")
         self.update_connection_status()  # Update UI based on new connection state
-
-    def _toggle_doom_mode(self):
-        if not DOOM_MODULE_LOADED: # Check if the module actually loaded
-            QMessageBox.warning(self, "Feature Unavailable", 
-                                "LazyDOOM module could not be loaded. Please check console for errors.")
-            if self.button_lazy_doom: self.button_lazy_doom.setEnabled(False) # Disable button if module fails
-            return
-        if self.is_doom_mode_active:
-            self._exit_doom_mode()
-        else:
-            self._enter_doom_mode()
-
-    def _enter_doom_mode(self):
-        print("MW INFO: Attempting to enter LazyDOOM mode...")
-        if not self.akai_controller or not self.akai_controller.is_connected():
-            QMessageBox.warning(self, "DOOM Mode Error", "Akai Fire is not connected. Please connect first.")
-            return
-        instructions_dialog = DoomInstructionsDialog(self)
-        dialog_result = instructions_dialog.exec()
-        instructions_dialog.deleteLater() # Clean up dialog
-        if dialog_result != QDialog.DialogCode.Accepted: # User clicked "Back to PixelForge" or closed
-            print("MW INFO: LazyDOOM cancelled by user from instructions dialog.")
-            return 
-        print("MW INFO: Proceeding to enter DOOM mode after instructions.")
-        self.is_doom_mode_active = True
-        # Disable Conflicting Features
-        if self.animator_manager:
-            if self.animator_manager.active_sequence_model and self.animator_manager.active_sequence_model.get_is_playing():
-                self.animator_manager.action_stop() 
-            if hasattr(self.animator_manager, 'set_interactive'):
-                self.animator_manager.set_interactive(False)
-            else: self.animator_manager.setEnabled(False)
-        if self.screen_sampler_manager:
-            if self.screen_sampler_manager.is_sampling_active():
-                self.screen_sampler_manager.stop_sampling_thread()
-            if hasattr(self.screen_sampler_manager, 'set_interactive'):
-                self.screen_sampler_manager.set_interactive(False)
-            elif self.screen_sampler_manager.get_ui_widget(): 
-                self.screen_sampler_manager.get_ui_widget().setEnabled(False)
-        if self.static_layouts_manager:
-            if hasattr(self.static_layouts_manager, 'set_interactive'):
-                self.static_layouts_manager.set_interactive(False)
-            else: self.static_layouts_manager.setEnabled(False) 
-        if self.color_picker_manager:
-            self.color_picker_manager.setEnabled(False)
-        if self.pad_grid_frame:
-            self.pad_grid_frame.setEnabled(False) 
-        if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
-            self.quick_tools_group_ref.setEnabled(False)
-        if self.oled_display_manager:
-            self.oled_display_manager.begin_external_oled_override()
-        try:
-            # Ensure self.doom_game_controller is None before creating a new one
-            if self.doom_game_controller is not None:
-                print("MW WARNING: Previous DoomGameController instance found, attempting to clean up.")
-                self.doom_game_controller.stop_game()
-                self.doom_game_controller.deleteLater()
-                self.doom_game_controller = None
-            self.doom_game_controller = DoomGameController(self.akai_controller, parent=self) # parent=self for Qt ownership
-            
-            self.doom_game_controller.frame_ready_for_oled_signal.connect(self._handle_doom_frame_for_display)
-            self.doom_game_controller.game_over_signal.connect(self._handle_doom_game_over)
-            
-            self.doom_game_controller.start_game()
-            print("MW INFO: DoomGameController started successfully.")
-        except Exception as e_dgc:
-            print(f"MW CRITICAL: Failed to initialize or start DoomGameController: {e_dgc}")
-            import traceback
-            traceback.print_exc()
-            QMessageBox.critical(self, "DOOM Error", f"Could not start LazyDOOM: {e_dgc}")
-            self._exit_doom_mode() 
-            return
-        if self.button_lazy_doom:
-            self.button_lazy_doom.setText("⏪ Exit LazyDOOM")
-        self.status_bar.showMessage("LazyDOOM Mode Active! 👹", 0) 
-        self._update_global_ui_interaction_states() 
-
-    def _exit_doom_mode(self):
-        print("MW INFO: Exiting LazyDOOM mode...")
-        if self.doom_game_controller:
-            print("MW INFO: Stopping DoomGameController...")
-            self.doom_game_controller.stop_game() 
-            try: # Gracefully disconnect signals
-                self.doom_game_controller.frame_ready_for_oled_signal.disconnect(self._handle_doom_frame_for_display)
-                self.doom_game_controller.game_over_signal.disconnect(self._handle_doom_game_over)
-            except TypeError: 
-                print("MW INFO: Signals for DoomGameController were not connected or already disconnected.")
-            except Exception as e_disconnect:
-                print(f"MW WARNING: Error disconnecting DoomGameController signals: {e_disconnect}")
-            self.doom_game_controller.deleteLater() 
-            self.doom_game_controller = None 
-            print("MW INFO: DoomGameController stopped and cleaned up.")
-            self.is_doom_mode_active = False 
-        if self.oled_display_manager:
-            self.oled_display_manager.end_external_oled_override() 
-        # Re-enable Conflicting Features
-        if self.animator_manager:
-            if hasattr(self.animator_manager, 'set_interactive'):
-                self.animator_manager.set_interactive(True)
-            else: self.animator_manager.setEnabled(True)
-        if self.screen_sampler_manager:
-            if hasattr(self.screen_sampler_manager, 'set_interactive'):
-                self.screen_sampler_manager.set_interactive(True)
-            elif self.screen_sampler_manager.get_ui_widget():
-                self.screen_sampler_manager.get_ui_widget().setEnabled(True)
-        if self.static_layouts_manager:
-            if hasattr(self.static_layouts_manager, 'set_interactive'):
-                self.static_layouts_manager.set_interactive(True)
-            else: self.static_layouts_manager.setEnabled(True)
-        if self.color_picker_manager:
-            self.color_picker_manager.setEnabled(True)
-        
-        if self.pad_grid_frame:
-            self.pad_grid_frame.setEnabled(True)
-        
-        if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
-            self.quick_tools_group_ref.setEnabled(True)
-        # Restore Main App Pad Lights
-        if self.akai_controller and self.akai_controller.is_connected():
-            if self.animator_manager and self.animator_manager.active_sequence_model:
-                current_frame_colors = self.animator_manager.active_sequence_model.get_colors_for_current_edit_frame()
-                if current_frame_colors: 
-                    self.apply_colors_to_main_pad_grid(current_frame_colors, update_hw=True, is_sampler_output=False)
-                else: 
-                    self.akai_controller.clear_all_pads()
-            else: 
-                self.akai_controller.clear_all_pads()
-        if self.button_lazy_doom:
-            self.button_lazy_doom.setText("👹 LazyDOOM")
-        self.status_bar.showMessage("Ready.", 0) 
-        self._update_global_ui_interaction_states() 
-        print("MW INFO: LazyDOOM mode exited.")
 
     def _handle_fire_pad_event_INTERNAL(self, note: int, is_pressed: bool):
         # print(
