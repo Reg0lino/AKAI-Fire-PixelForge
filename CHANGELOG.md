@@ -166,7 +166,7 @@ This major update focused on a comprehensive overhaul of the Akai Fire's OLED di
 
 ---
 
-## [Version 0.7.0] - (Date Inferred from original changelog)
+## [Version 0.7.0]
 
 ### ✨ Features & Enhancements
 *   Sampler Recording Auto-Save & Listing.
