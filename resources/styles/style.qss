@@ -119,6 +119,48 @@ QLabel#OLEDPlayPauseIconLabel:hover {
     qproperty-opacity: 0.8;  /* This needs WA_TranslucentBackground on QLabel */
 } 
 
+
+
+
+/* Styling for specific flat Reset Buttons in OLED Customizer */
+QPushButton#ResetButton {
+    background-color: transparent;
+    border: none;
+    padding: 1px 2px;       /* TRY THIS: Add 1px top/bottom padding */
+                            /* This can help center a slightly taller symbol */
+                            /* If it makes button too tall, try 0px top/bottom and rely on min-height */
+    min-height: 24px;       /* TRY THIS: Slightly increase min-height to give more vertical space */
+                            /* Experiment with 21px, 22px, 23px */
+                            /* You want the smallest value that prevents cutoff */
+    color: #B3B3B3;
+    font-size: 13pt;        /* Your chosen size */
+    font-weight: bold;      /* Your chosen weight */
+    border-radius: 2px;
+    /* For vertical alignment of the text/symbol within the button: */
+    /* Qt usually centers text vertically by default in a QPushButton. */
+    /* If it's still not perfectly centered after height/padding adjustments, */
+    /* direct QSS for vertical-align isn't standard for QPushButton text. */
+    /* It's more about providing enough space with height and padding. */
+}
+
+QPushButton#ResetButton:hover {
+    background-color: #4A4A4A;
+    color: #FFFFFF;
+}
+
+QPushButton#ResetButton:pressed {
+    background-color: #333333;
+    color: #CCCCCC;
+}
+
+QPushButton#ResetButton:focus {
+    outline: none;
+    border: none;
+    /* background-color: #404040; */
+}
+
+
+
 QPushButton:focus {
     outline: none;
 }

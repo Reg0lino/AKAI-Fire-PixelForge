@@ -1,6 +1,6 @@
 # utils/image_processing.py
 import os
-from PIL import Image, ImageOps, ImageSequence, ImageFont, ImageDraw, ImageEnhance
+from PIL import Image, ImageOps, ImageSequence, ImageFont, ImageDraw, ImageEnhance, ImageFilter
 import numpy as np # For Bayer matrix and efficient operations
 
 TARGET_SIZE = (128, 64) # OLED dimensions
@@ -87,21 +87,69 @@ def _apply_atkinson_dither(grayscale_image: Image.Image, dither_strength: float 
     monochrome_frame = Image.fromarray(final_binary_np, mode='L').convert('1')
     return monochrome_frame
 
+# New function to be ADDED to oled_utils/image_processing.py
+
+
+def _apply_floyd_steinberg_dither(grayscale_image: Image.Image, dither_strength: float = 1.0) -> Image.Image:
+    """
+    Applies Floyd-Steinberg dithering to a grayscale PIL Image with variable strength.
+    Returns a 1-bit monochrome PIL Image.
+    dither_strength: 0.0 (results in thresholding) to 1.0 (full Floyd-Steinberg).
+    """
+    if grayscale_image.mode != 'L':
+        grayscale_image = grayscale_image.convert('L')
+
+    # Use float for error accumulation
+    img_np = np.array(grayscale_image, dtype=float)
+    rows, cols = img_np.shape
+
+    # Floyd-Steinberg distribution coefficients and coordinates (dx, dy)
+    #       *   7/16
+    #   3/16 5/16 1/16
+    fs_distribution = [
+        ((1, 0), 7/16),  # Pixel to the right
+        ((-1, 1), 3/16),  # Pixel below-left
+        ((0, 1), 5/16),  # Pixel directly below
+        ((1, 1), 1/16)   # Pixel below-right
+    ]
+
+    for r in range(rows):
+        for c in range(cols):
+            old_pixel = img_np[r, c]
+            new_pixel = 255.0 if old_pixel > 127.5 else 0.0
+            img_np[r, c] = new_pixel  # Set the dithered pixel value
+            quant_error = old_pixel - new_pixel
+
+            # Apply dither strength to the error being distributed
+            error_to_distribute = quant_error * dither_strength
+
+            for dr_dc, weight in fs_distribution:
+                nc, nr = c + dr_dc[0], r + dr_dc[1]  # dx, dy
+                if 0 <= nr < rows and 0 <= nc < cols:
+                    img_np[nr, nc] += error_to_distribute * weight
+
+    # After error diffusion, ensure values are binary by thresholding the result
+    final_binary_np = np.where(img_np > 127.5, 255, 0).astype(np.uint8)
+    monochrome_frame = Image.fromarray(final_binary_np, mode='L').convert('1')
+    return monochrome_frame
+
+# Replacement for 'def process_single_frame(...)' in oled_utils/image_processing.py
+
+
 def process_single_frame(frame: Image.Image,
-                        resize_mode: str,
-                        mono_conversion_mode: str,
-                        threshold_value: int,
-                        invert_colors: bool,
-                        contrast_factor: float,
-                        brightness_factor: float,
-                        sharpen_factor: float,  # Value 0-100, 0 = no_op
-                        gamma_value: float,      # Value typically 0.5-2.5, 1.0 = no_op
-                        blur_radius: float,      # Value typically 0.0-2.0, 0.0 = no_op
-                        noise_amount: int,       # Value 0-100 (percentage)
-                        noise_type: str,         # "Off", "Pre-Dither", "Post-Dither"
-                        # Value 0.0-1.0 (for error diffusion)
-                        dither_strength: float
-                        ) -> Image.Image | None:
+                         resize_mode: str,
+                         mono_conversion_mode: str,
+                         threshold_value: int,
+                         invert_colors: bool,
+                         contrast_factor: float,
+                         brightness_factor: float,
+                         sharpen_factor: float,
+                         gamma_value: float,
+                         blur_radius: float,
+                         noise_amount: int,
+                         noise_type: str,
+                         dither_strength: float
+                         ) -> Image.Image | None:
     """Processes a single PIL Image frame to a 128x64 1-bit PIL Image, with pre-processing."""
     try:
         # 1. Ensure RGBA for consistent transparency handling
@@ -150,84 +198,53 @@ def process_single_frame(frame: Image.Image,
             grayscale_frame = processed_frame.convert("L")
 
         # --- Pre-Dithering Adjustments ---
-        # 3.1 Brightness
         if brightness_factor != 1.0:
             enhancer = ImageEnhance.Brightness(grayscale_frame)
             grayscale_frame = enhancer.enhance(brightness_factor)
-
-        # 3.2 Gamma Correction
         if gamma_value != 1.0:
-            # Create a lookup table for gamma correction
             gamma_corrected = bytearray(256)
             for i in range(256):
                 gamma_corrected[i] = int(((i / 255.0) ** gamma_value) * 255.0)
             grayscale_frame = grayscale_frame.point(gamma_corrected)
-
-        # 3.3 Sharpening
-        if sharpen_factor > 0:  # Assuming sharpen_factor is 0-100, map to a sensible PIL enhance factor
-            # ImageEnhance.Sharpness: 0.0 gives a blurred image, 1.0 gives the original image, and a factor >1.0 gives a sharpened image.
-            # Let's map slider 0-100 to Pillow factor 1.0 - 3.0 (0 = no change, 100 = 2.0x sharpen)
-            pil_sharpen_factor = 1.0 + \
-                (sharpen_factor / 100.0) * 1.0  # Max 2.0x sharpen
+        if sharpen_factor > 0:
+            pil_sharpen_factor = 1.0 + (sharpen_factor / 100.0) * 1.0
             if pil_sharpen_factor != 1.0:
                 enhancer = ImageEnhance.Sharpness(grayscale_frame)
                 grayscale_frame = enhancer.enhance(pil_sharpen_factor)
-
-        # 3.4 Contrast
         if contrast_factor != 1.0:
             enhancer = ImageEnhance.Contrast(grayscale_frame)
             grayscale_frame = enhancer.enhance(contrast_factor)
-
-        # 3.5 Pre-Dither Noise (if selected)
         if noise_type == "Pre-Dither" and noise_amount > 0:
             img_np = np.array(grayscale_frame, dtype=np.float32)
-            noise_intensity = noise_amount * 2.55  # Scale 0-100 to 0-255 for noise range
-            # Smaller std dev for less extreme noise
+            noise_intensity = noise_amount * 2.55
             noise = np.random.normal(0, noise_intensity / 6, img_np.shape)
             img_np += noise
             img_np = np.clip(img_np, 0, 255)
             grayscale_frame = Image.fromarray(
                 img_np.astype(np.uint8), mode='L')
-
-        # 4. Invert Colors (applied after tonal/detail adjustments, before dither)
+        if blur_radius > 0.0:  # Apply blur if radius is greater than 0
+            grayscale_frame = grayscale_frame.filter(
+                ImageFilter.GaussianBlur(radius=blur_radius))
         if invert_colors:
             grayscale_frame = ImageOps.invert(grayscale_frame)
 
         # 5. Monochrome Conversion / Dithering
         monochrome_frame: Image.Image
         if mono_conversion_mode == "Floyd-Steinberg Dither":
-            # Pass dither_strength to a modified Floyd-Steinberg if we implement it there
-            # For now, Pillow's built-in doesn't take strength.
-            # We could write a custom Floyd-Steinberg that uses dither_strength.
-            # For simplicity now, it uses full strength via Pillow.
-            # If dither_strength < 1.0, could blend with thresholded image.
-            if dither_strength < 1.0:
-                thresholded_for_blend = grayscale_frame.point(
-                    lambda p: 255 if p > 127.5 else 0, '1')
-                dithered_full = grayscale_frame.convert(
-                    '1', dither=Image.Dither.FLOYDSTEINBERG)
-                monochrome_frame = Image.blend(
-                    thresholded_for_blend, dithered_full, dither_strength)
-            else:
-                monochrome_frame = grayscale_frame.convert(
-                    '1', dither=Image.Dither.FLOYDSTEINBERG)
-
+            monochrome_frame = _apply_floyd_steinberg_dither(
+                grayscale_frame, dither_strength)  # Call new custom function
         elif mono_conversion_mode == "Atkinson Dither":
-            # Assuming _apply_atkinson_dither is modified to accept dither_strength
             monochrome_frame = _apply_atkinson_dither(
                 grayscale_frame, dither_strength)
-
         elif mono_conversion_mode == "Simple Threshold":
             monochrome_frame = grayscale_frame.point(
                 lambda p: 255 if p > threshold_value else 0, '1')
-
         elif mono_conversion_mode.startswith("Ordered Dither"):
             bayer_matrix_to_use = NORMALIZED_BAYER_MATRIX_4X4
             if "Bayer 2x2" in mono_conversion_mode:
                 bayer_matrix_to_use = NORMALIZED_BAYER_MATRIX_2X2
             elif "Bayer 8x8" in mono_conversion_mode:
                 bayer_matrix_to_use = NORMALIZED_BAYER_MATRIX_8X8
-
             gray_np = np.array(grayscale_frame, dtype=np.float32) / 255.0
             output_np = np.zeros_like(gray_np, dtype=np.uint8)
             bayer_rows, bayer_cols = bayer_matrix_to_use.shape
@@ -239,25 +256,21 @@ def process_single_frame(frame: Image.Image,
                 output_np, mode='L').convert('1')
         else:
             print(
-                f"IPROC Warning: Unknown mono_conversion_mode '{mono_conversion_mode}', defaulting to Floyd-Steinberg.")
-            monochrome_frame = grayscale_frame.convert(
-                '1', dither=Image.Dither.FLOYDSTEINBERG)
+                f"IPROC Warning: Unknown mono_conversion_mode '{mono_conversion_mode}', defaulting to Floyd-Steinberg (custom with strength).")
+            monochrome_frame = _apply_floyd_steinberg_dither(
+                grayscale_frame, dither_strength)
 
         # 6. Post-Dither Noise (if selected)
         if noise_type == "Post-Dither" and noise_amount > 0:
-            # Should be 0s and 255s from '1' mode
             img_np = np.array(monochrome_frame)
-            # noise_amount is 0-100, treat as percentage of pixels to flip
             num_pixels_to_flip = int((noise_amount / 100.0) * img_np.size)
-            # Get random indices to flip
             row_indices = np.random.randint(
                 0, img_np.shape[0], size=num_pixels_to_flip)
             col_indices = np.random.randint(
                 0, img_np.shape[1], size=num_pixels_to_flip)
             for r, c in zip(row_indices, col_indices):
-                img_np[r, c] = 255 - img_np[r, c]  # Flip 0 to 255 and 255 to 0
-            monochrome_frame = Image.fromarray(
-                img_np, mode='1')  # Mode '1' for binary
+                img_np[r, c] = 255 - img_np[r, c]
+            monochrome_frame = Image.fromarray(img_np, mode='1')
 
         return monochrome_frame
 
@@ -266,6 +279,7 @@ def process_single_frame(frame: Image.Image,
         import traceback
         traceback.print_exc()
         return None
+
 
 def process_image_to_oled_data(filepath: str,
                                 resize_mode: str,

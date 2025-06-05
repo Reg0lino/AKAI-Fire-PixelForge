@@ -387,17 +387,17 @@ class MainWindow(QMainWindow):
         - Right vertical panel layout
         - Status bar
         """
-        print("MW DEBUG: _init_ui_layout START") # For tracing
+        # print("MW DEBUG: _init_ui_layout START") # For tracing
         # 1. Create the central widget and set it on the QMainWindow
         self.central_widget_main = QWidget()
         self.setCentralWidget(self.central_widget_main)
-        print(f"MW DEBUG: _init_ui_layout - Central widget created: {self.central_widget_main}")
+        # print(f"MW DEBUG: _init_ui_layout - Central widget created: {self.central_widget_main}")
         # 2. Create the main application layout (QHBoxLayout) for the central widget
         # This will hold the left and right panels.
         self.main_app_layout = QHBoxLayout(self.central_widget_main) # Set layout directly on central_widget_main
         self.main_app_layout.setSpacing(10)
         self.main_app_layout.setContentsMargins(5, 5, 5, 5) # Small margins around the entire app content
-        print(f"MW DEBUG: _init_ui_layout - Main app layout (QHBoxLayout) created: {self.main_app_layout}")
+        # print(f"MW DEBUG: _init_ui_layout - Main app layout (QHBoxLayout) created: {self.main_app_layout}")
         # 3. --- Left Panel Setup ---
         # Create a QWidget to act as the container for the left panel's content
         self.left_panel_widget = QWidget()
@@ -408,7 +408,7 @@ class MainWindow(QMainWindow):
         self.left_panel_layout.setSpacing(8) # Spacing between items in the left panel
         # Add the left_panel_widget (which now has its QVBoxLayout) to the main_app_layout
         self.main_app_layout.addWidget(self.left_panel_widget, 2)  # Stretch factor 2 (takes 2/3 of available width)
-        print(f"MW DEBUG: _init_ui_layout - Left panel widget and layout created, added to main layout. Layout: {self.left_panel_layout}")
+        # print(f"MW DEBUG: _init_ui_layout - Left panel widget and layout created, added to main layout. Layout: {self.left_panel_layout}")
         # 4. --- Right Panel Setup ---
         # Create a QWidget for the right panel
         self.right_panel_widget = QWidget()
@@ -423,12 +423,12 @@ class MainWindow(QMainWindow):
         self.right_panel_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding) # Fixed width, expanding height
         # Add the right_panel_widget to the main_app_layout
         self.main_app_layout.addWidget(self.right_panel_widget, 1)  # Stretch factor 1 (takes 1/3 of available width)
-        print(f"MW DEBUG: _init_ui_layout - Right panel widget and layout created, added to main layout. Layout: {self.right_panel_layout_v}")
+        # print(f"MW DEBUG: _init_ui_layout - Right panel widget and layout created, added to main layout. Layout: {self.right_panel_layout_v}")
         # 5. --- Status Bar ---
         self.status_bar = QStatusBar() # Create a QStatusBar instance
         self.setStatusBar(self.status_bar) # Set it as the main window's status bar
         self.status_bar.showMessage("Ready. Please connect to AKAI Fire.") # Initial message
-        print(f"MW DEBUG: _init_ui_layout - Status bar created and set: {self.status_bar}")
+        # print(f"MW DEBUG: _init_ui_layout - Status bar created and set: {self.status_bar}")
         print("MW DEBUG: _init_ui_layout COMPLETE")
 
     def _create_hardware_top_strip(self) -> QGroupBox:
@@ -1558,7 +1558,7 @@ class MainWindow(QMainWindow):
 # init here
     def __init__(self):
         super().__init__()
-        print("MW DEBUG: MainWindow __init__ START")
+        # print("MW DEBUG: MainWindow __init__ START")
         # WINDOW TITLE & ICON
         self.setWindowTitle("AKAI Fire RGB Customizer")
         self.setGeometry(100, 100, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT)
@@ -1567,7 +1567,7 @@ class MainWindow(QMainWindow):
         else:
             print("MW CRITICAL ERROR: _set_window_icon method missing!")
         # --- PATH INITIALIZATION ---
-        print("MW DEBUG: Initializing paths...")
+        # print("MW DEBUG: Initializing paths...")
         if hasattr(self, '_get_presets_base_dir_path'):
             self.bundled_presets_base_path = self._get_presets_base_dir_path()
         else:
@@ -1585,10 +1585,10 @@ class MainWindow(QMainWindow):
             self.user_oled_presets_base_path, USER_OLED_ANIM_ITEMS_SUBDIR)
         os.makedirs(self.user_oled_text_items_path, exist_ok=True)
         os.makedirs(self.user_oled_anim_items_path, exist_ok=True)
-        print("MW DEBUG: Paths initialized.")
+        # print("MW DEBUG: Paths initialized.")
         # --- END PATH INITIALIZATION ---
         # --- OLED CONFIGURATION & STATE ---
-        print("MW DEBUG: Initializing OLED config attributes...")
+        # print("MW DEBUG: Initializing OLED config attributes...")
         self.active_graphic_item_relative_path: str | None = None
         self.oled_global_scroll_delay_ms: int = DEFAULT_OLED_SCROLL_DELAY_MS_FALLBACK
         self.current_cued_text_item_path: str | None = None
@@ -1608,19 +1608,19 @@ class MainWindow(QMainWindow):
             self._scan_available_oled_items()
         else:
             print("MW CRITICAL ERROR: _scan_available_oled_items method missing!")
-        print("MW DEBUG: OLED config attributes initialized and config loaded.")
+        # print("MW DEBUG: OLED config attributes initialized and config loaded.")
         # --- END OLED CONFIGURATION & STATE ---
         # --- CORE APPLICATION COMPONENTS ---
-        print("MW DEBUG: Initializing core application components...")
+        # print("MW DEBUG: Initializing core application components...")
         self.akai_controller = AkaiFireController(auto_connect=False)
         self.selected_qcolor = QColor("#04FF00")
         self.is_eyedropper_mode_active: bool = False
         self._has_played_initial_builtin_oled_animation: bool = False
         self.is_animator_playing: bool = False
-        print("MW DEBUG: Core application components initialized.")
+        # print("MW DEBUG: Core application components initialized.")
         # --- END CORE APPLICATION COMPONENTS ---
         # --- OLED NAVIGATION STATE ---
-        print("MW DEBUG: Initializing OLED navigation state...")
+        # print("MW DEBUG: Initializing OLED navigation state...")
         self.current_oled_nav_target_name: str = self.OLED_NAVIGATION_FOCUS_OPTIONS[0]
         self.current_oled_nav_target_widget: QWidget | None = None
         self.current_oled_nav_item_logical_index: int = 0
@@ -1630,13 +1630,13 @@ class MainWindow(QMainWindow):
         self._oled_nav_debounce_timer.setSingleShot(True)
         self._oled_nav_debounce_timer.setInterval(300)
         self._is_hardware_nav_action_in_progress: bool = False
-        print("MW DEBUG: OLED navigation state initialized.")
+        # print("MW DEBUG: OLED navigation state initialized.")
         # lazyDoom
         self.is_doom_mode_active: bool = False
         self.doom_game_controller = None  # Will hold the DoomGameController instance
         self.button_lazy_doom: QPushButton | None = None  # For the new button
         # --- INSTANTIATE MANAGERS ---
-        print("MW DEBUG: Instantiating managers...")
+        # print("MW DEBUG: Instantiating managers...")
         self.color_picker_manager = ColorPickerManager(
             initial_color=self.selected_qcolor, config_save_path_func=get_user_config_file_path)
         self.static_layouts_manager = StaticLayoutsManager(
@@ -1656,30 +1656,30 @@ class MainWindow(QMainWindow):
             animator_manager_ref=self.animator_manager, parent=self)
         self.oled_display_manager: OLEDDisplayManager | None = None
         self.hardware_input_manager: HardwareInputManager | None = None
-        print(f"MW DEBUG: AkaiController instance: {self.akai_controller}")
+        # print(f"MW DEBUG: AkaiController instance: {self.akai_controller}")
         if self.akai_controller:
-            print("MW DEBUG: AkaiController exists, attempting to create OLEDDisplayManager & HardwareInputManager.")
+            # print("MW DEBUG: AkaiController exists, attempting to create OLEDDisplayManager & HardwareInputManager.")
             self.oled_display_manager = OLEDDisplayManager(
                 akai_fire_controller_ref=self.akai_controller,
                 available_app_fonts=self.available_app_fonts_cache,
                 parent=self
             )
-            print(
-                f"MW DEBUG: OLEDDisplayManager created: {self.oled_display_manager}")
+            # print(
+            #     f"MW DEBUG: OLEDDisplayManager created: {self.oled_display_manager}")
             self.hardware_input_manager = HardwareInputManager(
                 akai_fire_controller_ref=self.akai_controller, parent=self
             )
-            print(
-                f"MW DEBUG: HardwareInputManager created: {self.hardware_input_manager}")
+            # print(
+                # f"MW DEBUG: HardwareInputManager created: {self.hardware_input_manager}")
         else:
             print(
                 "MW CRITICAL ERROR: AkaiController is None, cannot create dependent managers.")
             QMessageBox.critical(
                 self, "Fatal Error", "AkaiFireController instance could not be created. App will exit.")
             sys.exit("Fatal Error: AkaiFireController could not be initialized.")
-        print("MW DEBUG: Managers instantiated.")
+        # print("MW DEBUG: Managers instantiated.")
         # --- Initialize OLED Display Manager settings and Active Graphic ---
-        print("MW DEBUG: Initializing OLEDDisplayManager settings.")
+        # print("MW DEBUG: Initializing OLEDDisplayManager settings.")
         if self.oled_display_manager:
             if hasattr(self.oled_display_manager, 'update_global_text_item_scroll_delay'):
                 self.oled_display_manager.update_global_text_item_scroll_delay(
@@ -1695,14 +1695,14 @@ class MainWindow(QMainWindow):
             if hasattr(self, '_on_builtin_oled_startup_animation_finished') and callable(self._on_builtin_oled_startup_animation_finished):
                 self.oled_display_manager.builtin_startup_animation_finished.connect(
                     self._on_builtin_oled_startup_animation_finished)
-                print("MW DEBUG: Connected builtin_startup_animation_finished signal.")
+                # print("MW DEBUG: Connected builtin_startup_animation_finished signal.")
             else:
                 print(
                     "MW CRITICAL ERROR: _on_builtin_oled_startup_animation_finished slot is MISSING or not callable!")
         else:
             print("MainWindow CRITICAL: OLEDDisplayManager is None before setting scroll/graphic, cannot proceed with OLED init.")
         # --- UI ELEMENT REFERENCES (Initialize to None, will be populated by UI setup methods) ---
-        print("MW DEBUG: Initializing UI element references to None.")
+        # print("MW DEBUG: Initializing UI element references to None.")
         self.central_widget_main: QWidget | None = None
         self.main_app_layout: QHBoxLayout | None = None
         self.left_panel_widget: QWidget | None = None
@@ -1738,23 +1738,23 @@ class MainWindow(QMainWindow):
         else:
             print("MW CRITICAL ERROR: ensure_user_dirs_exist method missing!")
         # --- MAIN UI SETUP ---
-        print("MW DEBUG: Calling _init_ui_layout...")
+        # print("MW DEBUG: Calling _init_ui_layout...")
         if hasattr(self, '_init_ui_layout'):
             self._init_ui_layout()
         else:
             print("MW CRITICAL ERROR: _init_ui_layout method missing!")
-        print("MW DEBUG: Calling _populate_left_panel...")
+        # print("MW DEBUG: Calling _populate_left_panel...")
         if hasattr(self, '_populate_left_panel'):
             self._populate_left_panel()
         else:
             print("MW CRITICAL ERROR: _populate_left_panel method missing!")
-        print("MW DEBUG: Calling _populate_right_panel...")
+        # print("MW DEBUG: Calling _populate_right_panel...")
         if hasattr(self, '_populate_right_panel'):
             self._populate_right_panel()
         else:
             print("MW CRITICAL ERROR: _populate_right_panel method missing!")
         # --- GLOBAL BRIGHTNESS & KNOB SETUP ---
-        print("MW DEBUG: Setting up global brightness and knobs...")
+        # print("MW DEBUG: Setting up global brightness and knobs...")
         self.global_pad_brightness: float = 1.0
         # Assumes knobs are created in populate methods
         self.gui_knob1 = self.knob_volume_top_right
@@ -1766,7 +1766,7 @@ class MainWindow(QMainWindow):
         else:
             print("MW CRITICAL ERROR: _setup_global_brightness_knob method missing!")
         # --- TIMERS & FINAL SETUP ---
-        print("MW DEBUG: Setting up timers and final configurations...")
+        # print("MW DEBUG: Setting up timers and final configurations...")
         self._stop_action_issued_for_oled: bool = False
         # Keep this if _show_knob_feedback_on_oled uses it
         self._KNOB_FEEDBACK_OLED_DURATION_MS = 1500
@@ -1779,7 +1779,7 @@ class MainWindow(QMainWindow):
             self._connect_signals()
         else:
             print("MW CRITICAL ERROR: _connect_signals method missing!")
-        print("MW DEBUG: _connect_signals expected to be CALLED from __init__.")
+        # print("MW DEBUG: _connect_signals expected to be CALLED from __init__.")
         if hasattr(self, '_create_edit_actions'):
             self._create_edit_actions()
         else:
@@ -1808,7 +1808,7 @@ class MainWindow(QMainWindow):
         else:
             print(
                 "MW CRITICAL ERROR: _update_global_ui_interaction_states method missing!")
-        print("MW DEBUG: MainWindow __init__ COMPLETE.")
+        # print("MW DEBUG: MainWindow __init__ COMPLETE.")
         # --- END TIMERS & FINAL SETUP ---
 
     def eventFilter(self, obj, event: QEvent):

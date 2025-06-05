@@ -340,17 +340,17 @@ class ScreenSamplerManager(QObject):
 #  and reflect the success of critical imports, as discussed previously)
 
     def populate_monitor_list_for_ui(self, force_fetch: bool = False):
-        print(f"--- SSM populate_monitor_list_for_ui ENTER --- (force_fetch={force_fetch}, cache_exists={bool(self.screen_sampler_monitor_list_cache)})")
+        # print(f"--- SSM populate_monitor_list_for_ui ENTER --- (force_fetch={force_fetch}, cache_exists={bool(self.screen_sampler_monitor_list_cache)})")
 
         if not GUI_IMPORTS_OK or not FEATURES_IMPORTS_OK:
-            print("DEBUG SSM.populate_monitor_list_for_ui: Skipping due to missing critical imports.")
+            # print("DEBUG SSM.populate_monitor_list_for_ui: Skipping due to missing critical imports.")
             return
 
         # Determine if a fetch is truly needed
         needs_fetch = force_fetch or not self.screen_sampler_monitor_list_cache
         
         if needs_fetch:
-            print(f"DEBUG SSM.populate_monitor_list_for_ui: Needs fetch. force_fetch={force_fetch}, cache_empty={not self.screen_sampler_monitor_list_cache}")
+            # print(f"DEBUG SSM.populate_monitor_list_for_ui: Needs fetch. force_fetch={force_fetch}, cache_empty={not self.screen_sampler_monitor_list_cache}")
             try:
                 # print("DEBUG SSM.populate_monitor_list_for_ui: Attempting to fetch monitors with mss...")
                 with mss.mss() as sct:
@@ -360,11 +360,11 @@ class ScreenSamplerManager(QObject):
                 if not self.screen_sampler_monitor_list_cache:
                     self.sampler_status_update.emit("No monitors detected for screen sampler.", 3000)
             except Exception as e:
-                print(f"DEBUG SSM.populate_monitor_list_for_ui: Exception during mss monitor fetch: {e}")
+                # print(f"DEBUG SSM.populate_monitor_list_for_ui: Exception during mss monitor fetch: {e}")
                 self.sampler_status_update.emit(f"Error getting monitor list: {str(e)[:100]}", 5000)
                 self.screen_sampler_monitor_list_cache = [] # Ensure cache is empty on error
-        else:
-            print(f"DEBUG SSM.populate_monitor_list_for_ui: No fetch needed. Using cached monitors: {self.screen_sampler_monitor_list_cache}")
+        # else:
+            # print(f"DEBUG SSM.populate_monitor_list_for_ui: No fetch needed. Using cached monitors: {self.screen_sampler_monitor_list_cache}")
 
         # Update the UI manager's combo box with the (potentially new) cache
         if hasattr(self.ui_manager, 'populate_monitors_combo_external'):
@@ -824,13 +824,13 @@ class ScreenSamplerManager(QObject):
         # But do not use force_fetch=True here, as that creates the loop if called from populate_monitor_list_for_ui flow.
         # populate_monitor_list_for_ui itself will decide if a fetch is needed based on its own force_fetch flag and cache state.
         if not self.screen_sampler_monitor_list_cache:
-            print(f"DEBUG SSM._generate_monitor_key: Cache empty, calling populate_monitor_list_for_ui(force_fetch=False)")
+            # print(f"DEBUG SSM._generate_monitor_key: Cache empty, calling populate_monitor_list_for_ui(force_fetch=False)")
             # Call with force_fetch=False. If populate_monitor_list_for_ui was *just* called and filled the cache,
             # it won't re-fetch. If it's a genuine first call from somewhere else, it will fetch if needed.
             self.populate_monitor_list_for_ui(force_fetch=False) 
             # After the call, the cache should be populated if monitors were found. Check again.
             if not self.screen_sampler_monitor_list_cache: # Still empty after attempt?
-                 print(f"DEBUG SSM._generate_monitor_key: Cache still empty after pop attempt. Returning None.")
+                 # print(f"DEBUG SSM._generate_monitor_key: Cache still empty after pop attempt. Returning None.")
                  return None
         
         monitor_info = next((m for m in self.screen_sampler_monitor_list_cache if m['id'] == monitor_id), None)
@@ -839,22 +839,22 @@ class ScreenSamplerManager(QObject):
         return None
 
     def _apply_prefs_for_current_monitor(self):
-        print(f"DEBUG SSM._apply_prefs: Current monitor_id to apply for: {self.current_sampler_params['monitor_id']}")
+        # print(f"DEBUG SSM._apply_prefs: Current monitor_id to apply for: {self.current_sampler_params['monitor_id']}")
         monitor_key = self._generate_monitor_key(self.current_sampler_params['monitor_id'])
-        print(f"DEBUG SSM._apply_prefs: Generated key: {monitor_key}")
-        print(f"DEBUG SSM._apply_prefs: Available keys in prefs: {list(self.sampler_monitor_prefs.keys())}")
+        # print(f"DEBUG SSM._apply_prefs: Generated key: {monitor_key}")
+        # print(f"DEBUG SSM._apply_prefs: Available keys in prefs: {list(self.sampler_monitor_prefs.keys())}")
 
         if monitor_key and monitor_key in self.sampler_monitor_prefs:
             saved_prefs = self.sampler_monitor_prefs[monitor_key]
-            print(f"DEBUG SSM._apply_prefs: Found prefs for key '{monitor_key}': {saved_prefs}")
+            # print(f"DEBUG SSM._apply_prefs: Found prefs for key '{monitor_key}': {saved_prefs}")
             self.current_sampler_params['region_rect_percentage'] = saved_prefs.get('region_rect_percentage', self.current_sampler_params['region_rect_percentage'])
             self.current_sampler_params['adjustments'] = saved_prefs.get('adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy())
-            print(f"DEBUG SSM._apply_prefs: AFTER apply, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}")
+            # print(f"DEBUG SSM._apply_prefs: AFTER apply, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}")
         else:
-            print(f"DEBUG SSM._apply_prefs: No prefs found for key '{monitor_key}'. Using defaults.")
+            # print(f"DEBUG SSM._apply_prefs: No prefs found for key '{monitor_key}'. Using defaults.")
             self.current_sampler_params['region_rect_percentage'] = {'x': 0.4, 'y': 0.4, 'width': 0.2, 'height': 0.2}
             self.current_sampler_params['adjustments'] = ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()
-            print(f"DEBUG SSM._apply_prefs: AFTER default, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}")
+            # print(f"DEBUG SSM._apply_prefs: AFTER default, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}")
 
 
     def _save_prefs_for_current_monitor(self):

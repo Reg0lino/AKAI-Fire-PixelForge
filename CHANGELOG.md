@@ -1,153 +1,157 @@
 # Changelog - Akai Fire PixelForge
 
-## [Version 0.9.2] - 2025-05-29 (Dither Experiment Branch Focus)
+## [Version 1.0.0] - 2025-06-05
 
-This version significantly expands the image processing capabilities for OLED content, introducing new pre-dithering adjustments and a wider array of dithering algorithms for enhanced visual customization.
+This landmark v1.0.0 release introduces the highly anticipated **"LazyDOOM" on OLED** feature, transforming your Akai Fire into a mini retro gaming console! This version also finalizes and fully integrates the advanced OLED image processing and dithering capabilities previously in experimentation, solidifying PixelForge as a powerful platform for creative and interactive experiences on the Akai Fire.
+
+### 🚀 NEW FEATURE: LazyDOOM on OLED! 👹
+
+*   **Playable First-Person Experience:**
+    *   Integrated a DOOM-themed, first-person raycaster game, "LazyDOOM," playable directly on the Akai Fire's 128x64 monochrome OLED display.
+    *   Features a custom Python-based 2.5D raycasting engine (not a direct DOOM port), offering a unique retro feel.
+*   **Procedural Map Generation:**
+    *   Each game session features a unique, procedurally generated maze-like map using a Depth-First Search algorithm, ensuring high replayability.
+    *   Player always spawns facing a clear hallway, enhancing initial playability and fairness.
+*   **Gameplay Mechanics:**
+    *   **Movement:** Full player movement including Forward, Backward, Strafing (Left/Right), and Turning (Primary and Alternate turn speeds/methods).
+    *   **Run Functionality:** Hold the "Run" pad for increased movement speed.
+    *   **Combat:** Hitscan "shooting" mechanic to engage enemies.
+    *   **Health System:** Player Health (HP) system; taking damage reduces HP, and reaching zero results in game over.
+    *   **Enemies ("Imps"):**
+        *   Basic "Imp" type enemies populate the map, each with their own health.
+        *   Imps exhibit simple random jitter movement to make them less static targets.
+        *   AI-controlled shooting behavior, including Line-of-Sight (LOS) checks – Imps will no longer shoot through solid walls.
+        *   Enemies are strategically placed during map generation to avoid immediate, unavoidable LOS to the player at their spawn point.
+*   **Akai Fire Hardware Integration & Feedback:**
+    *   **Pad Controls:** The game is primarily controlled using the Akai Fire's 4x16 pad matrix, configured for D-Pad style movement, strafing, turning, and action buttons (Shoot, Run).
+    *   **RGB Pad Lighting for Controls & Status:**
+        *   Control pads light up with distinct, intuitive colors (e.g., Red for primary movement/turn, Orange for strafe/alternate-turn, Blue for Run, Green for Shoot).
+        *   Player HP is visually represented on a dedicated row of 4 pads, typically lighting up in Red to indicate current health levels (e.g., 4 red pads = full HP, 1 red pad = low HP).
+        *   Visual feedback on pads when the player takes damage (e.g., non-control/HP pads flash red briefly).
+        *   Game over sequence includes distinct full-pad RGB effects (e.g., flashing all red).
+    *   **OLED Display for Gameplay & HUD:**
+        *   The game world is rendered directly to the physical OLED display and mirrored in the main application's GUI OLED preview.
+        *   Includes an on-screen Heads-Up Display (HUD) showing current player HP.
+        *   Visual "screen glitch" or flash effect on the OLED when the player takes damage.
+        *   Clear "YOU DIED!" or "YOU WIN!" messages displayed prominently on the OLED at game conclusion.
+        *   "Restart? (SHOOT)" prompt displayed on the OLED after game over, with the physical "SHOOT" pad blinking (e.g., green) to indicate it as the restart trigger.
+*   **Selectable Difficulty Levels:**
+    *   Three difficulty levels (e.g., "Normal," "Hard," "Nightmare!") are available for selection when launching LazyDOOM.
+    *   Harder difficulties can influence factors such as enemy aggression (shooting frequency/chance), enemy health, or the number of enemies spawned (e.g., "Nightmare!" spawns additional enemies).
+*   **Seamless Integration into PixelForge:**
+    *   LazyDOOM is launched via a dedicated button (e.g., "👹 LazyDOOM") in the main PixelForge application UI.
+    *   An instructions dialog, detailing game controls, objectives, and tips, is presented to the user before the game session begins.
+    *   When LazyDOOM is active, other core PixelForge functionalities (Animator Studio, Screen Sampler, Static Layouts, Direct Pad Painting, and the main OLED Active Graphic display) are temporarily disabled or suspended. This dedicates hardware resources (MIDI communication, pad processing, OLED updates) to the game for optimal performance.
+    *   The application ensures a smooth transition into and out of DOOM mode. Upon exiting LazyDOOM, the previous PixelForge state (OLED display content, pad lighting for the active mode) is restored.
+*   **Clear Win Condition:**
+    *   The game is won by successfully defeating all "Imp" enemies on the currently generated map.
+    *   The previous concept of needing to find a specific "Exit" tile has been removed to provide a more straightforward and combat-focused win condition.
+
+### ✨ Other Features & Enhancements (v1.0.0)
+
+*   **Advanced OLED Image Processing & Dithering Finalized:** The full suite of image processing capabilities for OLED content, previously in experimental stages (as seen in v0.9.2 development), is now fully integrated and considered stable. This includes:
+    *   Gamma Correction, Pre-Dither Blur, Sharpening, and Noise Injection (Pre/Post).
+    *   Expanded Dithering Algorithms: Atkinson Dither, Ordered Dither (Bayer 2x2, 4x4, 8x8).
+    *   Variable Dither Strength for error-diffusion algorithms.
+    *   All options are integrated into the OLED Customizer, with parameters saved to and loaded from JSON presets.
+*   **Layout Restructuring (`OLEDCustomizerDialog`):** The "Live Preview (Main)" section in the OLED Customizer Dialog has been relocated to the left pane, under the Item Library. This provides significantly more vertical space for the "Item Editor" (especially the Animation Editor's numerous options) in the right pane, improving usability on various screen resolutions.
+*   **UI Refinements (`OLEDCustomizerDialog`):** Improved the appearance and clarity of the small "reset" buttons next to sliders in the Animation Item editor by using QSS for a flatter look and adjusting font size/weight for better symbol visibility.
+
+### 🐛 Bug Fixes & Stability (v1.0.0)
+
+*   **Critical `OLEDCustomizerDialog` Initialization Fix:** Resolved a persistent issue where the `item_library_list` (QListWidget) reference could become invalid or evaluate as `False` during signal connection in `_connect_signals`. This was due to the underlying C++ object becoming a "zombie," and has been fixed by explicitly checking `is not None` and adding robust error handling around signal connections. This restores full functionality to the "Edit Selected" and "Delete Selected" buttons and ensures proper library interaction.
+
+### 💬 Developer Notes
+
+*   The LazyDOOM raycasting engine is a bespoke implementation optimized for the Akai Fire's constraints and monochrome display. It's designed for fun, retro gameplay rather than being a feature-complete DOOM clone.
+*   The image processing pipeline in `image_processing.py` now robustly handles all new pre-dithering steps in a logical order: Brightness -> Gamma -> Sharpen -> Contrast -> Pre-Dither Blur -> Pre-Dither Noise -> Invert -> Dither -> Post-Dither Noise.
+
+---
+
+## [Version 0.9.2] - 2025-05-29
+
+This version significantly expanded the image processing capabilities for OLED content, introducing new pre-dithering adjustments and a wider array of dithering algorithms for enhanced visual customization. (Note: These features are now considered stable and fully integrated in v1.0.0).
 
 ### ✨ Features & Enhancements
 
 *   **Advanced OLED Image Processing & Dithering Options (`OLEDCustomizerDialog` & `image_processing.py`):**
-    *   🎨 **Gamma Correction:** Added a "Gamma" slider (0.5 to 2.0) to adjust mid-tones of the source image before other processing, allowing for better tonal balance.
-    *   🌫️ **Pre-Dither Blur:** Introduced a "Pre-Dither Blur" slider (0.0 to 2.0 radius for Gaussian blur) to smooth images before dithering, which can reduce noise and create softer dither patterns.
-    *   ✨ **Sharpening:** Added a "Sharpen" slider (0 to 100 strength) to enhance edge details in the source image before dithering, helping to preserve clarity for sprite art and graphics.
-    *   🔊 **Noise Injection:**
-        *   Added "Noise Type" dropdown: "Off", "Pre-Dither (Subtle)", "Post-Dither (Grainy)".
-        *   Added "Noise Amount" slider (0-100%) to control the intensity of injected noise.
-    *   🔢 **Expanded Dithering Algorithms:** The "Monochrome" conversion dropdown now includes:
-        *   **Atkinson Dither:** Provides a sharper, higher-contrast dither often good for graphics.
-        *   **Ordered Dither (Bayer 2x2):** A coarser, retro-style ordered dither.
-        *   **Ordered Dither (Bayer 4x4):** (Previously available)
-        *   **Ordered Dither (Bayer 8x8):** A finer ordered dither for smoother gradations.
-        *   (Floyd-Steinberg and Simple Threshold remain available).
-    *   💪 **Variable Dither Strength:** For error-diffusion algorithms (Floyd-Steinberg, Atkinson), a "Dither Strength" slider (0-100%) is now available. This allows blending between a simple threshold (0%) and the full dithering effect (100%). The slider is conditionally visible when an applicable dither mode is selected.
-    *   ⚙️ **UI Integration:** All new sliders and options are integrated into the "Import & Processing Options" section of the OLED Customizer's animation editor panel. Labels display current values.
-    *   💾 **Preset Compatibility:** New parameters (gamma, blur, noise settings, dither strength) are saved to and loaded from OLED animation item JSON presets.
-*   **DOOM Feature Integration (LazyDOOM):**
-    *   👹 **LazyDOOM Mode:** Integrated a playable version of a DOOM-like game that runs directly on the Akai Fire, utilizing the OLED for display and pads for controls. (Further details on gameplay and specific controls to be added by Reg0lino).
-    *   Includes a startup dialog for instructions and difficulty selection.
-    *   Keyboard controls (WASD, Q/E, F, Shift) are also mapped for DOOM gameplay when active.
-    *   Application enters a dedicated DOOM mode, disabling other UI interactions.
+    *   🎨 **Gamma Correction:** Added a "Gamma" slider (0.5 to 2.0).
+    *   🌫️ **Pre-Dither Blur:** Introduced a "Pre-Dither Blur" slider (0.0 to 2.0 radius).
+    *   ✨ **Sharpening:** Added a "Sharpen" slider (0 to 100 strength).
+    *   🔊 **Noise Injection:** "Noise Type" dropdown and "Noise Amount" slider.
+    *   🔢 **Expanded Dithering Algorithms:** Atkinson Dither, Ordered Dither (Bayer 2x2, 8x8) added.
+    *   💪 **Variable Dither Strength:** For Floyd-Steinberg, Atkinson.
+    *   ⚙️ **UI Integration:** All new sliders and options integrated.
+    *   💾 **Preset Compatibility:** New parameters saved/loaded.
+*   **DOOM Feature Integration (LazyDOOM - Initial experimental integration):**
+    *   Integrated an early playable version of a DOOM-like game.
+    *   Included startup dialog, keyboard controls, and dedicated game mode.
 
 ### 🐛 Bug Fixes & Stability
 
-*   **OLED Customizer Dialog Robustness:** Addressed previous `AttributeError` issues related to missing method definitions by ensuring a complete class structure, allowing the dialog to launch and function correctly with all new and existing controls.
-*   **Indentation & Code Structure:** Ensured proper Python indentation and structure for newly added and modified methods within `oled_customizer_dialog.py` and `image_processing.py`.
+*   **OLED Customizer Dialog Robustness:** Addressed `AttributeError` issues.
+*   **Indentation & Code Structure:** Ensured proper Python code structure.
 
 ### 💬 Developer Notes
 
-*   The image processing pipeline in `image_processing.py` has been updated to accommodate the new pre-dithering steps in a logical order: Brightness -> Gamma -> Sharpen -> Contrast -> Pre-Dither Noise -> Invert -> Dither -> Post-Dither Noise.
-*   The conditional visibility of the "Dither Strength" and "Threshold" sliders in the UI is now handled correctly based on the selected monochrome conversion mode.
+*   Image processing pipeline updated for new pre-dithering steps.
+*   Conditional visibility of Dither Strength/Threshold sliders handled.
 
 ---
 
 ## [Version 0.9.1] - 2025-05-28
 
-This version focuses on critical usability enhancements for the OLED Customizer Dialog, performance improvements in the Animator Studio, and fixes for UI stability and appearance.
+This version focused on critical usability enhancements for the OLED Customizer Dialog, performance improvements in the Animator Studio, and fixes for UI stability and appearance.
 
 ### ✨ Features & Enhancements
 
-*   **OLED Customizer Dialog UX Improvements:**
-    *   ✨ **"Save & Apply" Functionality:** Added a "Save & Apply" button to the OLED Customizer Dialog. This allows users to save the currently edited Text or Animation item and immediately set it as the "Active Graphic" in one step. The editor content takes precedence if active and modified; otherwise, the library selection is used.
-    *   🔄 **Persistent "Active Graphic" Choice:** The selection made in the "Set as Active Graphic" dropdown within the OLED Customizer Dialog now persists throughout the dialog session, even when new items are created, edited, or deleted from the library.
-    *   🖼️ **Clearer Item Labels:** Single-frame items imported/saved via the "Image Animation Items" workflow are now labeled with an "(Image)" suffix (e.g., "My Cool Pic (Image)") in the OLED item library and "Set as Active Graphic" dropdown, distinguishing them from multi-frame "(Animation)" items. The internal `item_type` remains `image_animation` for consistent data handling.
-*   **Manual OLED Active Graphic Control:**
-    *   ⏯️ **Play/Pause Indicator for OLED:** Added a clickable icon (using `play-pause.png`) next to the OLED mirror in the main window's top strip. This allows users to manually pause or resume the currently playing/scrolling OLED "Active Graphic".
-        *   The icon's tooltip dynamically updates to "Pause..." or "Resume..." based on the current state.
-        *   The icon is styled to be clean and borderless, positioned to the right of the OLED mirror and below the Browser button (as per user mockup).
-    *   🚫 **Removed Automatic OLED Pausing:** The feature where the OLED Active Graphic would automatically pause when a frame was selected in the Animator Studio has been removed in favor of user-controlled manual pausing. The tooltip on the new Play/Pause icon can suggest using it for performance if needed.
-*   **Animator Studio Performance:**
-    *   ⚡ **Optimized Pad Painting Speed:** Significantly improved responsiveness when drawing on pads while a frame is selected in the Animator.
-        *   The timeline thumbnail for *only the edited frame* is now updated, instead of redrawing all thumbnails.
-        *   Undo state (`_push_undo_state` in `SequenceModel`) is now captured once at the *start* of a continuous paint stroke (mouse down) rather than on every individual pad paint, greatly reducing overhead during dragging. Undo now reverts the entire last stroke.
-*   **UI & OLED Message Refinements:**
-    *   ✨ **"New Sequence" OLED Cue:** When a new sequence is created in the Animator, the OLED now briefly displays a short message like "New Seq*" instead of the longer, scrolling "Seq: Untitled*".
+*   **OLED Customizer Dialog UX Improvements:** "Save & Apply" functionality, Persistent "Active Graphic" choice, Clearer Item Labels for Image vs. Animation.
+*   **Manual OLED Active Graphic Control:** Play/Pause indicator and functionality for OLED Active Graphic. Removed automatic OLED pausing in Animator.
+*   **Animator Studio Performance:** Optimized pad painting speed (undo per stroke, targeted thumbnail update).
+*   **UI & OLED Message Refinements:** "New Sequence" OLED cue.
 
 ### 🐛 Bug Fixes & Stability
 
-*   **OLED Customizer Dialog Stability:**
-    *   Fixed `TypeError: 'current_active_graphic_path' is an unknown keyword argument` that occurred when opening the OLED Customizer Dialog due to a parameter name mismatch.
-    *   Fixed `AttributeError: 'OLEDCustomizerDialog' object has no attribute '_clear_main_preview_content'` by correcting the method call to `_clear_preview_label_content`.
-    *   **Resolved Save Button Visibility:** Ensured the "Save Text Item" and "Save Animation Item" buttons within the OLED Customizer Dialog editor panels are consistently visible and not cut off, by adjusting internal layout stretch factors and confirming panel minimum heights are adequate.
-*   **Top Strip UI Layout & Functionality:**
-    *   Fixed `TypeError: addLayout(...) too many arguments` in `MainWindow._create_hardware_top_strip` by correctly using `addWidget` for QWidget containers of layouts or by removing the erroneous alignment flag from `addLayout` calls.
-    *   **OLED Play/Pause Icon:**
-        *   Fixed click functionality for the new QLabel-based Play/Pause icon by correcting event handling in `MainWindow.eventFilter` and ensuring the label is enabled when the device is connected.
-        *   Addressed appearance issues (e.g., blue focus outlines) via more specific QSS and by using a QLabel with a Pixmap for a cleaner look.
-        *   Refined the layout of the Play/Pause icon to be positioned at the bottom-right of the OLED mirror, with the Browser button to its right and vertically centered.
-*   **Animator Performance & Signal Handling:**
-    *   Reduced "signal echo" and redundant UI updates when selecting frames in the Animator timeline or when the model's edit frame changed, leading to a smoother experience.
-    *   Optimized the emission of `sequence_modified_status_changed` from `AnimatorManagerWidget` to only fire when the sequence name or its `is_modified` boolean state actually changes, preventing excessive OLED updates during pad painting.
+*   **OLED Customizer Dialog Stability:** Fixed `TypeError` on open, `AttributeError` for preview clearing, Resolved Save Button visibility.
+*   **Top Strip UI Layout & Functionality:** Fixed `TypeError` in layout, improved OLED Play/Pause icon functionality and appearance.
+*   **Animator Performance & Signal Handling:** Reduced "signal echo" and redundant UI updates.
 
 ### 💬 Developer Notes
 
-*   The manual OLED Play/Pause functionality is now the primary way to control OLED Active Graphic playback state during application use.
-*   Further optimization of the `SequenceModel._push_undo_state()` deep copy operation could be considered if sequences with a very large number of frames still exhibit a slight hitch at the beginning of a paint stroke, but the current "undo per stroke" is a significant improvement.
+*   Manual OLED Play/Pause is now primary control method.
 
 ---
 
-## [Version 0.9.0] - 2025-05-28 
+## [Version 0.9.0] - 2025-05-28
 *(Previously "Unreleased - 2025-05-25")*
 
-This major update focuses on a comprehensive overhaul of the Akai Fire's OLED display capabilities, transforming it into a highly customizable visual element, alongside significant stability improvements and refined hardware control.
+This major update focused on a comprehensive overhaul of the Akai Fire's OLED display capabilities, transforming it into a highly customizable visual element, alongside significant stability improvements and refined hardware control.
 
 ### ✨ Features & Enhancements
 
 *   **Advanced OLED Display Customization (Phase 2 - Content Library & Active Graphic System):**
-    *   **OLED Content Library Manager (`OLEDCustomizerDialog`):**
-        *   Introduced a dedicated dialog (accessed by clicking the OLED mirror) to create, manage, and preview custom OLED content.
-        *   Supports two main item types: "Text Items" and "Image Animation Items."
-        *   User-created items are saved as JSON presets in `Documents/Akai Fire RGB Controller User Presets/OLEDCustomPresets/`.
-        *   Dialog features live preview of selected library items (including playing animations) and items being edited.
-    *   **Custom Text Items:**
-        *   Users can define text content, select from available system fonts, and set font size in pixels.
-        *   Configuration for text alignment (left, center, right) for static display.
-        *   Scrolling animation for long text, with options to override the global scroll speed and define end-pause durations for individual items.
-    *   **Custom Image & GIF Animations for OLED:**
-        *   Import various static image formats (PNG, JPG, BMP, etc.) and **animated GIFs** via `oled_utils/image_processing.py`.
-        *   Comprehensive image processing options during import:
-            *   **Resize Modes:** Stretch to Fit, Fit (Keep Aspect & Pad), Crop to Center for the 128x64 OLED.
-            *   **Contrast Adjustment:** Pre-dithering contrast enhancement slider.
-            *   **Color Inversion:** Option to invert black and white.
-            *   **Monochrome Conversion & Dithering (Initial Set):** Floyd-Steinberg Dither, Simple Threshold (adjustable), Ordered Dither (Bayer 4x4).
-        *   Processed images/GIFs are converted into sequences of 1-bit logical frames.
-        *   Users can set target playback FPS and loop behavior (Loop Infinitely, Play Once) for animations on the hardware OLED.
-        *   GIF metadata (original FPS, loop count) is extracted where available.
-    *   **"Active Graphic" System (`OLEDDisplayManager`):**
-        *   Users can select any custom Text Item or Image Animation Item from their library to be the persistent "Active Graphic."
-        *   This Active Graphic automatically displays on the hardware OLED after an initial built-in startup visual.
-        *   The chosen Active Graphic path is saved to `oled_config.json` and loaded on application start.
-    *   **Built-in Visual Startup Animation:**
-        *   A fixed, dynamic visual animation (pulse/grid) now plays on the OLED upon successful MIDI connection.
-    *   **Unified Temporary System Messages (`OLEDDisplayManager`):**
-        *   Robust system for displaying transient feedback using a specific "TomThumb" 60pt retro font.
-        *   Messages display briefly (scrolling if necessary) and then gracefully revert to the user's chosen "Active Graphic".
-    *   **Application Default OLED Message:**
-        *   If no "Active Graphic" is set, a scrolling message "Fire RGB Customizer by Reg0lino =^.^=" (TomThumb 60pt) is displayed.
-    *   **Qt-based Text Rendering for Active Graphics:** Improves system font compatibility and rendering fidelity.
-*   **Enhanced Hardware Control & OLED Feedback Integration:**
-    *   **Dynamic Knob Control:** Context-sensitive knobs for Global Brightness, Sampler Parameters, or Animator Speed.
-    *   **OLED Feedback for Hardware Actions:** Knob turns, sampler status, animator status, UI navigation cues show temporary messages.
-    *   **OLED Item Navigation via Hardware:** PATTERN UP/DOWN to cue OLED items, BROWSER to activate cued item.
-*   **UI and UX Refinements:**
-    *   `OLEDCustomizerDialog` layout stabilized.
-    *   Terms like "Set as Active Graphic" clarified.
+    *   OLED Content Library Manager (`OLEDCustomizerDialog`): Text Items, Image Animation Items, JSON presets.
+    *   Custom Text Items: Fonts, size, alignment, scrolling with overrides.
+    *   Custom Image & GIF Animations for OLED: Import, resize, contrast, inversion, initial dithering set (Floyd-Steinberg, Threshold, Bayer 4x4).
+    *   "Active Graphic" System (`OLEDDisplayManager`): Persistent user-chosen OLED display.
+    *   Built-in Visual Startup Animation.
+    *   Unified Temporary System Messages (TomThumb font).
+    *   Application Default OLED Message.
+    *   Qt-based Text Rendering for Active Graphics.
+*   **Enhanced Hardware Control & OLED Feedback Integration:** Dynamic Knob Control, OLED Feedback for Hardware Actions, OLED Item Navigation via Hardware.
+*   **UI and UX Refinements:** `OLEDCustomizerDialog` layout stabilized.
 
 ### 🐛 Bug Fixes & Stability
 
-*   **OLED System Stability:** Resolved various errors in `OLEDDisplayManager` and `oled_renderer.py`. Corrected OLED text scrolling. Ensured `OLEDCustomizerDialog` animation previews work.
-*   **Type Errors & NameErrors:** Addressed multiple `TypeError`s (e.g., Hue Shift) and `NameError`s, improving stability.
-*   **Dialog Initialization:** `OLEDCustomizerDialog` correctly loads initial global settings.
-*   **Packaging Preparation:** Refined `utils.get_resource_path`, updated `.spec` file.
+*   OLED System Stability, TypeErrors, NameErrors, Dialog Initialization, Packaging Prep.
 
 ### 💬 Developer Notes
 
 *   `OLEDDisplayManager` state machine robustly manages display priorities.
-*   User preset paths standardized to "Documents".
 
 ---
 
 ## [Version 0.8.0] - 2025-05-19 - Sampler Stability & Preference Refinement
-*(Details as previously provided in original changelog)*
 
 ### ✨ Features & Enhancements
 *   Screen Sampler Functionality Restored & Improved (Monitor Selection, Preference Loading, Live Preview).
@@ -163,7 +167,6 @@ This major update focuses on a comprehensive overhaul of the Akai Fire's OLED di
 ---
 
 ## [Version 0.7.0] - (Date Inferred from original changelog)
-*(Details as previously provided in original changelog)*
 
 ### ✨ Features & Enhancements
 *   Sampler Recording Auto-Save & Listing.
@@ -179,7 +182,6 @@ This major update focuses on a comprehensive overhaul of the Akai Fire's OLED di
 ---
 
 ## Previous Versions (Summary - Pre-0.7.0)
-*(Details as previously provided in original changelog)*
 *   Sampler Recording Framework
 *   Granular Grid Sampling & Monitor View Refinement
 *   Interactive Screen Sampler MVP
@@ -189,4 +191,4 @@ This major update focuses on a comprehensive overhaul of the Akai Fire's OLED di
 *   Initial Development Phase
 
 ---
-*Akai Fire PixelForge - Developed by Reg0lino with extensive AI assistance from Gemini models.*
+*Akai Fire PixelForge - Developed by Reg0lino with extensive AI assistance from Gemini models.*5
