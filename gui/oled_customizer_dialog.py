@@ -916,7 +916,7 @@ class OLEDCustomizerDialog(QDialog):
         self.text_font_family_combo.blockSignals(False)
 
     def _populate_item_library_list(self):
-        print("DEBUG OCD: _populate_item_library_list - ENTERED") # Kept entry log
+        # print("DEBUG OCD: _populate_item_library_list - ENTERED") # Kept entry log
 
         if self.item_library_list is None:
             print("DEBUG OCD ERROR: _populate_item_library_list - self.item_library_list is None! Aborting.")
@@ -984,9 +984,9 @@ class OLEDCustomizerDialog(QDialog):
                         'type': source['internal_type'], 
                         'name': item_name_from_json
                     })
-                    self.item_library_list.addItem(qlist_item)
+                    self.item_library_list.addItem(qlist_item)                    
                     items_added_count += 1
-        print(f"DEBUG OCD: _populate_item_library_list - FINISHED. Total items added: {items_added_count}. QListWidget count: {self.item_library_list.count()}") # Kept summary log
+        # print(f"DEBUG OCD: _populate_item_library_list - FINISHED. Total items added: {items_added_count}. QListWidget count: {self.item_library_list.count()}") # Kept summary log
 
     def _play_next_library_preview_anim_frame(self):
         if not self._is_library_preview_anim_playing or \
@@ -1863,8 +1863,6 @@ class OLEDCustomizerDialog(QDialog):
             else:
                 self._clear_preview_label_content()
 
-    # class OLEDCustomizerDialog(QDialog):
-    # ...
     def _mark_editor_dirty_if_needed(self, *args):
         sender = self.sender()
         
