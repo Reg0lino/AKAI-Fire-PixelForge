@@ -427,7 +427,126 @@ QGroupBox#StaticPresetsGroup {
     margin-top: 10px;
 }
 
-/* Dials */
+
+/* QDial Styling - Dark Metallic to match physical black knobs */
 QDial {
-    background-color: #101010; /* Or transparent if you want QWidget background */
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #1F1F1F, stop: 1 #151515);
+    border: 2px solid #333333;
+    border-radius: 21px;
+    color: #FFFFFF;
+}
+
+QDial::handle {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #666666, stop: 1 #444444);
+    border: 1px solid #555555;
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin: -4px;
+}
+
+QDial::handle:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #777777, stop: 1 #555555);
+    border-color: #666666;
+}
+
+QDial::handle:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #444444, stop: 1 #222222);
+    border-color: #333333;
+}
+
+/* Specific styling for named dial controls */
+QDial#knob_volume_top_right,
+QDial#knob_pan_top_right,
+QDial#knob_filter_top_right,
+QDial#knob_resonance_top_right,
+QDial#SelectKnobTopRight {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #0A0A0A, stop: 1 #050505);
+    border: 2px solid #1A1A1A;
+    border-radius: 21px;
+    color: #FFFFFF;
+}
+
+QDial#knob_volume_top_right::handle,
+QDial#knob_pan_top_right::handle,
+QDial#knob_filter_top_right::handle,
+QDial#knob_resonance_top_right::handle,
+QDial#SelectKnobTopRight::handle {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 #5c5b5b, stop: 0.5 #414141, stop: 1 #2c2c2c);
+    border: 1px solid #808080;
+    border-radius: 5px;
+    width: 10px;
+    height: 10px;
+}
+
+QDial#knob_volume_top_right::handle:hover,
+QDial#knob_pan_top_right::handle:hover,
+QDial#knob_filter_top_right::handle:hover,
+QDial#knob_resonance_top_right::handle:hover,
+QDial#SelectKnobTopRight::handle:hover {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 #5c5b5b, stop: 0.5 #414141, stop: 1 #2c2c2c);
+    border-color: #909090;
+}
+
+QDial#knob_volume_top_right::handle:pressed,
+QDial#knob_pan_top_right::handle:pressed,
+QDial#knob_filter_top_right::handle:pressed,
+QDial#knob_resonance_top_right::handle:pressed,
+QDial#SelectKnobTopRight::handle:pressed {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 #5c5b5b, stop: 0.5 #414141, stop: 1 #2c2c2c);
+    border-color: #606060;
+}
+
+/* Specific styling for triangle navigation labels */
+QLabel#TriangleGridLeft, QLabel#TriangleGridRight {
+    font-size: 20pt !important;
+    font-weight: bold !important;
+    color: #B3B3B3 !important;
+    background-color: transparent !important;
+    border: none !important;
+    padding: 2px !important;
+    text-align: center;
+}
+
+QLabel#TriangleGridLeft:hover, QLabel#TriangleGridRight:hover {
+    color: #FFFFFF !important;
+}
+
+/* Additional dial styling for main controller knobs */
+QDial#MainControllerDial {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 #0A0A0A, stop: 0.5 #070707, stop: 1 #050505);
+    border: 3px solid #1A1A1A;
+    border-radius: 20px;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+QDial#MainControllerDial::handle {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 #757575, stop: 0.5 #656565, stop: 1 #555555);
+    border: 2px solid #858585;
+    border-radius: 6px;
+    width: 12px;
+    height: 12px;
+}
+
+QDial#MainControllerDial::handle:hover {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 #858585, stop: 0.5 #757575, stop: 1 #656565);
+    border-color: #505050;
+}
+
+QDial#MainControllerDial::handle:pressed {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 #555555, stop: 0.5 #454545, stop: 1 #353535);
+    border-color: #3d3d3d;
 }

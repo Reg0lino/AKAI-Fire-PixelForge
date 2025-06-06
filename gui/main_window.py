@@ -460,7 +460,7 @@ class MainWindow(QMainWindow):
                     ("knob_filter_top_right", "Filter"), ("knob_resonance_top_right", "Resonance")]
         for attr_name, tooltip_text in knob_info:
             knob_v_container = QVBoxLayout()
-            knob_v_container.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            knob_v_container.setAlignment(Qt.AlignmentFlag.AlignCenter)              
             knob = QDial()
             knob.setFixedSize(QSize(knob_size, knob_size))
             knob.setNotchesVisible(True)
@@ -587,7 +587,7 @@ class MainWindow(QMainWindow):
         select_knob_container_vbox_INTERNAL.setContentsMargins(0, 0, 0, 0)
         select_knob_container_vbox_INTERNAL.setAlignment(
             Qt.AlignmentFlag.AlignCenter)
-        self.knob_select_top_right = QDial()
+        self.knob_select_top_right = QDial()          
         self.knob_select_top_right.setFixedSize(QSize(knob_size, knob_size))
         self.knob_select_top_right.setNotchesVisible(True)
         self.knob_select_top_right.setObjectName("SelectKnobTopRight")
@@ -603,12 +603,10 @@ class MainWindow(QMainWindow):
             QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred)
         grid_buttons_layout_INTERNAL = QHBoxLayout(grid_buttons_widget)
         grid_buttons_layout_INTERNAL.setContentsMargins(0, 0, 0, 0)
-        grid_buttons_layout_INTERNAL.setSpacing(1)
+        grid_buttons_layout_INTERNAL.setSpacing(1)        
         grid_buttons_layout_INTERNAL.setAlignment(Qt.AlignmentFlag.AlignCenter)
         triangle_left_label = QLabel("◀")
-        triangle_left_label.setStyleSheet(triangle_label_style)
         triangle_left_label.setObjectName("TriangleGridLeft")
-        triangle_left_label.setFixedWidth(18)
         triangle_left_label.setAlignment(
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
         grid_buttons_layout_INTERNAL.addWidget(
@@ -630,12 +628,9 @@ class MainWindow(QMainWindow):
             flat_button_size)
         self.button_grid_nav_focus_next_top_right.setToolTip(
             "Cycle Navigation Focus (Next)")
-        grid_buttons_layout_INTERNAL.addWidget(
-            self.button_grid_nav_focus_next_top_right, 0, Qt.AlignmentFlag.AlignVCenter)
+        grid_buttons_layout_INTERNAL.addWidget(self.button_grid_nav_focus_next_top_right, 0, Qt.AlignmentFlag.AlignVCenter)
         triangle_right_label = QLabel("▶")
-        triangle_right_label.setStyleSheet(triangle_label_style)
         triangle_right_label.setObjectName("TriangleGridRight")
-        triangle_right_label.setFixedWidth(18)
         triangle_right_label.setAlignment(
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         grid_buttons_layout_INTERNAL.addWidget(
@@ -2251,8 +2246,7 @@ class MainWindow(QMainWindow):
             self.animator_manager.active_sequence_model.update_all_pads_in_current_edit_frame(colors_hex)
             self.status_bar.showMessage("Static layout applied to pads and current animator frame.", 2500)
         else:
-            self.status_bar.showMessage("Static layout applied to pads.", 2500)
-
+            self.status_bar.showMessage("Static layout applied to pads.", 2500)    
     def _on_physical_encoder_rotated(self, encoder_id: int, delta: int):
         """
         Handles rotation from any of the physical encoders 1-4.
@@ -2262,19 +2256,22 @@ class MainWindow(QMainWindow):
         target_knob: QDial | None = None
         step: int = 0
         handler_to_call = None # Stores the method to call after updating GUI knob
-        # Determine context and target knob/handler
-        if self.is_animator_playing:
+        
+        # Knob 1 is ALWAYS Global Brightness regardless of mode
+        if encoder_id == 1:
+            target_knob = self.gui_knob1
+            step = self.GLOBAL_BRIGHTNESS_KNOB_STEP
+            handler_to_call = self._on_global_brightness_knob_changed
+        # Determine context and target knob/handler for other encoders
+        elif self.is_animator_playing:
             if encoder_id == 4: # Knob 4 -> Animator Speed
                 target_knob = self.gui_knob4
                 step = self.ANIMATOR_SPEED_KNOB_STEP
                 handler_to_call = self._on_animator_speed_knob_changed        
         elif self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
             # Sampler is active, Animator is NOT playing
-            if encoder_id == 1: # Knob 1 -> Sampler Brightness
-                target_knob = self.gui_knob1
-                step = self.SAMPLER_FACTOR_KNOB_STEP
-                handler_to_call = self._on_sampler_brightness_knob_changed
-            elif encoder_id == 2: # Knob 2 -> Sampler Saturation
+            # Note: Knob 1 is handled above, so only knobs 2-4 for sampler
+            if encoder_id == 2: # Knob 2 -> Sampler Saturation
                 target_knob = self.gui_knob2
                 step = self.SAMPLER_FACTOR_KNOB_STEP
                 handler_to_call = self._on_sampler_saturation_knob_changed
@@ -2286,12 +2283,8 @@ class MainWindow(QMainWindow):
                 target_knob = self.gui_knob4
                 step = self.SAMPLER_HUE_KNOB_STEP
                 handler_to_call = self._on_sampler_hue_knob_changed        
-        else: # Global mode (Neither Animator playing nor Sampler active)
-            if encoder_id == 1: # Knob 1 -> Global Pad Brightness
-                target_knob = self.gui_knob1
-                step = self.GLOBAL_BRIGHTNESS_KNOB_STEP
-                handler_to_call = self._on_global_brightness_knob_changed
-            # Knobs 2, 3, 4 are unassigned in global mode for now
+        # Global mode (Neither Animator playing nor Sampler active)
+        # Note: Knob 1 is handled above, knobs 2-4 remain unassigned in global mode
         # If a target knob and action were determined
         if target_knob and handler_to_call and step != 0:
             current_gui_value = target_knob.value()
@@ -2335,12 +2328,13 @@ class MainWindow(QMainWindow):
         )
         if not sampler_is_active and not animator_is_playing and self.pad_grid_frame:
             current_colors_hex = self.pad_grid_frame.get_current_grid_colors_hex()
-            self.apply_colors_to_main_pad_grid(current_colors_hex, update_hw=True, is_sampler_output=False)
-
+            self.apply_colors_to_main_pad_grid(current_colors_hex, update_hw=True, is_sampler_output=False)    
+    
     def _on_sampler_activity_changed_for_knobs(self, sampler_is_active: bool):
         """
         Reconfigures the top 4 GUI knobs based on sampler active state.
         Disconnects old signals, sets new ranges, values, tooltips, and connects new signals.
+        Note: Knob 1 is always Global Brightness, regardless of sampler state.
         """
         # print(f"MW TRACE: _on_sampler_activity_changed_for_knobs: Sampler active = {sampler_is_active}")
         knobs_to_reconfigure = [self.gui_knob1, self.gui_knob2, self.gui_knob3, self.gui_knob4]
@@ -2348,15 +2342,15 @@ class MainWindow(QMainWindow):
             if knob:
                 try: knob.valueChanged.disconnect()
                 except TypeError: pass 
+        
+        # Knob 1 is ALWAYS Global Brightness
+        self._setup_global_brightness_knob() 
+        
         if sampler_is_active and self.screen_sampler_manager:
             adj = self.screen_sampler_manager.current_sampler_params.get('adjustments', 
             ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy())            
-            if self.gui_knob1: # Brightness
-                brightness_factor = adj.get('brightness', 1.0)
-                self.gui_knob1.setRange(self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX)
-                self.gui_knob1.setValue(int(round(brightness_factor * 100)))
-                self.gui_knob1.setToolTip(f"Sampler: Brightness ({brightness_factor:.2f}x)")
-                self.gui_knob1.valueChanged.connect(self._on_sampler_brightness_knob_changed)
+            # Note: Knob 1 (brightness) is handled above as global brightness
+            # Sampler now uses knobs 2-4 for saturation, contrast, hue shift
             if self.gui_knob2: # Saturation
                 saturation_factor = adj.get('saturation', 1.0)
                 self.gui_knob2.setRange(self.SAMPLER_SATURATION_KNOB_MIN, self.SAMPLER_SATURATION_KNOB_MAX)
@@ -2376,9 +2370,9 @@ class MainWindow(QMainWindow):
                 self.gui_knob4.setValue(hue_val_int_for_knob_and_tooltip) 
                 self.gui_knob4.setToolTip(f"Sampler: Hue Shift ({hue_val_int_for_knob_and_tooltip:+d})") # Removed °
                 self.gui_knob4.valueChanged.connect(self._on_sampler_hue_knob_changed)            
-            # print("MW TRACE: Knobs configured for SAMPLER mode.")
+            # print("MW TRACE: Knobs configured for SAMPLER mode (knobs 2-4 only).")
         else: # Sampler is OFF - Configure for Global mode
-            self._setup_global_brightness_knob() 
+            # Knob 1 is already configured above for global brightness
             if self.gui_knob2: 
                 self.gui_knob2.setToolTip("Pan (Global - Unassigned)")
                 self.gui_knob2.setRange(0,127); self.gui_knob2.setValue(64)
@@ -2387,6 +2381,7 @@ class MainWindow(QMainWindow):
                 self.gui_knob3.setRange(0,127); self.gui_knob3.setValue(64)
             if self.gui_knob4: 
                 self.gui_knob4.setToolTip("Resonance (Global - Unassigned)")
+                self.gui_knob4.setRange(0,127); self.gui_knob4.setValue(64)            # print("MW TRACE: Knobs configured for GLOBAL mode.")
                 self.gui_knob4.setRange(0,127); self.gui_knob4.setValue(64)
             # print("MW TRACE: Knobs configured for GLOBAL mode.")
 
@@ -2394,16 +2389,12 @@ class MainWindow(QMainWindow):
         """
         Called when ScreenSamplerManager reports its adjustments have changed
         (e.g., from its dialog). Updates the GUI knobs if sampler is active.
+        Note: Knob 1 is no longer used for sampler brightness, only knobs 2-4.
         """
         if not (self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()):
             return 
         # print(f"MW TRACE: _on_sampler_adjustments_updated_for_knobs: Received new adjustments: {adjustments}") # Optional
-        if self.gui_knob1:
-            self.gui_knob1.blockSignals(True)
-            brightness_factor = adjustments.get('brightness', 1.0)
-            self.gui_knob1.setValue(int(round(brightness_factor * 100))) 
-            self.gui_knob1.setToolTip(f"Sampler: Brightness ({brightness_factor:.2f}x)")
-            self.gui_knob1.blockSignals(False)        
+        # Note: Knob 1 is always global brightness, not sampler brightness
         if self.gui_knob2:
             self.gui_knob2.blockSignals(True)
             saturation_factor = adjustments.get('saturation', 1.0)

@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QDialogButtonBox, QFontComboBox, QSpinBox, QWidget, QSizePolicy, QFrame,
     QSlider, QGroupBox, QListWidget, QListWidgetItem, QSplitter, QComboBox,
-    QTextEdit, QCheckBox, QFileDialog, QMessageBox, QStackedWidget, QScrollArea
+    QTextEdit, QCheckBox, QFileDialog, QMessageBox, QStackedWidget, QScrollArea, QDial
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QFont, QColor, QPixmap, QPainter, QFontMetrics, QImage, QIcon, QCloseEvent
@@ -25,8 +25,9 @@ except ImportError:
 try:
     from oled_utils import image_processing
     IMAGE_PROCESSING_AVAILABLE = True
-    print("OLEDCustomizerDialog INFO: image_processing module loaded successfully.")
 except ImportError as e:
+
+    
     print(
         f"OLEDCustomizerDialog WARNING: image_processing module not found: {e}. Animation import will be disabled.")
     IMAGE_PROCESSING_AVAILABLE = False
@@ -497,20 +498,28 @@ class OLEDCustomizerDialog(QDialog):
 
         # --- Brightness ---
         row += 1; import_options_layout.addWidget(QLabel("Brightness:"), row, 0)
+        # Add QDial for brightness
+        self.anim_brightness_dial = QDial()
+        self.anim_brightness_dial.setRange(0, 200)
+        self.anim_brightness_dial.setValue(100)
+        self.anim_brightness_dial.setNotchesVisible(False)
+        self.anim_brightness_dial.setObjectName("BrightnessDial")
+        import_options_layout.addWidget(self.anim_brightness_dial, row, 1)
+        # Keep the slider for now for comparison
         self.anim_brightness_slider = QSlider(Qt.Orientation.Horizontal); 
         self.anim_brightness_slider.setRange(0, 200); 
         self.anim_brightness_slider.setValue(100); 
         self.anim_brightness_slider.setToolTip("0.0x to 2.0x")
-        import_options_layout.addWidget(self.anim_brightness_slider, row, 1)
+        import_options_layout.addWidget(self.anim_brightness_slider, row, 2)
         self.anim_brightness_value_label = QLabel("1.00x"); 
         self.anim_brightness_value_label.setMinimumWidth(VALUE_LABEL_MIN_WIDTH); 
         self.anim_brightness_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        import_options_layout.addWidget(self.anim_brightness_value_label, row, 2)
+        import_options_layout.addWidget(self.anim_brightness_value_label, row, 3)
         self.reset_brightness_button = QPushButton(RESET_SYMBOL); 
         self.reset_brightness_button.setObjectName("ResetButton")
         self.reset_brightness_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_brightness_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Brightness")
-        import_options_layout.addWidget(self.reset_brightness_button, row, 3)
+        import_options_layout.addWidget(self.reset_brightness_button, row, 4)
         
         # --- Gamma ---
         row += 1; import_options_layout.addWidget(QLabel("Gamma:"), row, 0)
@@ -693,7 +702,14 @@ class OLEDCustomizerDialog(QDialog):
             self._current_edited_item_type = None
             self._is_editing_new_item = False
             self._editor_has_unsaved_changes = False
-            self._update_preview()
+            self._current_anim_source_filepath = None
+            self._processed_logical_frames = None
+            self._processed_anim_source_fps = None
+            self._processed_anim_source_loop_count = None
+            self._anim_editor_preview_timer.stop()
+            self._is_anim_editor_preview_playing = False
+            self._current_anim_editor_preview_frame_index = 0
+            self._clear_preview()
         self._update_save_this_item_button_state()
         if self.layout() is not None:
             self.layout().activate()  # Ensure dialog's main layout is active

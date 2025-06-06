@@ -139,8 +139,8 @@ class OLEDDisplayManager(QObject):
                 if os.path.exists(font_path):
                     self.feedback_pil_font = ImageFont.truetype(
                         font_path, self.FEEDBACK_FONT_SIZE_PX)
-                    print(
-                        f"OLED Mgr INFO: Loaded Feedback Font '{self.FEEDBACK_FONT_FILENAME}' @ {self.FEEDBACK_FONT_SIZE_PX}px.")
+                    # print(
+                    #     f"OLED Mgr INFO: Loaded Feedback Font '{self.FEEDBACK_FONT_FILENAME}' @ {self.FEEDBACK_FONT_SIZE_PX}px.")
                 else:
                     print(
                         f"OLED Mgr WARNING: Feedback Font '{self.FEEDBACK_FONT_FILENAME}' not found at '{font_path}'.")
@@ -163,8 +163,8 @@ class OLEDDisplayManager(QObject):
                 self.PERSISTENT_OVERRIDE_FONT_FAMILY,
                 self.PERSISTENT_OVERRIDE_FONT_SIZE_PX
             )
-            print(
-                f"OLED Mgr INFO: Loaded Persistent Override Font '{self.PERSISTENT_OVERRIDE_FONT_FAMILY}' @ {self.PERSISTENT_OVERRIDE_FONT_SIZE_PX}px.")
+            # print(
+            #     f"OLED Mgr INFO: Loaded Persistent Override Font '{self.PERSISTENT_OVERRIDE_FONT_FAMILY}' @ {self.PERSISTENT_OVERRIDE_FONT_SIZE_PX}px.")
         except IOError:  # Pillow couldn't find/load it
             print(
                 f"OLED Mgr WARNING: System font '{self.PERSISTENT_OVERRIDE_FONT_FAMILY}' for persistent override not found by Pillow. Using Pillow default.")
@@ -209,8 +209,8 @@ class OLEDDisplayManager(QObject):
                             if os.path.exists(font_path):
                                 loaded_font = ImageFont.truetype(
                                     font_path, font_size_px)
-                                print(
-                                    f"OLED Mgr INFO: Loaded BUNDLED font '{app_font_filename}' (matched '{font_family}') @{font_size_px}px.")
+                                # print(
+                                #     f"OLED Mgr INFO: Loaded BUNDLED font '{app_font_filename}' (matched '{font_family}') @{font_size_px}px.")
                                 return loaded_font
                         # else: print(f"OLED Mgr WARNING: Cannot load bundled font '{app_font_filename}', utils not available.") # Already logged in method
                     except Exception as e_res:
@@ -233,8 +233,8 @@ class OLEDDisplayManager(QObject):
                     f"OLED Mgr WARNING: Error during Pillow's attempt to load system font '{font_family}' by name: {e_sys_target_name}")
         # 3. NEW: Attempt to Load System Font by Path (using QFontDatabase to find path for Pillow)
         if not loaded_font:
-            print(
-                f"OLED Mgr DEBUG: Attempting to find font path for '{font_family}' using QFontDatabase...")
+            # print(
+            #     f"OLED Mgr DEBUG: Attempting to find font path for '{font_family}' using QFontDatabase...")
             try:
                 # QFontDatabase needs to be instantiated if not already globally available in this class
                 # It's usually fine to create it on the fly.
@@ -248,23 +248,10 @@ class OLEDDisplayManager(QObject):
                 font_info = QFontInfo(test_qfont)
                 actual_family_found = font_info.family()
                 if actual_family_found.lower() == font_family.lower():  # Good match
-                    # This method to get file path is not directly available on QFontInfo or QFont.
-                    # This is the tricky part. QFontDatabase doesn't easily expose file paths.
-                    # However, for common scenarios, if QFont can use it, Pillow *might* also find it if the name is canonical.
-                    # The main issue is usually with non-canonical names or fonts not in typical system paths Pillow checks.
-                    # A more involved approach would be needed to truly get the file path from Qt,
-                    # which might involve platform-specific APIs or iterating QFontDatabase.families()
-                    # and then trying to guess paths, which is unreliable.
-                    # For now, let's simplify: If Qt thinks it has the font (font_info.exactMatch() or family matches),
-                    # we can re-try with Pillow, hoping the canonical name helps.
-                    # The previous attempt already did this. This step might be redundant without deeper path finding.
-                    # Let's log what Qt found:
+
                     print(
                         f"OLED Mgr DEBUG: QFontDatabase check for '{font_family}': Matched family '{actual_family_found}'. ExactMatch: {font_info.exactMatch()}")
-                    # If Qt found a good match, and Pillow didn't find it by the original name,
-                    # it's unlikely Pillow will find it by actual_family_found if it's the same.
-                    # This step might not add much value without actual path retrieval.
-                    # We will keep the structure for future enhancement if path retrieval is implemented.
+
                 else:
                     print(
                         f"OLED Mgr DEBUG: QFontDatabase check for '{font_family}': Did not find exact match (found '{actual_family_found}').")
@@ -280,8 +267,8 @@ class OLEDDisplayManager(QObject):
                 try:
                     loaded_font = ImageFont.truetype(
                         fallback_name, font_size_px)
-                    print(
-                        f"OLED Mgr INFO: Used FALLBACK system font '{fallback_name}' @{font_size_px}px for original target '{font_family}'.")
+                    # print(
+                    #     f"OLED Mgr INFO: Used FALLBACK system font '{fallback_name}' @{font_size_px}px for original target '{font_family}'.")
                     return loaded_font
                 except IOError:
                     pass
@@ -330,7 +317,7 @@ class OLEDDisplayManager(QObject):
         Called when an external module (e.g., a game) wants to take full control of the OLED.
         Stops all current ODM activity and prepares for external updates.
         """
-        print("OLED Mgr INFO: Beginning external OLED override.")
+        # print("OLED Mgr INFO: Beginning external OLED override.")
         self.stop_all_activity()  # Stops all internal timers (text scroll, anim, temp messages)
         # Optionally, store the very last bitmap ODM sent if needed for a flicker-free transition,
         # or just expect the external controller to send its first frame immediately.
@@ -352,7 +339,7 @@ class OLEDDisplayManager(QObject):
         Called when an external module relinquishes control of the OLED.
         ODM should resume its normal operation (e.g., display Active Graphic or default).
         """
-        print("OLED Mgr INFO: Ending external OLED override.")
+        # print("OLED Mgr INFO: Ending external OLED override.")
         if not hasattr(self, '_is_external_override_active'):
             self._is_external_override_active = True  # Should have been set by begin_
         self._is_external_override_active = False
@@ -390,7 +377,7 @@ class OLEDDisplayManager(QObject):
             self.builtin_startup_animation_finished.emit()
             self._apply_current_oled_state()  # Directly apply active graphic or default
             return
-        print("OLED Mgr INFO: play_builtin_startup_animation called.")
+        # print("OLED Mgr INFO: play_builtin_startup_animation called.")
         self.stop_all_activity()
         self._is_builtin_startup_animation_playing = True
         self._builtin_startup_animation_frames = frames_data
@@ -523,8 +510,8 @@ class OLEDDisplayManager(QObject):
                 self.stop_all_activity()
                 self._display_hardcoded_app_default_message()
         else:
-            print(
-                "OLED Mgr INFO: No Active Graphic or Persistent Override. Applying app default message.")
+            # print(
+            #     "OLED Mgr INFO: No Active Graphic or Persistent Override. Applying app default message.")
             self.stop_all_activity()
             self._display_hardcoded_app_default_message()
 
@@ -563,8 +550,8 @@ class OLEDDisplayManager(QObject):
             return
         item_name = self._active_graphic_item_data.get(
             "item_name", "Unnamed Animation")
-        print(
-            f"OLED Mgr INFO: Starting Active Graphic Animation '{item_name}'")
+        # print(
+        #     f"OLED Mgr INFO: Starting Active Graphic Animation '{item_name}'")
         self._is_custom_animation_playing = True
         self._custom_animation_current_frame_index = 0  # Always start from beginning
         timer_interval_ms = int(
@@ -852,8 +839,8 @@ class OLEDDisplayManager(QObject):
         # print(
             # f"OLED Mgr INFO: show_system_message: '{text}', Duration: {duration_ms}ms, Scroll: {scroll_if_needed}")
         if self._is_builtin_startup_animation_playing:
-            print(
-                "OLED Mgr INFO: Built-in startup playing, system message deferred/skipped.")
+            # print(
+            #     "OLED Mgr INFO: Built-in startup playing, system message deferred/skipped.")
             return
         # Stops current Active Graphic, other temp messages, and their timers
         self.stop_all_activity()
@@ -938,8 +925,8 @@ class OLEDDisplayManager(QObject):
         self._render_and_send_temporary_message_frame()
         # Check if the text has fully scrolled off to the left
         if self._temporary_message_current_scroll_offset > self._temporary_message_text_pixel_width:
-            print(
-                f"OLED Mgr DEBUG: Temporary message '{self._current_temporary_message_text[:20]}...' finished scrolling once.")
+            # print(
+            #     f"OLED Mgr DEBUG: Temporary message '{self._current_temporary_message_text[:20]}...' finished scrolling once.")
             self._temporary_message_text_scroll_timer.stop()
             self._temporary_message_is_scrolling = False
             self._temporary_message_has_scrolled_once = True
@@ -965,8 +952,8 @@ class OLEDDisplayManager(QObject):
 
     def _revert_from_temporary_display(self):
         # This slot is connected to self._temporary_message_timer.timeout()
-        print(
-            "OLED Mgr INFO: Reverting from temporary display (main duration timer expired).")
+        # print(
+        #     "OLED Mgr INFO: Reverting from temporary display (main duration timer expired).")
         # Stop any lingering scroll timer for the temporary message (should be already stopped if scroll completed)
         if self._temporary_message_text_scroll_timer.isActive():
             self._temporary_message_text_scroll_timer.stop()
@@ -1160,6 +1147,6 @@ class OLEDDisplayManager(QObject):
 
     def play_animation_item_temporarily(self, item_data: dict, duration_ms: int):
         """Plays an animation item for a fixed duration then reverts."""
-        print("OLED Mgr WARNING: play_animation_item_temporarily is complex with new model, consider text cues.")
+        # print("OLED Mgr WARNING: play_animation_item_temporarily is complex with new model, consider text cues.")
         item_name = item_data.get("item_name", "Animation")
         self.show_system_message(f"Playing: {item_name}", duration_ms)
