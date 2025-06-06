@@ -680,7 +680,7 @@ class MainWindow(QMainWindow):
                 "Click to customize OLED display")
             self.oled_display_mirror_widget.installEventFilter(
                 self)  # MainWindow will handle its events
-            print("MW TRACE: OLED mirror configured for click.")
+            # print("MW TRACE: OLED mirror configured for click.")
         else:
             print(
                 "MW WARNING: oled_display_mirror_widget not found during _setup_oled_mirror_clickable.")
@@ -736,7 +736,7 @@ class MainWindow(QMainWindow):
             print(
                 "MW CRITICAL ERROR: _populate_right_panel - self.right_panel_layout_v is None!")
             return
-        print(f"MW TRACE: _populate_right_panel - START")
+        # print(f"MW TRACE: _populate_right_panel - START")
         # --- MIDI Connection Group (Output) ---
         connection_group = QGroupBox("🔌 MIDI Output")
         connection_layout = QHBoxLayout(connection_group)
@@ -799,15 +799,15 @@ class MainWindow(QMainWindow):
         self.right_panel_layout_v.addWidget(bottom_buttons_container_widget)
         # --- END Bottom Buttons ---
         self.right_panel_layout_v.addStretch(1)
-        print(f"MW TRACE: _populate_right_panel - FINISHED")
+        # print(f"MW TRACE: _populate_right_panel - FINISHED")
 
     def _populate_left_panel(self):
         """Populates the left panel with the hardware top strip, pad grid, animator UI, and sampler UI."""
         if self.left_panel_layout is None:
             print("MW CRITICAL ERROR: _populate_left_panel - self.left_panel_layout is LITERALLY None! CANNOT POPULATE.")
             return
-        print(
-            f"MW TRACE: _populate_left_panel - START - Layout object IS: {self.left_panel_layout} (ID: {id(self.left_panel_layout)})")
+        # print(
+        #     f"MW TRACE: _populate_left_panel - START - Layout object IS: {self.left_panel_layout} (ID: {id(self.left_panel_layout)})")
         # 1. Add Hardware Top Strip
         if hasattr(self, '_create_hardware_top_strip'):
             hardware_top_strip_widget = self._create_hardware_top_strip()
@@ -858,7 +858,7 @@ class MainWindow(QMainWindow):
             self.left_panel_layout.addWidget(
                 QLabel("Error: Sampler Manager Missing"))
         # Removed addStretch(1) to allow AnimatorManagerWidget to take all remaining space.
-        print(f"MW TRACE: _populate_left_panel - FINISHED")
+        # print(f"MW TRACE: _populate_left_panel - FINISHED")
 
 # --- GROUP 3: OTHER INITIALIZATION & CONFIGURATION HELPERS ---
     def _setup_global_brightness_knob(self):
@@ -892,7 +892,7 @@ class MainWindow(QMainWindow):
             self._oled_nav_item_count = self.current_oled_nav_target_widget.get_navigation_item_count()
 
     def _connect_signals(self):
-        print("MW TRACE: _connect_signals CALLED.")
+        # print("MW TRACE: _connect_signals CALLED.")
         # --- AkaiFireController raw pad/button events ---
         if self.akai_controller and hasattr(self.akai_controller, 'fire_button_event'):
             try:
@@ -905,8 +905,8 @@ class MainWindow(QMainWindow):
                     f"MW WARNING: Error trying to disconnect fire_button_event: {e_disc_fbe}")
             self.akai_controller.fire_button_event.connect(
                 self._handle_fire_pad_event_INTERNAL)
-            print(
-                "MW TRACE: Connected akai_controller.fire_button_event to _handle_fire_pad_event_INTERNAL.")
+            # print(
+            #     "MW TRACE: Connected akai_controller.fire_button_event to _handle_fire_pad_event_INTERNAL.")
         elif not self.akai_controller:
             print(
                 "MW WARNING: _connect_signals - self.akai_controller is None. Cannot connect fire_button_event.")
@@ -1051,7 +1051,7 @@ class MainWindow(QMainWindow):
                         f"MW WARNING: Error disconnecting pause UI signal: {e_disc_pause_ui}")
                 self.oled_display_manager.active_graphic_pause_state_changed.connect(
                     self._update_oled_play_pause_button_ui)
-        print("MW TRACE: _connect_signals FINISHED.")
+        # print("MW TRACE: _connect_signals FINISHED.")
 
     def keyPressEvent(self, event: QKeyEvent):
         # Existing print for MW_PAD_ROUTER in _handle_fire_pad_event_INTERNAL will show routing
@@ -1417,7 +1417,7 @@ class MainWindow(QMainWindow):
                 self.gui_knob4.setToolTip(f"Anim Speed: {current_fps:.1f} FPS")
                 self.gui_knob4.valueChanged.connect(
                     self._on_animator_speed_knob_changed)
-                print("MW TRACE: Knob 4 configured for ANIMATOR SPEED.")
+                # print("MW TRACE: Knob 4 configured for ANIMATOR SPEED.")
         elif sampler_is_active and self.screen_sampler_manager:
             # Sampler is ACTIVE, Animator is NOT PLAYING - Knob 4 controls Sampler Hue
             adj_s = self.screen_sampler_manager.current_sampler_params.get(
@@ -1432,7 +1432,7 @@ class MainWindow(QMainWindow):
                     f"Sampler: Hue Shift ({hue_val_int:+d})")
                 self.gui_knob4.valueChanged.connect(
                     self._on_sampler_hue_knob_changed)
-                print("MW TRACE: Knob 4 configured for SAMPLER HUE.")
+                # print("MW TRACE: Knob 4 configured for SAMPLER HUE.")
         else:
             # NEITHER Animator Playing NOR Sampler Active - Knob 4 is Global Resonance (or Unassigned)
             if self.gui_knob4:
@@ -1440,7 +1440,7 @@ class MainWindow(QMainWindow):
                 self.gui_knob4.setRange(0, 127)
                 self.gui_knob4.setValue(64)
                 # self.gui_knob4.valueChanged.connect(self._on_global_resonance_knob_changed) # Future
-                print("MW TRACE: Knob 4 configured for GLOBAL RESONANCE/UNASSIGNED.")
+                # print("MW TRACE: Knob 4 configured for GLOBAL RESONANCE/UNASSIGNED.")
         # --- Global UI State Management ---
 
     def _update_global_ui_interaction_states(self):
@@ -2309,8 +2309,8 @@ class MainWindow(QMainWindow):
                 # and also handle its own OLED feedback.
                 handler_to_call(new_gui_value)                
                 # print(f"MW TRACE: Physical Enc {encoder_id} (delta {delta}) -> GUI Knob new value {new_gui_value} for handler {handler_to_call.__name__}") # Optional
-        else: # Optional
-            print(f"MW TRACE: No action for physical encoder {encoder_id} in current context.")
+        # else: # Optional
+            # print(f"MW TRACE: No action for physical encoder {encoder_id} in current context.")
 
     def _on_global_brightness_knob_changed(self, gui_knob_value: int):
         """
@@ -2342,7 +2342,7 @@ class MainWindow(QMainWindow):
         Reconfigures the top 4 GUI knobs based on sampler active state.
         Disconnects old signals, sets new ranges, values, tooltips, and connects new signals.
         """
-        print(f"MW TRACE: _on_sampler_activity_changed_for_knobs: Sampler active = {sampler_is_active}")
+        # print(f"MW TRACE: _on_sampler_activity_changed_for_knobs: Sampler active = {sampler_is_active}")
         knobs_to_reconfigure = [self.gui_knob1, self.gui_knob2, self.gui_knob3, self.gui_knob4]
         for knob in knobs_to_reconfigure:
             if knob:
@@ -2376,7 +2376,7 @@ class MainWindow(QMainWindow):
                 self.gui_knob4.setValue(hue_val_int_for_knob_and_tooltip) 
                 self.gui_knob4.setToolTip(f"Sampler: Hue Shift ({hue_val_int_for_knob_and_tooltip:+d})") # Removed °
                 self.gui_knob4.valueChanged.connect(self._on_sampler_hue_knob_changed)            
-            print("MW TRACE: Knobs configured for SAMPLER mode.")
+            # print("MW TRACE: Knobs configured for SAMPLER mode.")
         else: # Sampler is OFF - Configure for Global mode
             self._setup_global_brightness_knob() 
             if self.gui_knob2: 
@@ -2388,7 +2388,7 @@ class MainWindow(QMainWindow):
             if self.gui_knob4: 
                 self.gui_knob4.setToolTip("Resonance (Global - Unassigned)")
                 self.gui_knob4.setRange(0,127); self.gui_knob4.setValue(64)
-            print("MW TRACE: Knobs configured for GLOBAL mode.")
+            # print("MW TRACE: Knobs configured for GLOBAL mode.")
 
     def _on_sampler_adjustments_updated_for_knobs(self, adjustments: dict):
         """
@@ -2497,7 +2497,7 @@ class MainWindow(QMainWindow):
             # self.status_bar.showMessage("Sampler deactivated by other component.", 2000) # Optional
 
     def _on_oled_startup_animation_finished(self): # <<< OR WHATEVER NAME YOU CHOSE
-        print("MW TRACE: _on_oled_startup_animation_finished called.") # Optional
+        # print("MW TRACE: _on_oled_startup_animation_finished called.") # Optional
         if not self.oled_display_manager:
             print("MW WARNING: OLEDDisplayManager not available in _on_oled_startup_animation_finished.") # Optional
             return
@@ -2597,7 +2597,7 @@ class MainWindow(QMainWindow):
         Updates the internal MainWindow flag `self.is_animator_playing` and then
         reconfigures the contextual knob functions.
         """
-        print(f"MW TRACE: _on_animator_playback_status_changed_for_knobs: Animator playing = {is_playing}") # Optional
+        # print(f"MW TRACE: _on_animator_playback_status_changed_for_knobs: Animator playing = {is_playing}") # Optional
         self.is_animator_playing = is_playing 
         self._update_contextual_knob_configs()
 
@@ -3336,10 +3336,10 @@ class MainWindow(QMainWindow):
             pass
 
     def closeEvent(self, event: QCloseEvent): 
-        print("MW TRACE: closeEvent triggered.")
+        # print("MW TRACE: closeEvent triggered.")
         if self.is_doom_mode_active:
             # If DOOM is active, exit it cleanly first before handling main app save prompts
-            print("MW TRACE: DOOM mode active during closeEvent, exiting DOOM mode first.")
+            # print("MW TRACE: DOOM mode active during closeEvent, exiting DOOM mode first.")
             self._exit_doom_mode() 
             # Let event processing continue to allow animator save prompt if needed
         # Prompt to save unsaved animator changes (original logic)
