@@ -139,6 +139,7 @@ User-generated presets (Animator Sequences, Static Layouts, OLED Items) are save
 ## 📝 Future Ideas
 
 *   Cross-platform packaging (macOS, Linux).
+*   Audio Visualizer on OLED/Pads or both.
 *   More advanced animation features (e.g., easing, layer blending).
 *   Further LazyDOOM enhancements (more enemy types, pickups, sound).
 
