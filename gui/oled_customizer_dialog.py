@@ -866,47 +866,26 @@ class OLEDCustomizerDialog(QDialog):
         if self.save_and_apply_button: # This is your "Save as Active Graphic" button
             self.save_and_apply_button.clicked.connect(self._handle_save_and_apply)
 
-    # class OLEDCustomizerDialog(QDialog):
-    # ...
-    def _load_initial_data(self):
-        print("DEBUG OCD: _load_initial_data - ENTERED METHOD")
 
+    def _load_initial_data(self):
         initial_speed_level = self._delay_ms_to_speed_level(
             self._initial_global_scroll_delay_ms)
         if self.global_scroll_speed_level_slider:
             self.global_scroll_speed_level_slider.setValue(initial_speed_level)
-
         self._update_scroll_speed_display_label(
             initial_speed_level, self._initial_global_scroll_delay_ms)
-
         if self.text_font_family_combo:
             self._populate_font_family_combo()
-
-        print(
-            f"DEBUG OCD: _load_initial_data - Before populate check. self.item_library_list is {self.item_library_list}, type is {type(self.item_library_list)}")
-
         if self.item_library_list is not None:
-            if not self.item_library_list:
-                print(
-                    f"DEBUG OCD WARNING: _load_initial_data - self.item_library_list reference exists BUT underlying Qt object may be invalid (evaluates to False). Object: {self.item_library_list}")
-
-            print(
-                f"DEBUG OCD: _load_initial_data - Proceeding to call _populate_item_library_list.")
             self._populate_item_library_list()
-        else:
-            print("DEBUG OCD ERROR: _load_initial_data - self.item_library_list is LITERALLY None, cannot populate.")
-
+        
         # Attempt to select the initial active item in the QListWidget
         # Ensure paths are compared consistently (e.g., both with forward slashes)
         path_to_select = None
         if self._intended_active_graphic_relative_path:
             path_to_select = self._intended_active_graphic_relative_path.replace(
                 os.path.sep, '/')
-
         if self.item_library_list and self.item_library_list.count() > 0 and path_to_select:
-            print(
-                f"DEBUG OCD: _load_initial_data - Attempting to select initial active item: '{path_to_select}'")
-            found_initial = False
             for i in range(self.item_library_list.count()):
                 list_item = self.item_library_list.item(i)
                 item_data = list_item.data(Qt.ItemDataRole.UserRole)
@@ -917,20 +896,14 @@ class OLEDCustomizerDialog(QDialog):
                     if lib_item_rel_path == path_to_select:
                         self.item_library_list.setCurrentItem(list_item)
                         # _on_library_selection_changed will fire and update preview etc.
-                        print(
-                            f"DEBUG OCD: _load_initial_data - Initial active item '{path_to_select}' FOUND and selected in library list.")
-                        found_initial = True
                         break
-            if not found_initial:
-                print(
-                    f"DEBUG OCD WARNING: _load_initial_data - Initial active item '{path_to_select}' NOT FOUND in library list.")
-        elif self.item_library_list and self.item_library_list.count() > 0:
-            print(
-                f"DEBUG OCD: _load_initial_data - No specific initial item to select, or it wasn't found. List has {self.item_library_list.count()} items.")
+        
+        self._update_library_button_states()
+        self._update_save_this_item_button_state()
 
         self._update_library_button_states()
         self._update_save_this_item_button_state()
-        print("DEBUG OCD: _load_initial_data - EXITED METHOD")
+        # print("DEBUG OCD: _load_initial_data - EXITED METHOD")
 
 
     def _populate_font_family_combo(self):
