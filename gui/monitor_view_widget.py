@@ -4,8 +4,8 @@ from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QPointF, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QMouseEvent, QCursor
 from enum import Enum
 
-print("--- EXECUTING monitor_view_widget.py (VERSION: MVW_JULY_22_B) ---")
-print(f"--- MVW __file__: {__file__} ---")
+# print("--- EXECUTING monitor_view_widget.py (VERSION: MVW_JULY_22_B) ---")
+# print(f"--- MVW __file__: {__file__} ---")
 
 MONITOR_AREA_PADDING = 10
 DEFAULT_MONITOR_BG_COLOR = QColor(55, 55, 60)
@@ -69,7 +69,7 @@ class MonitorViewWidget(QWidget):
         """Sets the target monitor, recalculates scales, and updates the selection rectangle based on current logical values."""
         target_mon_info = next((m for m in self.all_monitors_original_info if m['id'] == target_mss_id), None)
         if not target_mon_info:
-            print(f"MonitorViewWidget Error: Invalid target_mss_id: {target_mss_id}")
+            # print(f"MonitorViewWidget Error: Invalid target_mss_id: {target_mss_id}")
             # Potentially fallback or clear if current target_monitor_mss_id becomes invalid
             if self.all_monitors_original_info: self.target_monitor_mss_id = self.all_monitors_original_info[0]['id']
             else: self.target_monitor_mss_id = None; self._reset_scaled_rects()
@@ -109,7 +109,7 @@ class MonitorViewWidget(QWidget):
         self._clamp_selection_rect_to_current_monitor_view()
 
     def set_current_selection_from_params(self, target_mss_id: int, region_rect_percentage: dict):
-        print(f"--- MVW.set_current_selection_from_params CALLED (VERSION: MVW_JULY_22_B) --- target_id={target_mss_id}, region%={region_rect_percentage}")
+        # print(f"--- MVW.set_current_selection_from_params CALLED (VERSION: MVW_JULY_22_B) --- target_id={target_mss_id}, region%={region_rect_percentage}")
         """ Called by MainWindow/Dialog to set selection based on loaded/defined parameters (percentages). """
         target_mon_info = next((m for m in self.all_monitors_original_info if m['id'] == target_mss_id), None)
         if not target_mon_info:
@@ -416,7 +416,8 @@ if __name__ == '__main__':
     monitor_view_main.set_monitors_data(mock_monitors_main, target_mss_id_to_focus=1)
 
     def on_selection_changed_main(mon_id, region_dict): 
-        print(f"Test Main: MonID {mon_id}, Region %: x:{region_dict['x']:.4f}, y:{region_dict['y']:.4f}, w:{region_dict['width']:.4f}, h:{region_dict['height']:.4f}")
+        # print(f"Test Main: MonID {mon_id}, Region %: x:{region_dict['x']:.4f}, y:{region_dict['y']:.4f}, w:{region_dict['width']:.4f}, h:{region_dict['height']:.4f}")
+        pass  # Keep function but silence the output
 
     monitor_view_main.region_selection_changed.connect(on_selection_changed_main)
     btn_get_sel_main = QPushButton("Get Current Sel Params")

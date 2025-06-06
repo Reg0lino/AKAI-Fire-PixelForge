@@ -29,11 +29,11 @@ DEFAULT_TEXT_FONT_SIZE_PX = 12
 # --- Simplified import for get_resource_path ---
 try:
     from utils import get_resource_path as resource_path_func
-    print(f"DEBUG (oled_renderer.py): Successfully imported get_resource_path from utils.")
+    # print(f"DEBUG (oled_renderer.py): Successfully imported get_resource_path from utils.")
 except ImportError as e_utils:
     print(f"ERROR (oled_renderer.py): Could not import get_resource_path from utils: {e_utils}")
-    print(f"  Current sys.path for oled_renderer: {sys.path}")
-    print(f"  Location of oled_renderer.py: {__file__}")
+    # print(f"  Current sys.path for oled_renderer: {sys.path}")
+    # print(f"  Location of oled_renderer.py: {__file__}")
     # Fallback if direct import fails (e.g., running oled_renderer.py standalone without project root in path)
     def resource_path_func(relative_path_from_project_root: str) -> str:
         oled_utils_dir = os.path.dirname(os.path.abspath(__file__))
@@ -55,16 +55,16 @@ except Exception as e:
 
 try:
     # --- TomThumb Font Loading with Enhanced Debugging ---
-    print(f"DEBUG (oled_renderer.py): Attempting to load TomThumb font.")
+    # print(f"DEBUG (oled_renderer.py): Attempting to load TomThumb font.")
     tom_thumb_relative_path = os.path.join("resources", "fonts", CUSTOM_FONT_FILENAME)
-    print(f"DEBUG (oled_renderer.py): Relative path for TomThumb: '{tom_thumb_relative_path}'")
+    # print(f"DEBUG (oled_renderer.py): Relative path for TomThumb: '{tom_thumb_relative_path}'")
     font_path = resource_path_func(tom_thumb_relative_path)
-    print(f"DEBUG (oled_renderer.py): Path returned by resource_path_func for TomThumb: '{font_path}'")
+    # print(f"DEBUG (oled_renderer.py): Path returned by resource_path_func for TomThumb: '{font_path}'")
     if os.path.exists(font_path):
         _FONT_OBJECT = ImageFont.truetype(
             font_path, CUSTOM_FONT_TARGET_HEIGHT_PX)
-        print(
-            f"INFO (oled_renderer): Loaded custom font '{CUSTOM_FONT_FILENAME}' @ {CUSTOM_FONT_TARGET_HEIGHT_PX}px from '{font_path}'")
+        # print(
+        #     f"INFO (oled_renderer): Loaded custom font '{CUSTOM_FONT_FILENAME}' @ {CUSTOM_FONT_TARGET_HEIGHT_PX}px from '{font_path}'")
     else:
         print(
             f"WARNING (oled_renderer): Custom font file '{CUSTOM_FONT_FILENAME}' NOT FOUND at resolved path: '{font_path}'.")
@@ -86,8 +86,8 @@ except (IOError, OSError) as e:
             try:
                 _FONT_OBJECT = ImageFont.truetype(
                     fname, DEFAULT_TEXT_FONT_SIZE_PX)
-                print(
-                    f"INFO (oled_renderer): Loaded system font '{fname}' size {DEFAULT_TEXT_FONT_SIZE_PX}px as fallback.")
+                # print(
+                #     f"INFO (oled_renderer): Loaded system font '{fname}' size {DEFAULT_TEXT_FONT_SIZE_PX}px as fallback.")
                 font_loaded = True
                 break
             except IOError:
@@ -179,7 +179,7 @@ def pack_pil_image_to_7bit_stream(pil_monochrome_image: Image.Image) -> bytearra
             return None
             
     if pil_monochrome_image.width != OLED_WIDTH or pil_monochrome_image.height != OLED_HEIGHT:
-        print(f"ERROR (oled_renderer.pack_pil_image_to_7bit_stream): Image dimensions ({pil_monochrome_image.width}x{pil_monochrome_image.height}) do not match OLED ({OLED_WIDTH}x{OLED_HEIGHT}).")
+        # print(f"ERROR (oled_renderer.pack_pil_image_to_7bit_stream): Image dimensions ({pil_monochrome_image.width}x{pil_monochrome_image.height}) do not match OLED ({OLED_WIDTH}x{OLED_HEIGHT}).")
         # Optional: resize/crop, but for now, expect correct size
         return None
 
@@ -279,7 +279,7 @@ def generate_fire_startup_animation(width=OLED_WIDTH, height=OLED_HEIGHT) -> lis
         def fizz_pixel_on(px,py): return logical_pixels_fizz[py][px]
         all_frames_packed.append(_generate_fire_packed_stream_from_logical_pixels(fizz_pixel_on, width, height))
     all_frames_packed.append(get_blank_packed_bitmap())
-    print(f"INFO (oled_renderer): Generated {len(all_frames_packed)} frames for new startup animation.")
+    # print(f"INFO (oled_renderer): Generated {len(all_frames_packed)} frames for new startup animation.")
     return all_frames_packed
 
 def _unpack_fire_7bit_stream_to_logical_image(packed_stream: bytearray, width: int, height: int) -> Image.Image:
