@@ -68,7 +68,7 @@ class OLEDCustomizerDialog(QDialog):
     def __init__(self,
                 current_active_graphic_path: str | None,
                 current_global_scroll_delay_ms: int,
-                available_oled_items: list,
+                available_oled_items: list, # Note: available_oled_items is not directly used by dialog anymore
                 user_oled_presets_base_path: str,
                 available_app_fonts: list[str],
                 parent: QWidget | None = None):
@@ -76,11 +76,22 @@ class OLEDCustomizerDialog(QDialog):
         self.setWindowTitle("⚙️ OLED Active Graphic Manager")
         self.resize(DIALOG_INITIAL_WIDTH, DIALOG_INITIAL_HEIGHT)
         self.setMinimumSize(DIALOG_MINIMUM_WIDTH, DIALOG_MINIMUM_HEIGHT)
+
+        # Store initial state for comparison and for emitting changes
         self._initial_active_graphic_path = current_active_graphic_path
         self._initial_global_scroll_delay_ms = current_global_scroll_delay_ms
-        self._current_dialog_chosen_active_graphic_relative_path: str | None = self._initial_active_graphic_path
-        # Initialize all UI attributes to None first
-        self.default_startup_item_combo: QComboBox | None = None
+        
+        # This will hold the path of the item that should become active if the user accepts.
+        # It's initialized with the incoming active path.
+        # It will be updated if the user selects something from the library and hits "Save as Active Graphic",
+        # or if an editor item is saved and applied.
+        self._intended_active_graphic_relative_path: str | None = self._initial_active_graphic_path
+
+        # Flag to track if the global scroll speed slider was changed by the user
+        self._global_scroll_speed_changed_by_user = False
+
+        # Initialize all UI attributes to None first (as before)
+        # self.default_startup_item_combo will be removed from this list
         self.global_scroll_speed_level_slider: QSlider | None = None
         self.global_scroll_speed_display_label: QLabel | None = None
         self.item_library_list: QListWidget | None = None
@@ -144,7 +155,7 @@ class OLEDCustomizerDialog(QDialog):
         self.save_this_animation_button: QPushButton | None = None
         self.oled_preview_label: QLabel | None = None
         self.button_box: QDialogButtonBox | None = None
-        self.save_and_apply_button: QPushButton | None = None
+        self.save_and_apply_button: QPushButton | None = None # This is your "Save as Active Graphic" button
         self.user_oled_presets_base_path = user_oled_presets_base_path
         self.text_items_dir = os.path.join(
             self.user_oled_presets_base_path, USER_OLED_TEXT_ITEMS_SUBDIR)
@@ -152,7 +163,7 @@ class OLEDCustomizerDialog(QDialog):
             self.user_oled_presets_base_path, USER_OLED_ANIM_ITEMS_SUBDIR)
         self.available_app_fonts = available_app_fonts
 
-        # State Variables
+        # State Variables (as before)
         self._preview_scroll_timer = QTimer(self)
         self._preview_scroll_timer.timeout.connect(self._scroll_preview_step)
         self._preview_current_scroll_offset = 0
@@ -181,28 +192,26 @@ class OLEDCustomizerDialog(QDialog):
         self._library_preview_anim_fps = 15.0
         self._library_preview_anim_loop_behavior = "Loop Infinitely"
         self._is_library_preview_anim_playing = False
+        
         self._init_ui()
         self._connect_signals()
         QTimer.singleShot(0, self._load_initial_data)
-        # This also calls _update_save_this_item_button_state
         self._update_editor_panel_visibility(None)
-
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
-        self.setLayout(main_layout) # Ensure main_layout is set on the dialog
+        self.setLayout(main_layout)
 
         # --- Global OLED Settings Group ---
         global_settings_group = QGroupBox("Global OLED Settings")
         global_settings_layout = QHBoxLayout(global_settings_group)
-        # ... (Global settings widgets are created and added to global_settings_layout as before) ...
-        global_settings_layout.addWidget(QLabel("Set as Active Graphic:"))
-        self.default_startup_item_combo = QComboBox()
-        self.default_startup_item_combo.setMinimumWidth(200)
-        self.default_startup_item_combo.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        global_settings_layout.addWidget(self.default_startup_item_combo, 1)
-        global_settings_layout.addSpacing(20)
+        
+        # Remove "Set as Active Graphic" Combo Box and its label
+        # global_settings_layout.addWidget(QLabel("Set as Active Graphic:"))
+        # self.default_startup_item_combo = QComboBox() ... (and its setup)
+
+        # Center the Global Scroll Speed controls
+        global_settings_layout.addStretch(1) # Add stretch before
         global_settings_layout.addWidget(QLabel("Global Scroll Speed:"))
         self.global_scroll_speed_level_slider = QSlider(
             Qt.Orientation.Horizontal)
@@ -215,38 +224,38 @@ class OLEDCustomizerDialog(QDialog):
         self.global_scroll_speed_level_slider.setTickPosition(
             QSlider.TickPosition.TicksBelow)
         global_settings_layout.addWidget(
-            self.global_scroll_speed_level_slider, 1)
+            self.global_scroll_speed_level_slider, 1) # Give slider some stretch weight
         self.global_scroll_speed_display_label = QLabel()
         self.global_scroll_speed_display_label.setMinimumWidth(90)
         self.global_scroll_speed_display_label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         global_settings_layout.addWidget(
             self.global_scroll_speed_display_label)
+        global_settings_layout.addStretch(1) # Add stretch after
+        
         main_layout.addWidget(global_settings_group)
 
         # --- Main Splitter ---
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
-        main_layout.addWidget(self.splitter, 1) # Add splitter to main layout, allow it to stretch vertically
+        main_layout.addWidget(self.splitter, 1) 
 
         # --- Left Pane of Splitter (Container for Library and Preview) ---
         left_pane_widget = QWidget()
         left_pane_layout = QVBoxLayout(left_pane_widget)
-        left_pane_layout.setContentsMargins(0,0,0,0) # Optional: keep margins tight
+        left_pane_layout.setContentsMargins(0,0,0,0) 
 
-        # Item Library Group (goes into left_pane_layout)
         library_group = QGroupBox("Item Library")
-        # Make library group expand vertically within the left pane
         library_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         library_layout = QVBoxLayout(library_group)
         self.item_library_list = QListWidget()
-        self.item_library_list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding) # Ensure list widget itself expands
-        library_layout.addWidget(self.item_library_list, 1) # Give stretch factor to list widget
+        self.item_library_list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding) 
+        library_layout.addWidget(self.item_library_list, 1) 
 
         library_buttons_layout = QGridLayout()
         self.new_text_item_button = QPushButton("✨ New Text Item")
         self.new_anim_item_button = QPushButton(
             "🎬 New Animation or Image Item")
-        if self.new_anim_item_button: # Check for None
+        if self.new_anim_item_button: 
             self.new_anim_item_button.setEnabled(IMAGE_PROCESSING_AVAILABLE)
         self.edit_selected_item_button = QPushButton("✏️ Edit Selected")
         self.delete_selected_item_button = QPushButton("🗑️ Delete Selected")
@@ -256,11 +265,10 @@ class OLEDCustomizerDialog(QDialog):
         library_buttons_layout.addWidget(
             self.delete_selected_item_button, 1, 1)
         library_layout.addLayout(library_buttons_layout)
-        left_pane_layout.addWidget(library_group, 1) # Add library_group to left pane, allow stretch
+        left_pane_layout.addWidget(library_group, 1) 
 
-        # Live Preview (Main) Group (goes into left_pane_layout, below library)
         preview_group = QGroupBox("Live Preview (Main)")
-        preview_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed) # Fixed vertical size
+        preview_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed) 
         preview_layout = QVBoxLayout(preview_group)
         self.oled_preview_label = QLabel("Preview")
         preview_label_width = NATIVE_OLED_WIDTH * PREVIEW_LABEL_SCALE_FACTOR
@@ -272,19 +280,19 @@ class OLEDCustomizerDialog(QDialog):
         self.oled_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         preview_layout.addWidget(
             self.oled_preview_label, 0, Qt.AlignmentFlag.AlignCenter)
-        left_pane_layout.addWidget(preview_group) # Add preview_group to left pane
+        left_pane_layout.addWidget(preview_group) 
 
-        self.splitter.addWidget(left_pane_widget) # Add the combined left_pane_widget to the splitter
+        self.splitter.addWidget(left_pane_widget) 
 
         # --- Right Pane of Splitter (Item Editor) ---
         self.item_editor_group = QGroupBox("Item Editor")
         self.item_editor_group.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # Editor group should expand
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) 
         item_editor_main_layout = QVBoxLayout(self.item_editor_group)
 
         self.editor_stacked_widget = QStackedWidget()
         self.editor_stacked_widget.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # Stacked widget should expand
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) 
 
         self.text_editor_widget = self._create_text_editor_panel()
         if self.text_editor_widget:
@@ -294,47 +302,26 @@ class OLEDCustomizerDialog(QDialog):
 
         self.animation_editor_widget_container = self._create_animation_editor_panel()
         if self.animation_editor_widget_container:
-            # The animation_editor_widget_container (page_widget) already has
-            # setMinimumHeight and Expanding vertical policy.
-            # The QScrollArea inside it handles the actual scrolling content.
             self.animation_editor_widget_container.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             self.editor_stacked_widget.addWidget(self.animation_editor_widget_container)
 
-        item_editor_main_layout.addWidget(self.editor_stacked_widget, 1) # Add stacked widget with stretch
-        self.splitter.addWidget(self.item_editor_group) # Add editor group to the right pane of splitter
+        item_editor_main_layout.addWidget(self.editor_stacked_widget, 1) 
+        self.splitter.addWidget(self.item_editor_group) 
 
-        # --- Splitter Initial Sizes ---
-        # Adjust initial widths as needed. The heights will be managed by the splitter and main layout.
-        library_initial_width = 280 # Or your preferred width for the left pane
-        # Editor takes the rest of the available width
-        editor_initial_width = DIALOG_INITIAL_WIDTH - library_initial_width - self.splitter.handleWidth() - 20 # Rough estimate
+        library_initial_width = 280 
+        editor_initial_width = DIALOG_INITIAL_WIDTH - library_initial_width - self.splitter.handleWidth() - 20 
         self.splitter.setSizes([library_initial_width, max(100, editor_initial_width)])
-        # Optional: Set stretch factors for splitter panes if one should dominate resizing
-        # self.splitter.setStretchFactor(0, 1) # Index of left pane
-        # self.splitter.setStretchFactor(1, 2) # Index of right pane (editor), give it more weight
-
+        
         # --- Dialog Buttons (at the very bottom) ---
         self.button_box = QDialogButtonBox()
+        # self.save_and_apply_button is your "Save as Active Graphic" button
         self.save_and_apply_button = self.button_box.addButton(
-            "Save && Apply", QDialogButtonBox.ButtonRole.ApplyRole)
-        self.button_box.addButton(QDialogButtonBox.StandardButton.Save)
+            "Save as Active Graphic", QDialogButtonBox.ButtonRole.ApplyRole) 
+        # Remove the standard "Save" button
+        # self.button_box.addButton(QDialogButtonBox.StandardButton.Save) 
         self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
-        main_layout.addWidget(self.button_box) # Add buttons to the main dialog layout
-
-
-
-    def _on_active_graphic_combo_changed(self, index: int):
-        """
-        Slot for when the 'Set as Active Graphic' QComboBox selection changes.
-        Updates the internal state variable that tracks the dialog's chosen active graphic.
-        """
-        current_data = self.default_startup_item_combo.itemData(index)
-        if current_data and isinstance(current_data, dict):
-            self._current_dialog_chosen_active_graphic_relative_path = current_data.get(
-                'path')
-        elif index == 0 and self.default_startup_item_combo.itemText(index) == "None (Show Default Text)":
-            self._current_dialog_chosen_active_graphic_relative_path = None
+        main_layout.addWidget(self.button_box)
 
     def _speed_level_to_delay_ms(self, level: int) -> int:
         if level <= MIN_SPEED_LEVEL:
@@ -802,22 +789,20 @@ class OLEDCustomizerDialog(QDialog):
         # Global Settings
         if self.global_scroll_speed_level_slider:
             self.global_scroll_speed_level_slider.valueChanged.connect(self._on_global_scroll_speed_level_slider_changed)
-        if self.default_startup_item_combo: 
-            try: 
-                self.default_startup_item_combo.currentIndexChanged.disconnect(self._on_active_graphic_combo_changed)
-            except TypeError: 
-                pass 
-            self.default_startup_item_combo.currentIndexChanged.connect(self._on_active_graphic_combo_changed)
+        
+        # Removed connection for self.default_startup_item_combo as it's deleted
+        # if self.default_startup_item_combo: ...
+
         # Library
-        obj_to_check_p4_1 = self.item_library_list
-        is_obj_not_none_p4_2 = obj_to_check_p4_1 is not None
-        bool_of_obj_p4_3 = bool(obj_to_check_p4_1) 
         if self.item_library_list is not None: 
             try:
                 self.item_library_list.currentItemChanged.connect(self._on_library_selection_changed)
                 self.item_library_list.itemDoubleClicked.connect(self._handle_edit_selected_item)
-            except Exception as e_connect: # Catch any exception during connect
-                pass
+            except Exception as e_connect: 
+                print(f"ERROR OCD: EXCEPTION during connecting signals for item_library_list: {e_connect}")
+        else:
+            print(f"ERROR OCD: self.item_library_list is None, cannot connect signals.")
+
         if self.new_text_item_button: self.new_text_item_button.clicked.connect(self._handle_new_text_item)
         if self.new_anim_item_button: self.new_anim_item_button.clicked.connect(self._handle_new_animation_item)
         if self.edit_selected_item_button: self.edit_selected_item_button.clicked.connect(self._handle_edit_selected_item)
@@ -867,28 +852,86 @@ class OLEDCustomizerDialog(QDialog):
 
         # Dialog Buttons
         if self.button_box:
-            self.button_box.accepted.connect(self.accept)
-            self.button_box.rejected.connect(self.reject)
-        if self.save_and_apply_button:
+            # The .accepted signal is usually connected to QDialogButtonBox.StandardButton.Ok
+            # or buttons with ButtonRole.AcceptRole.
+            # Since "Save as Active Graphic" has ApplyRole, its clicked signal is handled directly.
+            # The main .accepted signal of the button_box might now only be triggered if you
+            # add an "OK" button, or if "Save as Active Graphic" also triggers it due to its role.
+            # For clarity, we connect our specific apply button directly.
+            # If QDialogButtonBox.StandardButton.Save was the only one triggering .accepted before,
+            # this might not be needed anymore, or .accepted might not fire as expected.
+            # However, super().accept() will be called by _handle_save_and_apply.
+            # self.button_box.accepted.connect(self.accept) # Re-evaluate if this is needed.
+            self.button_box.rejected.connect(self.reject) # Cancel button still uses this.
+        if self.save_and_apply_button: # This is your "Save as Active Graphic" button
             self.save_and_apply_button.clicked.connect(self._handle_save_and_apply)
 
+    # class OLEDCustomizerDialog(QDialog):
+    # ...
     def _load_initial_data(self):
+        print("DEBUG OCD: _load_initial_data - ENTERED METHOD")
+
         initial_speed_level = self._delay_ms_to_speed_level(
             self._initial_global_scroll_delay_ms)
-        self.global_scroll_speed_level_slider.setValue(initial_speed_level)
+        if self.global_scroll_speed_level_slider:
+            self.global_scroll_speed_level_slider.setValue(initial_speed_level)
+
         self._update_scroll_speed_display_label(
             initial_speed_level, self._initial_global_scroll_delay_ms)
-        self._populate_font_family_combo()
-        self._populate_item_library_list()
-        if self._initial_active_graphic_path:  # <<< CHANGED ATTRIBUTE NAME
-            for i in range(self.default_startup_item_combo.count()):
-                item_data = self.default_startup_item_combo.itemData(i)
-                # <<< CHANGED
-                if item_data and item_data.get('path') == self._initial_active_graphic_path:
-                    self.default_startup_item_combo.setCurrentIndex(i)
-                    break
+
+        if self.text_font_family_combo:
+            self._populate_font_family_combo()
+
+        print(
+            f"DEBUG OCD: _load_initial_data - Before populate check. self.item_library_list is {self.item_library_list}, type is {type(self.item_library_list)}")
+
+        if self.item_library_list is not None:
+            if not self.item_library_list:
+                print(
+                    f"DEBUG OCD WARNING: _load_initial_data - self.item_library_list reference exists BUT underlying Qt object may be invalid (evaluates to False). Object: {self.item_library_list}")
+
+            print(
+                f"DEBUG OCD: _load_initial_data - Proceeding to call _populate_item_library_list.")
+            self._populate_item_library_list()
+        else:
+            print("DEBUG OCD ERROR: _load_initial_data - self.item_library_list is LITERALLY None, cannot populate.")
+
+        # Attempt to select the initial active item in the QListWidget
+        # Ensure paths are compared consistently (e.g., both with forward slashes)
+        path_to_select = None
+        if self._intended_active_graphic_relative_path:
+            path_to_select = self._intended_active_graphic_relative_path.replace(
+                os.path.sep, '/')
+
+        if self.item_library_list and self.item_library_list.count() > 0 and path_to_select:
+            print(
+                f"DEBUG OCD: _load_initial_data - Attempting to select initial active item: '{path_to_select}'")
+            found_initial = False
+            for i in range(self.item_library_list.count()):
+                list_item = self.item_library_list.item(i)
+                item_data = list_item.data(Qt.ItemDataRole.UserRole)
+                # Ensure item_data and 'relative_path' exist and normalize library item's path
+                if item_data and item_data.get('relative_path'):
+                    lib_item_rel_path = item_data.get(
+                        'relative_path').replace(os.path.sep, '/')
+                    if lib_item_rel_path == path_to_select:
+                        self.item_library_list.setCurrentItem(list_item)
+                        # _on_library_selection_changed will fire and update preview etc.
+                        print(
+                            f"DEBUG OCD: _load_initial_data - Initial active item '{path_to_select}' FOUND and selected in library list.")
+                        found_initial = True
+                        break
+            if not found_initial:
+                print(
+                    f"DEBUG OCD WARNING: _load_initial_data - Initial active item '{path_to_select}' NOT FOUND in library list.")
+        elif self.item_library_list and self.item_library_list.count() > 0:
+            print(
+                f"DEBUG OCD: _load_initial_data - No specific initial item to select, or it wasn't found. List has {self.item_library_list.count()} items.")
+
         self._update_library_button_states()
         self._update_save_this_item_button_state()
+        print("DEBUG OCD: _load_initial_data - EXITED METHOD")
+
 
     def _populate_font_family_combo(self):
         self.text_font_family_combo.blockSignals(True)
@@ -900,87 +943,77 @@ class OLEDCustomizerDialog(QDialog):
         self.text_font_family_combo.blockSignals(False)
 
     def _populate_item_library_list(self):
-        # print("DIALOG DEBUG: _populate_item_library_list CALLED")
-        if self.default_startup_item_combo is None or self.item_library_list is None:
-            print("DIALOG CRITICAL ERROR: UI elements for library list/combo not initialized before _populate_item_library_list! Aborting population.")
+        print("DEBUG OCD: _populate_item_library_list - ENTERED") # Kept entry log
+
+        if self.item_library_list is None:
+            print("DEBUG OCD ERROR: _populate_item_library_list - self.item_library_list is None! Aborting.")
             return
-        self.default_startup_item_combo.blockSignals(True)
         self.item_library_list.clear()
-        self.default_startup_item_combo.clear()
-        self.default_startup_item_combo.addItem(
-            "None (Show Default Text)", userData=None)
-        os.makedirs(self.text_items_dir, exist_ok=True)
-        os.makedirs(self.animation_items_dir, exist_ok=True)
-        found_items_for_combo = []
+        try:
+            os.makedirs(self.text_items_dir, exist_ok=True)
+            os.makedirs(self.animation_items_dir, exist_ok=True)
+        except OSError as e:
+            print(f"DEBUG OCD ERROR: _populate_item_library_list - Could not create preset directories: {e}")
+            # Consider showing a QMessageBox to the user here in a real scenario
+            # For now, just log and continue; listing might fail or be empty.
         item_sources = [
             {"dir": self.text_items_dir, "internal_type": "text", "base_label": "Text"},
-            {"dir": self.animation_items_dir,
-                "internal_type": "animation", "base_label": "Animation"}
+            {"dir": self.animation_items_dir, "internal_type": "animation", "base_label": "Animation"}
         ]
+        items_added_count = 0
         for source in item_sources:
-            if not os.path.isdir(source["dir"]):
+            current_scan_dir = source["dir"]
+            # print(f"DEBUG OCD: _populate_item_library_list - Scanning directory: '{current_scan_dir}' for type '{source['internal_type']}'")
+            
+            if not os.path.isdir(current_scan_dir):
+                print(f"DEBUG OCD WARNING: _populate_item_library_list - Directory does not exist: '{current_scan_dir}'. Skipping.")
                 continue
-            for filename in os.listdir(source["dir"]):
+            files_in_dir = []
+            try:
+                files_in_dir = os.listdir(current_scan_dir)
+            except OSError as e_list:
+                print(f"DEBUG OCD ERROR: _populate_item_library_list - Could not list directory '{current_scan_dir}': {e_list}")
+                continue
+            for filename in files_in_dir:
                 if filename.endswith(".json"):
-                    filepath = os.path.join(source["dir"], filename)
+                    filepath = os.path.join(current_scan_dir, filename)
                     display_label_suffix = source["base_label"]
-                    item_name_from_json = os.path.splitext(filename)[0]
-                    actual_item_type_from_json = None
+                    item_name_from_json = os.path.splitext(filename)[0] 
                     try:
                         with open(filepath, 'r', encoding='utf-8') as f:
                             data = json.load(f)
-                        item_name_from_json = data.get(
-                            "item_name", item_name_from_json)
-                        actual_item_type_from_json = data.get("item_type")
-                        if actual_item_type_from_json == "image_animation":
+                        item_name_from_json = data.get("item_name", item_name_from_json)
+                        actual_item_json_type = data.get("item_type")
+                        if actual_item_json_type == "image_animation":
                             frames = data.get("frames_logical")
                             if isinstance(frames, list) and len(frames) == 1:
                                 display_label_suffix = "Image"
                             else:
                                 display_label_suffix = "Animation"
-                        elif actual_item_type_from_json == "text":
+                        elif actual_item_json_type == "text":
                             display_label_suffix = "Text"
+                    except json.JSONDecodeError as e_json:
+                        print(f"DEBUG OCD ERROR: _populate_item_library_list - JSON Decode Error for '{filepath}': {e_json}. Skipping.")
+                        continue
                     except Exception as e_read:
-                        print(
-                            f"Dialog Info: Could not properly read JSON content from {filepath}: {e_read}. Using default label '{display_label_suffix}'.")
+                        print(f"DEBUG OCD WARNING: _populate_item_library_list - Error reading/parsing '{filepath}': {e_read}. Using filename as name.")
                     qlist_item_text = f"{item_name_from_json} ({display_label_suffix})"
                     qlist_item = QListWidgetItem(qlist_item_text)
-                    relative_path = os.path.join(
-                        os.path.basename(source["dir"]), filename)
+                    try:
+                        relative_path = os.path.relpath(filepath, self.user_oled_presets_base_path)
+                        relative_path = relative_path.replace(os.path.sep, '/') 
+                    except ValueError: 
+                        print(f"DEBUG OCD WARNING: Could not create relative path for {filepath}. Using full path.")
+                        relative_path = filepath.replace(os.path.sep, '/')
                     qlist_item.setData(Qt.ItemDataRole.UserRole, {
-                        'path': filepath, 'relative_path': relative_path,
-                        'type': source['internal_type'], 'name': item_name_from_json
+                        'path': filepath,
+                        'relative_path': relative_path,
+                        'type': source['internal_type'], 
+                        'name': item_name_from_json
                     })
                     self.item_library_list.addItem(qlist_item)
-                    found_items_for_combo.append({
-                        'name': item_name_from_json,
-                        'path': os.path.join(os.path.basename(source["dir"]), filename),
-                        'type_label_for_combo': display_label_suffix,
-                        'internal_type_for_combo': source['internal_type']
-                    })
-        found_items_for_combo.sort(key=lambda x: x['name'].lower())
-        for item_info in found_items_for_combo:
-            combo_text = f"{item_info['name']} ({item_info['type_label_for_combo']})"
-            self.default_startup_item_combo.addItem(
-                combo_text,
-                userData={
-                    'path': item_info['path'], 'type': item_info['internal_type_for_combo']}
-            )
-        restored_selection = False
-        if self._current_dialog_chosen_active_graphic_relative_path:
-            for i in range(self.default_startup_item_combo.count()):
-                item_data = self.default_startup_item_combo.itemData(i)
-                if item_data and isinstance(item_data, dict) and \
-                    item_data.get('path') == self._current_dialog_chosen_active_graphic_relative_path:
-                    self.default_startup_item_combo.setCurrentIndex(i)
-                    restored_selection = True
-                    break
-        if not restored_selection and self._current_dialog_chosen_active_graphic_relative_path is not None:
-            self.default_startup_item_combo.setCurrentIndex(0)
-            self._current_dialog_chosen_active_graphic_relative_path = None
-        elif self._current_dialog_chosen_active_graphic_relative_path is None and self.default_startup_item_combo.count() > 0:
-            self.default_startup_item_combo.setCurrentIndex(0)
-        self.default_startup_item_combo.blockSignals(False)
+                    items_added_count += 1
+        print(f"DEBUG OCD: _populate_item_library_list - FINISHED. Total items added: {items_added_count}. QListWidget count: {self.item_library_list.count()}") # Kept summary log
 
     def _play_next_library_preview_anim_frame(self):
         if not self._is_library_preview_anim_playing or \
@@ -1856,18 +1889,33 @@ class OLEDCustomizerDialog(QDialog):
                     self._clear_preview_label_content()
             else:
                 self._clear_preview_label_content()
+
+    # class OLEDCustomizerDialog(QDialog):
+    # ...
     def _mark_editor_dirty_if_needed(self, *args):
         sender = self.sender()
-        if sender == self.default_startup_item_combo or sender == self.global_scroll_speed_level_slider:
+        
+        # self.default_startup_item_combo has been removed.
+        # The global_scroll_speed_level_slider changes are handled by _on_global_scroll_speed_level_slider_changed
+        # which sets self._global_scroll_speed_changed_by_user and calls _update_save_this_item_button_state.
+        # So, we only care if the sender is the global scroll speed slider to PREVENT marking editor dirty.
+        if sender == self.global_scroll_speed_level_slider:
+            # Changes to global settings should not mark the *item editor* as dirty.
+            # The "Save as Active Graphic" button will be enabled by _global_scroll_speed_changed_by_user flag.
             return
+
+        # Only mark dirty if an editor is visible and an item is contextually being edited (new or existing)
         if self.item_editor_group and self.item_editor_group.isVisible() and \
-            (self._is_editing_new_item or self._current_edited_item_path is not None):
+           (self._is_editing_new_item or self._current_edited_item_path is not None):
 
             if not self._editor_has_unsaved_changes:
-                pass
+                # print("DEBUG OCD: Editor marked dirty.") # Optional debug
+                pass 
             self._editor_has_unsaved_changes = True
-            active_editor_widget = self.editor_stacked_widget.currentWidget(
-            ) if self.editor_stacked_widget else None
+
+            active_editor_widget = self.editor_stacked_widget.currentWidget() if self.editor_stacked_widget else None
+            should_invalidate_frames = False # Initialize here
+
             if active_editor_widget == self.animation_editor_widget_container:
                 anim_processing_option_senders = [
                     self.anim_resize_mode_combo, self.anim_mono_conversion_combo,
@@ -1875,107 +1923,101 @@ class OLEDCustomizerDialog(QDialog):
                     self.anim_contrast_slider, self.anim_brightness_slider,
                     self.anim_sharpen_slider, self.anim_gamma_slider,
                     self.anim_blur_slider, self.anim_noise_type_combo,
-                    self.anim_noise_amount_slider, self.anim_dither_strength_slider                ]
-                should_invalidate_frames = False
+                    self.anim_noise_amount_slider, self.anim_dither_strength_slider
+                ]
+                # Also consider playback_fps and loop_behavior as options that make anim editor dirty
+                # but don't necessarily invalidate *processed* frames, just how they are *used* if saved.
+                # The key is that these options mean the *saved JSON* would be different.
+
                 if sender in anim_processing_option_senders:
                     if sender == self.anim_noise_amount_slider:
                         if self.anim_noise_type_combo and self.anim_noise_type_combo.currentText() != "Off":
                             should_invalidate_frames = True
                     else:
                         should_invalidate_frames = True
+                
+                # If playback options change, it's a dirty edit, but doesn't require re-processing frames.
+                # For simplicity, any interaction with these also implies the item is "dirty" if saved.
+
                 if should_invalidate_frames:
                     if self._processed_logical_frames:
+                        # print("DEBUG OCD: Animation options changed, invalidating processed frames.") # Optional
                         self._processed_logical_frames = None
                         if self.anim_frame_info_label:
                             self.anim_frame_info_label.setText(
                                 "Frames: N/A | Options changed. Re-process.")
                         if self.anim_play_preview_button:
                             if self._is_anim_editor_preview_playing:
-                                self.anim_play_preview_button.setChecked(False)
+                                self.anim_play_preview_button.setChecked(False) # This will trigger its slot
                             self.anim_play_preview_button.setEnabled(False)
-                        self._current_preview_anim_logical_frame = None
-                        self._update_preview()
+                        self._current_preview_anim_logical_frame = None 
+                        # _update_preview() will be called below if not invalidating frames
+                        # if we invalidate, the preview should clear or show "re-process"
+                        self._clear_preview_label_content() # More direct way to clear preview
+
+            # Always update save button states after potentially marking dirty
             self._update_save_this_item_button_state()
+
+            # Update preview if the change doesn't automatically invalidate frames (handled above for anim)
+            # or if it's not one of the sliders whose effect is only seen after "Process Frames"
             if not (active_editor_widget == self.animation_editor_widget_container and should_invalidate_frames):
                 self._update_preview()
-        else:
+        # else:
+            # print("DEBUG OCD: Editor not visible or no item context, not marking dirty.") # Optional
             pass
+
 
     def _update_save_this_item_button_state(self):
         can_save_text_item_locally = False
         can_save_anim_item_locally = False
-        can_apply_via_editor = False  # Can "Save & Apply" using current editor content
-        can_apply_via_library = False  # Can "Save & Apply" using selected library item
-        if not self.editor_stacked_widget:
-            # print(
-            #     "DEBUG OCD: _update_save_this_item_button_state - editor_stacked_widget is None, disabling all.")
+        
+        # Conditions for enabling "Save as Active Graphic" button
+        enable_save_as_active_graphic = False
+        if not self.editor_stacked_widget or not self.item_editor_group:
+            # UI elements crucial for state not ready, disable buttons
             if hasattr(self, 'save_this_text_item_button') and self.save_this_text_item_button:
                 self.save_this_text_item_button.setEnabled(False)
             if hasattr(self, 'save_this_animation_button') and self.save_this_animation_button:
                 self.save_this_animation_button.setEnabled(False)
             if hasattr(self, 'save_and_apply_button') and self.save_and_apply_button:
                 self.save_and_apply_button.setEnabled(False)
-            if self.button_box:
-                save_button = self.button_box.button(
-                    QDialogButtonBox.StandardButton.Save)
-                if save_button:
-                    save_button.setEnabled(False)
             return
-        is_editor_visible = self.item_editor_group.isVisible(
-        ) if self.item_editor_group else False
-        active_widget = self.editor_stacked_widget.currentWidget(
-        ) if self.editor_stacked_widget else None
-        if is_editor_visible and active_widget:
-            if active_widget == self.text_editor_widget:
+        is_editor_visible_and_active = self.item_editor_group.isVisible()
+        active_editor_widget = self.editor_stacked_widget.currentWidget()
+        # Check 1: Editor has valid, saveable changes
+        if is_editor_visible_and_active and (self._editor_has_unsaved_changes or self._is_editing_new_item):
+            if active_editor_widget == self.text_editor_widget:
                 item_name_text = self.item_name_edit.text().strip() if self.item_name_edit else ""
                 is_name_valid = bool(item_name_text)
-                can_save_text_item_locally = (
-                    self._editor_has_unsaved_changes or self._is_editing_new_item) and is_name_valid
-                can_apply_via_editor = can_save_text_item_locally
-
-            elif active_widget == self.animation_editor_widget_container:
-                anim_name_text = self.anim_item_name_edit.text(
-                ).strip() if self.anim_item_name_edit else ""
+                can_save_text_item_locally = is_name_valid
+                if is_name_valid: # If text item is valid and dirty/new
+                    enable_save_as_active_graphic = True
+            elif active_editor_widget == self.animation_editor_widget_container:
+                anim_name_text = self.anim_item_name_edit.text().strip() if self.anim_item_name_edit else ""
                 is_name_valid_anim = bool(anim_name_text)
-                has_processed_frames = self._processed_logical_frames is not None and len(
-                    self._processed_logical_frames) > 0
-                can_save_anim_item_locally = IMAGE_PROCESSING_AVAILABLE and \
-                    (self._editor_has_unsaved_changes or self._is_editing_new_item) and \
-                    is_name_valid_anim and has_processed_frames
-                can_apply_via_editor = can_save_anim_item_locally
-
-        # Determine if "Save & Apply" can be used for a library item (only if editor is not the primary target)
-        if not can_apply_via_editor:  # If editor isn't in a state to be "Saved & Applied"
-            if self.item_library_list is not None and self.item_library_list.currentItem() is not None:
-                can_apply_via_library = True
-        can_apply_something = can_apply_via_editor or can_apply_via_library
+                has_processed_frames = self._processed_logical_frames is not None and len(self._processed_logical_frames) > 0
+                can_save_anim_item_locally = IMAGE_PROCESSING_AVAILABLE and is_name_valid_anim and has_processed_frames
+                if can_save_anim_item_locally: # If anim item is valid, processed and dirty/new
+                    enable_save_as_active_graphic = True
+        # Check 2: A library item is selected (and editor isn't taking precedence for "Save as Active Graphic")
+        # If enable_save_as_active_graphic is already true from editor, this condition doesn't need to make it true again.
+        if not enable_save_as_active_graphic:
+            if self.item_library_list and self.item_library_list.currentItem() is not None:
+                enable_save_as_active_graphic = True
+        # Check 3: Global scroll speed has been changed by the user
+        if self._global_scroll_speed_changed_by_user:
+            enable_save_as_active_graphic = True
+        # Enable/Disable local save buttons in editor panels
         if hasattr(self, 'save_this_text_item_button') and self.save_this_text_item_button:
-            self.save_this_text_item_button.setEnabled(
-                can_save_text_item_locally)
+            self.save_this_text_item_button.setEnabled(can_save_text_item_locally)
         if hasattr(self, 'save_this_animation_button') and self.save_this_animation_button:
-            self.save_this_animation_button.setEnabled(
-                can_save_anim_item_locally)
-
+            self.save_this_animation_button.setEnabled(can_save_anim_item_locally)
+        # Enable/Disable the "Save as Active Graphic" button
         if hasattr(self, 'save_and_apply_button') and self.save_and_apply_button:
-            self.save_and_apply_button.setEnabled(can_apply_something)
+            self.save_and_apply_button.setEnabled(enable_save_as_active_graphic)
+        
+        # The main QDialogButtonBox.StandardButton.Save has been removed, so no logic for it here.
 
-        if self.button_box:
-            save_button = self.button_box.button(
-                QDialogButtonBox.StandardButton.Save)
-            if save_button:
-                enable_main_save = False
-                if is_editor_visible and self._editor_has_unsaved_changes:
-                    if active_widget == self.text_editor_widget:
-                        if bool(self.item_name_edit.text().strip() if self.item_name_edit else False):
-                            enable_main_save = True
-                    elif active_widget == self.animation_editor_widget_container:
-                        anim_name_is_valid = bool(self.anim_item_name_edit.text(
-                        ).strip() if self.anim_item_name_edit else False)
-                        frames_are_processed_and_valid = (
-                            self._processed_logical_frames is not None and len(self._processed_logical_frames) > 0)
-                        if anim_name_is_valid and frames_are_processed_and_valid:
-                            enable_main_save = True
-                save_button.setEnabled(enable_main_save)
 
     def _on_text_scroll_checkbox_changed(self):
         is_scrolling = self.text_scroll_checkbox.isChecked()
@@ -2151,87 +2193,83 @@ class OLEDCustomizerDialog(QDialog):
             QMessageBox.critical(self, "Save Error", f"Failed to save animation item: {e}")
             return False
 
-    def _handle_save_and_apply(self):
-        """
-        Handles the "Save & Apply" button click.
-        1. Determines the target item (editor content or library selection).
-        2. Saves the item if it's from the editor and has changes or is new.
-        3. Sets the target item as the choice in the "Set as Active Graphic" dropdown.
-        4. Accepts and closes the dialog.
-        """
-        target_item_relative_path: str | None = None
-        target_item_type_for_combo: str | None = None
-        save_was_successful_or_not_needed = True
-        is_editor_active_and_valid = False
-        if self.item_editor_group.isVisible() and self._current_edited_item_type:
-            if self._current_edited_item_type == 'text' and self.item_name_edit.text().strip():
-                is_editor_active_and_valid = True
-            elif self._current_edited_item_type == 'animation' and self.anim_item_name_edit.text().strip() and \
+    def _handle_save_and_apply(self): # Assuming this is connected to "Save as Active Graphic"
+        save_from_editor_successful_or_not_needed = True
+        
+        # This will be the relative path of the item to be made active.
+        # Initialize with the path that was active when dialog opened, or last successfully applied.
+        final_active_graphic_to_set = self._intended_active_graphic_relative_path
+
+        # --- Step 1: Handle saving from editor if active and dirty/new ---
+        is_editor_active_and_valid_for_save = False
+        if self.item_editor_group and self.item_editor_group.isVisible() and self._current_edited_item_type:
+            if self._current_edited_item_type == 'text' and self.item_name_edit and self.item_name_edit.text().strip():
+                is_editor_active_and_valid_for_save = True
+            elif self._current_edited_item_type == 'animation' and self.anim_item_name_edit and self.anim_item_name_edit.text().strip() and \
                     IMAGE_PROCESSING_AVAILABLE and self._processed_logical_frames:
-                is_editor_active_and_valid = True
-        if is_editor_active_and_valid and (self._editor_has_unsaved_changes or self._is_editing_new_item):
+                is_editor_active_and_valid_for_save = True
+
+        if is_editor_active_and_valid_for_save and (self._editor_has_unsaved_changes or self._is_editing_new_item):
             if self._current_edited_item_type == 'text':
-                save_was_successful_or_not_needed = self._handle_save_this_text_item()
+                save_from_editor_successful_or_not_needed = self._handle_save_this_text_item()
             elif self._current_edited_item_type == 'animation':
-                save_was_successful_or_not_needed = self._handle_save_this_animation_item()
-            if not save_was_successful_or_not_needed:
-                return  # Stop if save failed/cancelled
+                save_from_editor_successful_or_not_needed = self._handle_save_this_animation_item()
+
+            if not save_from_editor_successful_or_not_needed:
+                # Save failed or was cancelled by user (e.g., in QFileDialog)
+                return 
+
+            # If save was successful, _current_edited_item_path is now the full path of the saved item.
+            # We need its relative path to set as active.
             if self._current_edited_item_path:
-                base_dir_for_type = self.text_items_dir if self._current_edited_item_type == 'text' else self.animation_items_dir
                 try:
-                    full_item_path_norm = os.path.normpath(
-                        self._current_edited_item_path)
-                    base_presets_path_norm = os.path.normpath(
-                        self.user_oled_presets_base_path)
-                    target_item_relative_path = os.path.relpath(
-                        full_item_path_norm, base_presets_path_norm)
-                    target_item_relative_path = target_item_relative_path.replace(
-                        os.path.sep, '/')  # Ensure forward slashes
-                    target_item_type_for_combo = self._current_edited_item_type
-                except ValueError as e_rel:  # Can happen if paths are on different drives on Windows
-                    print(
-                        f"Dialog ERROR: Could not determine relative path for saved item '{self._current_edited_item_path}': {e_rel}")
-                    QMessageBox.warning(
-                        self, "Apply Error", "Could not determine relative path for the saved item. Cannot apply.")
+                    full_item_path_norm = os.path.normpath(self._current_edited_item_path)
+                    base_presets_path_norm = os.path.normpath(self.user_oled_presets_base_path)
+                    final_active_graphic_to_set = os.path.relpath(full_item_path_norm, base_presets_path_norm)
+                    final_active_graphic_to_set = final_active_graphic_to_set.replace(os.path.sep, '/')
+                except ValueError as e_rel:
+                    print(f"Dialog ERROR: Could not determine relative path for saved editor item '{self._current_edited_item_path}': {e_rel}")
+                    QMessageBox.warning(self, "Apply Error", "Could not determine relative path for the saved item. Cannot apply.")
                     return
-            else:
-                print(
-                    "Dialog ERROR: Save & Apply - Editor save successful, but _current_edited_item_path is None.")
+            else: # Should not happen if editor save was successful
+                print(f"Dialog ERROR: Editor save successful, but _current_edited_item_path is None.")
                 return
-        # Editor not active/valid, or no unsaved changes. Use library selection.
-        else:
+        
+        # --- Step 2: If editor wasn't active/dirty, or no item saved from it, check library selection ---
+        # If final_active_graphic_to_set wasn't updated by editor save, check library.
+        # This logic path also covers if only global scroll speed was changed and user hits apply.
+        elif self.item_library_list and self.item_library_list.currentItem():
+            # If an item is selected in the library, that becomes the intended active graphic
             selected_qlist_item = self.item_library_list.currentItem()
-            if selected_qlist_item:
-                item_data = selected_qlist_item.data(Qt.ItemDataRole.UserRole)
-                if item_data:
-                    target_item_relative_path = item_data.get('relative_path')
-                    target_item_type_for_combo = item_data.get('type')
-            else:  # No editor content, no library selection
-                QMessageBox.information(
-                    self, "Save & Apply", "Please select an item from the library or save an edited item first.")
-                return
-        if not target_item_relative_path:
-            QMessageBox.warning(self, "Save & Apply Error",
-                                "Could not determine an item to apply.")
-            return
-        found_in_combo = False
-        for i in range(self.default_startup_item_combo.count()):
-            combo_item_data = self.default_startup_item_combo.itemData(i)
-            if combo_item_data and isinstance(combo_item_data, dict) and \
-                combo_item_data.get('path') == target_item_relative_path:
-                self.default_startup_item_combo.blockSignals(True)
-                self.default_startup_item_combo.setCurrentIndex(i)
-                self.default_startup_item_combo.blockSignals(False)
-                self._current_dialog_chosen_active_graphic_relative_path = target_item_relative_path
-                found_in_combo = True
-                break
-        if not found_in_combo:
-            print(
-                f"Dialog ERROR: Save & Apply - Target item '{target_item_relative_path}' not found in Active Graphic dropdown after save/selection.")
-            QMessageBox.warning(
-                self, "Apply Error", "Could not find the target item in the Active Graphic list after processing. Please check the library.")
-            return
-        self.accept()
+            item_data = selected_qlist_item.data(Qt.ItemDataRole.UserRole)
+            if item_data and item_data.get('relative_path'):
+                final_active_graphic_to_set = item_data.get('relative_path')
+            # If library item has no path, final_active_graphic_to_set remains as initialized (e.g. _initial_active_graphic_path or None)
+        
+        # If no editor action and no library selection, final_active_graphic_to_set will be
+        # whatever was active when the dialog opened (or None), which is fine if only scroll speed changed.
+
+        # --- Step 3: Get current global scroll speed ---
+        current_global_delay_from_slider = self._initial_global_scroll_delay_ms # Default to initial
+        if self.global_scroll_speed_level_slider:
+            current_global_delay_from_slider = self._speed_level_to_delay_ms(
+                self.global_scroll_speed_level_slider.value())
+
+        # --- Step 4: Emit changes and accept the dialog ---
+        self.global_settings_changed.emit(
+            final_active_graphic_to_set,
+            current_global_delay_from_slider
+        )
+        
+        # Update internal trackers to reflect what was just applied
+        self._intended_active_graphic_relative_path = final_active_graphic_to_set
+        self._initial_global_scroll_delay_ms = current_global_delay_from_slider # Update initial for next "dirty" check
+        self._global_scroll_speed_changed_by_user = False # Reset flag
+        self._editor_has_unsaved_changes = False # If editor was saved, it's no longer dirty
+        self._is_editing_new_item = False # If new item was saved, it's no longer "new" in this context
+
+        super().accept() # Close the dialog with accept state
+
 
     def _on_anim_mono_conversion_changed(self):
         if not IMAGE_PROCESSING_AVAILABLE: return
@@ -2357,8 +2395,23 @@ class OLEDCustomizerDialog(QDialog):
     def _on_global_scroll_speed_level_slider_changed(self, speed_level_value: int):
         delay_ms = self._speed_level_to_delay_ms(speed_level_value)
         self._update_scroll_speed_display_label(speed_level_value, delay_ms)
-        if self.editor_stacked_widget.currentWidget() == self.text_editor_widget and \
-            self._preview_is_scrolling and not self.text_anim_override_speed_checkbox.isChecked():
+        # Check if the current slider-derived delay is different from what was initially loaded
+        current_delay_from_slider = self._speed_level_to_delay_ms(
+            self.global_scroll_speed_level_slider.value())
+        if current_delay_from_slider != self._initial_global_scroll_delay_ms:
+            self._global_scroll_speed_changed_by_user = True
+        else:
+            # If user slid it and then slid it back to the exact initial value
+            # Or keep true if any interaction should enable save
+            self._global_scroll_speed_changed_by_user = False
+        # Update the "Save as Active Graphic" button state, as this change might enable it
+        self._update_save_this_item_button_state()
+        # Update live preview scroll speed IF text editor is active and not overriding its speed
+        if self.editor_stacked_widget and self.text_editor_widget and \
+            self.editor_stacked_widget.currentWidget() == self.text_editor_widget and \
+            hasattr(self, '_preview_is_scrolling') and self._preview_is_scrolling and \
+            self.text_anim_override_speed_checkbox and not self.text_anim_override_speed_checkbox.isChecked() and \
+            hasattr(self, '_preview_scroll_timer'):
             self._preview_scroll_timer.start(max(20, delay_ms))
 
     def _update_scroll_speed_display_label(self, speed_level: int, delay_ms: int):
@@ -2397,27 +2450,38 @@ class OLEDCustomizerDialog(QDialog):
         self._update_save_this_item_button_state()
         return QMessageBox.StandardButton.Discard
 
+    # class OLEDCustomizerDialog(QDialog):
+    # ...
     def accept(self):
-        if self.item_editor_group.isVisible() and self._editor_has_unsaved_changes:
+        # This method is called if QDialogButtonBox.accepted() is emitted,
+        # or if super().accept() is called.
+        # Our "Save as Active Graphic" button now calls super().accept() directly
+        # after handling all logic.
+
+        # We should still check for unsaved editor changes here as a fallback,
+        # in case 'accept' is triggered by other means (e.g., Enter key on a default button if one existed).
+        if self.item_editor_group and self.item_editor_group.isVisible() and self._editor_has_unsaved_changes:
             prompt_result = self._prompt_save_unsaved_editor_changes()
             if prompt_result == QMessageBox.StandardButton.Cancel:
-                return
-        if self._preview_scroll_timer.isActive():
+                return  # User cancelled, do not accept the dialog
+
+            # If user chose Save or Discard, unsaved changes are handled, proceed to accept.
+            # If save handler in prompt failed, _editor_has_unsaved_changes might still be true,
+            # but the prompt_result would have been Cancel (handled above).
+
+        # Stop timers before closing (already done in _handle_save_and_apply if that's the path)
+        # For robustness, ensure timers are stopped if accept() is called directly.
+        if hasattr(self, '_preview_scroll_timer') and self._preview_scroll_timer.isActive():
             self._preview_scroll_timer.stop()
         if hasattr(self, '_anim_editor_preview_timer') and self._anim_editor_preview_timer.isActive():
             self._anim_editor_preview_timer.stop()
         if hasattr(self, '_library_preview_anim_timer') and self._library_preview_anim_timer.isActive():
             self._library_preview_anim_timer.stop()
-        selected_active_graphic_data = self.default_startup_item_combo.currentData()
-        selected_active_graphic_relative_path = selected_active_graphic_data.get(
-            'path') if selected_active_graphic_data else None
-        current_global_delay_from_slider = self._speed_level_to_delay_ms(
-            self.global_scroll_speed_level_slider.value())
-        self.global_settings_changed.emit(
-            selected_active_graphic_relative_path,
-            current_global_delay_from_slider
-        )
+
+        # The actual emission of global_settings_changed is now done in _handle_save_and_apply
+        # So, this accept() method just calls the parent's accept.
         super().accept()
+
 
     def reject(self):
         if self.item_editor_group.isVisible() and self._editor_has_unsaved_changes:

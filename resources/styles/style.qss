@@ -302,6 +302,83 @@ QSlider::handle:vertical:hover {
     background: #757575;
 }
 
+/* ScrollBar Styling - Dark, Thin, No Arrows */
+QScrollBar:vertical {
+    border: none; /* No border around the scrollbar track */
+    background: #222222; /* Dark background for the scrollbar track area */
+    width: 8px;          /* Width of the vertical scrollbar - thin */
+    margin: 0px 0px 0px 0px;
+}
+QScrollBar::handle:vertical {
+    background: #4A4A4A;    /* Darker grey for the draggable handle */
+    min-height: 25px;       /* Minimum height of the handle */
+    border-radius: 4px;     /* Rounded corners for the handle */
+    /* border: 1px solid #333333; */ /* Optional: very dark border for handle, or none */
+}
+QScrollBar::handle:vertical:hover {
+    background: #5A5A5A;    /* Slightly lighter handle on hover */
+}
+QScrollBar::handle:vertical:pressed {
+    background: #383838;    /* Darker handle when pressed */
+}
+
+/* Hide the up and down arrow buttons completely */
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 0px;
+    width: 0px; /* Ensure width is also zeroed for consistency */
+    subcontrol-position: top; /* Still needed for proper layout even if hidden */
+    subcontrol-origin: margin;
+}
+/* QScrollBar::sub-line:vertical {
+    subcontrol-position: bottom;
+} */ /* Not strictly needed if height is 0 */
+
+/* The page (track) area above and below the handle */
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none; /* Makes the track seamless */
+}
+
+/* Horizontal Scrollbar Styling - Dark, Thin, No Arrows */
+QScrollBar:horizontal {
+    border: none;
+    background: #222222;
+    height: 8px;         /* Height of the horizontal scrollbar - thin */
+    margin: 0px 0px 0px 0px;
+}
+QScrollBar::handle:horizontal {
+    background: #4A4A4A;
+    min-width: 25px;
+    border-radius: 4px;
+    /* border: 1px solid #333333; */
+}
+QScrollBar::handle:horizontal:hover {
+    background: #5A5A5A;
+}
+QScrollBar::handle:horizontal:pressed {
+    background: #383838;
+}
+
+/* Hide the left and right arrow buttons completely */
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    border: none;
+    background: none;
+    width: 0px;
+    height: 0px; /* Ensure height is also zeroed */
+    subcontrol-position: left; /* Still needed for proper layout even if hidden */
+    subcontrol-origin: margin;
+}
+/* QScrollBar::sub-line:horizontal {
+    subcontrol-position: right;
+} */ /* Not strictly needed if width is 0 */
+
+/* The page (track) area left and right of the handle */
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+}   
+
+
 /* LineEdits */
 QLineEdit {
     background-color: #232323;
