@@ -8,7 +8,9 @@ FIRE_BUTTON_GRID_RIGHT = 0x23
 FIRE_ENCODER_SELECT_PRESS_NOTE = 0x19 # Note value for select encoder press (renamed for clarity)
 FIRE_ENCODER_SELECT_TURN_CC = 0x76 
 
-FIRE_BUTTON_BROWSER = 0x21 # For toggling sampler
+FIRE_BUTTON_PATTERN_UP = 0x1F   # Physical "PATTERN UP" button note
+FIRE_BUTTON_PATTERN_DOWN = 0x20 # Physical "PATTERN DOWN" button note
+FIRE_BUTTON_BROWSER = 0x21      # Physical "BROWSER" button note
 
 HW_BUTTON_SAMPLER_TOGGLE = 0x2F  # Physical "PERFORM" button
 HW_BUTTON_MONITOR_CYCLE = 0x2E   # Physical "DRUM" button
@@ -32,9 +34,18 @@ class HardwareInputManager(QObject):
     request_toggle_screen_sampler = pyqtSignal()
     request_cycle_sampler_monitor = pyqtSignal()
     
-    # --- CHANGE: Generic signal for top 4 physical encoders ---
     physical_encoder_rotated = pyqtSignal(int, int) # encoder_id (1-4), delta (+1 or -1)
-    # REMOVE: physical_encoder_1_rotated = pyqtSignal(int) 
+
+    # --- START MODIFICATION: Old cueing signals ---
+    # oled_pattern_up_pressed = pyqtSignal()
+    # oled_pattern_down_pressed = pyqtSignal()
+
+    oled_browser_activate_pressed = pyqtSignal() # Keep if BROWSER button still has a role
+    # --- END MODIFICATION ---
+
+    # Add new signals for direct cycling of active OLED graphic
+    request_cycle_active_oled_graphic_next = pyqtSignal()
+    request_cycle_active_oled_graphic_prev = pyqtSignal()
 
     def __init__(self, akai_fire_controller_ref, parent=None):
         super().__init__(parent)
@@ -59,24 +70,45 @@ class HardwareInputManager(QObject):
         self.request_animator_stop.emit()
 
     def _handle_generic_button_event(self, note_number: int, is_pressed: bool):
-        if not is_pressed: return 
+        if not is_pressed:
+            return  # Process only on press
 
+        # --- Standard Button Handling (Keep your existing logic for these) ---
         if note_number == FIRE_BUTTON_GRID_LEFT:
             self.grid_left_pressed.emit()
         elif note_number == FIRE_BUTTON_GRID_RIGHT:
             self.grid_right_pressed.emit()
-        elif note_number == FIRE_ENCODER_SELECT_PRESS_NOTE: # Changed constant name
+        elif note_number == FIRE_ENCODER_SELECT_PRESS_NOTE:  # Renamed constant
             self.select_encoder_pressed.emit()
-        elif note_number == HW_BUTTON_SAMPLER_TOGGLE: 
+        elif note_number == HW_BUTTON_SAMPLER_TOGGLE:
             self.request_toggle_screen_sampler.emit()
-        # --- ADD BROWSER button to also toggle sampler ---
-        elif note_number == FIRE_BUTTON_BROWSER:
-            # print(f"HIM INFO: BROWSER button (Note {hex(FIRE_BUTTON_BROWSER)}) pressed, toggling sampler.")
-            self.request_toggle_screen_sampler.emit()
-        # --- END ADD ---
-        elif note_number == HW_BUTTON_MONITOR_CYCLE: 
+        elif note_number == HW_BUTTON_MONITOR_CYCLE:
             self.request_cycle_sampler_monitor.emit()
-        # Add other note-based button presses here if needed
+
+        # --- MODIFIED/NEW LOGIC for PATTERN UP/DOWN and BROWSER ---
+        # Physical PATTERN UP button (0x1F)
+        elif note_number == FIRE_BUTTON_PATTERN_UP:
+            self.request_cycle_active_oled_graphic_next.emit()
+            # print(f"HIM DEBUG: Note {hex(note_number)} -> request_cycle_active_oled_graphic_next")
+
+        # Physical PATTERN DOWN button (0x20)
+        elif note_number == FIRE_BUTTON_PATTERN_DOWN:
+            self.request_cycle_active_oled_graphic_prev.emit()
+            # print(f"HIM DEBUG: Note {hex(note_number)} -> request_cycle_active_oled_graphic_prev")
+
+        # Physical BROWSER button (0x21)
+        elif note_number == FIRE_BUTTON_BROWSER:
+            # Current behavior: Toggles sampler and emits oled_browser_activate_pressed
+            self.request_toggle_screen_sampler.emit()  # Keep sampler toggle
+            # If BROWSER button should have a *new distinct* OLED role, that would be a separate feature.
+            if hasattr(self, 'oled_browser_activate_pressed'):
+                self.oled_browser_activate_pressed.emit()
+            # print(f"HIM DEBUG: Note {hex(note_number)} -> request_toggle_screen_sampler AND oled_browser_activate_pressed")
+
+        # Add any other specific button note checks here
+        # else:
+            # print(f"HIM DEBUG: Unhandled button note press: {hex(note_number)}") # Optional for debugging other buttons
+
 
     def _handle_control_change_event(self, control_cc: int, value: int):
         delta = 0

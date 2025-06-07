@@ -410,9 +410,10 @@ class OLEDCustomizerDialog(QDialog):
             self.save_this_text_item_button, 0, Qt.AlignmentFlag.AlignRight)
         return widget
 
+
     def _create_animation_editor_panel(self) -> QWidget:
         page_widget = QWidget()
-        page_widget.setMinimumHeight(INNER_EDITOR_PANEL_CONTENT_MIN_HEIGHT + 150) # Increased further for more controls
+        page_widget.setMinimumHeight(INNER_EDITOR_PANEL_CONTENT_MIN_HEIGHT + 150) 
         page_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         outer_layout = QVBoxLayout(page_widget)
         outer_layout.setContentsMargins(0, 0, 0, 0); 
@@ -421,9 +422,11 @@ class OLEDCustomizerDialog(QDialog):
         anim_editor_layout = QVBoxLayout(scroll_content_widget)
         anim_editor_layout.setContentsMargins(5, 5, 5, 5); 
         anim_editor_layout.setSpacing(8)
+        
         name_layout = QHBoxLayout(); name_layout.addWidget(QLabel("Animation Name:")); 
         self.anim_item_name_edit = QLineEdit(); name_layout.addWidget(self.anim_item_name_edit); 
         anim_editor_layout.addLayout(name_layout)
+        
         source_file_layout = QHBoxLayout(); 
         source_file_layout.addWidget(QLabel("Source Image/GIF:")); 
         self.anim_source_file_label = QLabel("<i>No file selected</i>"); 
@@ -431,6 +434,7 @@ class OLEDCustomizerDialog(QDialog):
         self.anim_source_file_label.setWordWrap(True); source_file_layout.addWidget(self.anim_source_file_label, 1); 
         self.anim_browse_button = QPushButton("Browse..."); source_file_layout.addWidget(self.anim_browse_button); 
         anim_editor_layout.addLayout(source_file_layout)
+        
         import_options_group = QGroupBox("Import & Processing Options")
         import_options_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         import_options_layout = QGridLayout(import_options_group)
@@ -439,19 +443,22 @@ class OLEDCustomizerDialog(QDialog):
         RESET_BUTTON_TOOLTIP_PREFIX = "Reset "
         RESET_SYMBOL = "↺"
         VALUE_LABEL_MIN_WIDTH = 45
+        SLIDER_COL = 1 # Column for the main slider
+        VALUE_LABEL_COL = 2 # Column for the value label next to slider
+        RESET_BUTTON_COL = 3 # Column for the reset button
 
         row = 0
         import_options_layout.addWidget(QLabel("Resize Mode:"), row, 0)
         self.anim_resize_mode_combo = QComboBox(); self.anim_resize_mode_combo.addItems(["Stretch to Fit", "Fit (Keep Aspect, Pad)", "Crop to Center"])
-        import_options_layout.addWidget(self.anim_resize_mode_combo, row, 1, 1, 3) # Span 3 (slider, value, reset)
+        import_options_layout.addWidget(self.anim_resize_mode_combo, row, SLIDER_COL, 1, RESET_BUTTON_COL) # Span slider, value, reset columns
+
         row += 1
         import_options_layout.addWidget(QLabel("Monochrome:"), row, 0)
         self.anim_mono_conversion_combo = QComboBox(); self.anim_mono_conversion_combo.addItems(["Floyd-Steinberg Dither", "Atkinson Dither", "Simple Threshold", "Ordered Dither (Bayer 2x2)", "Ordered Dither (Bayer 4x4)", "Ordered Dither (Bayer 8x8)"])
-        import_options_layout.addWidget(self.anim_mono_conversion_combo, row, 1, 1, 3)
+        import_options_layout.addWidget(self.anim_mono_conversion_combo, row, SLIDER_COL, 1, RESET_BUTTON_COL)
 
-        # --- Dither Strength (conditionally visible) ---
         row += 1
-        self.anim_dither_strength_widget = QWidget() # Container for Label, Slider, Value, Reset
+        self.anim_dither_strength_widget = QWidget() 
         dither_strength_row_layout = QHBoxLayout(self.anim_dither_strength_widget); 
         dither_strength_row_layout.setContentsMargins(0,0,0,0); 
         dither_strength_row_layout.setSpacing(5)
@@ -470,12 +477,11 @@ class OLEDCustomizerDialog(QDialog):
         self.reset_dither_strength_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_dither_strength_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Dither Strength")
         dither_strength_row_layout.addWidget(self.reset_dither_strength_button)
-        import_options_layout.addWidget(self.anim_dither_strength_widget, row, 0, 1, 4) # Span all 4 columns for the container widget
+        import_options_layout.addWidget(self.anim_dither_strength_widget, row, 0, 1, RESET_BUTTON_COL + 1) 
         self.anim_dither_strength_widget.setVisible(False)
 
-        # --- Threshold (conditionally visible) ---
         row += 1
-        self.anim_threshold_widget = QWidget() # Container for Label, Slider, Value, Reset
+        self.anim_threshold_widget = QWidget() 
         threshold_row_layout = QHBoxLayout(self.anim_threshold_widget); 
         threshold_row_layout.setContentsMargins(0,0,0,0); 
         threshold_row_layout.setSpacing(5)
@@ -486,135 +492,125 @@ class OLEDCustomizerDialog(QDialog):
         threshold_row_layout.addWidget(self.anim_threshold_slider, 1)
         self.anim_threshold_value_label = QLabel("128"); 
         self.anim_threshold_value_label.setMinimumWidth(VALUE_LABEL_MIN_WIDTH -15); 
-        self.anim_threshold_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter) # Adjusted min width
+        self.anim_threshold_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter) 
         threshold_row_layout.addWidget(self.anim_threshold_value_label)
         self.reset_threshold_button = QPushButton(RESET_SYMBOL); 
         self.reset_threshold_button.setObjectName("ResetButton")
         self.reset_threshold_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_threshold_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Threshold")
         threshold_row_layout.addWidget(self.reset_threshold_button)
-        import_options_layout.addWidget(self.anim_threshold_widget, row, 0, 1, 4) # Span all 4 columns
+        import_options_layout.addWidget(self.anim_threshold_widget, row, 0, 1, RESET_BUTTON_COL + 1) 
         self.anim_threshold_widget.setVisible(False)
 
-        # --- Brightness ---
+        # --- Brightness (QDial REMOVED) ---
         row += 1; import_options_layout.addWidget(QLabel("Brightness:"), row, 0)
-        # Add QDial for brightness
-        self.anim_brightness_dial = QDial()
-        self.anim_brightness_dial.setRange(0, 200)
-        self.anim_brightness_dial.setValue(100)
-        self.anim_brightness_dial.setNotchesVisible(False)
-        self.anim_brightness_dial.setObjectName("BrightnessDial")
-        import_options_layout.addWidget(self.anim_brightness_dial, row, 1)
-        # Keep the slider for now for comparison
+        # self.anim_brightness_dial = QDial() # REMOVED QDIAL
+        # ... (QDial setup REMOVED) ...
+        # import_options_layout.addWidget(self.anim_brightness_dial, row, 1) # REMOVED QDIAL ADDITION
+
         self.anim_brightness_slider = QSlider(Qt.Orientation.Horizontal); 
         self.anim_brightness_slider.setRange(0, 200); 
         self.anim_brightness_slider.setValue(100); 
         self.anim_brightness_slider.setToolTip("0.0x to 2.0x")
-        import_options_layout.addWidget(self.anim_brightness_slider, row, 2)
+        import_options_layout.addWidget(self.anim_brightness_slider, row, SLIDER_COL) # Slider now in SLIDER_COL
         self.anim_brightness_value_label = QLabel("1.00x"); 
         self.anim_brightness_value_label.setMinimumWidth(VALUE_LABEL_MIN_WIDTH); 
         self.anim_brightness_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        import_options_layout.addWidget(self.anim_brightness_value_label, row, 3)
+        import_options_layout.addWidget(self.anim_brightness_value_label, row, VALUE_LABEL_COL) # Value label in VALUE_LABEL_COL
         self.reset_brightness_button = QPushButton(RESET_SYMBOL); 
         self.reset_brightness_button.setObjectName("ResetButton")
         self.reset_brightness_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_brightness_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Brightness")
-        import_options_layout.addWidget(self.reset_brightness_button, row, 4)
+        import_options_layout.addWidget(self.reset_brightness_button, row, RESET_BUTTON_COL) # Reset button in RESET_BUTTON_COL
         
-        # --- Gamma ---
         row += 1; import_options_layout.addWidget(QLabel("Gamma:"), row, 0)
         self.anim_gamma_slider = QSlider(Qt.Orientation.Horizontal); 
         self.anim_gamma_slider.setRange(50, 200); 
         self.anim_gamma_slider.setValue(100); 
         self.anim_gamma_slider.setToolTip("0.5 to 2.0")
-        import_options_layout.addWidget(self.anim_gamma_slider, row, 1)
+        import_options_layout.addWidget(self.anim_gamma_slider, row, SLIDER_COL)
         self.anim_gamma_value_label = QLabel("1.00"); 
         self.anim_gamma_value_label.setMinimumWidth(VALUE_LABEL_MIN_WIDTH); 
         self.anim_gamma_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        import_options_layout.addWidget(self.anim_gamma_value_label, row, 2)
+        import_options_layout.addWidget(self.anim_gamma_value_label, row, VALUE_LABEL_COL)
         self.reset_gamma_button = QPushButton(RESET_SYMBOL); 
         self.reset_gamma_button.setObjectName("ResetButton")
         self.reset_gamma_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_gamma_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Gamma")
-        import_options_layout.addWidget(self.reset_gamma_button, row, 3)
+        import_options_layout.addWidget(self.reset_gamma_button, row, RESET_BUTTON_COL)
         
-        # --- Contrast ---
         row += 1; import_options_layout.addWidget(QLabel("Contrast:"), row, 0)
         self.anim_contrast_slider = QSlider(Qt.Orientation.Horizontal); 
         self.anim_contrast_slider.setRange(0, 200); 
         self.anim_contrast_slider.setValue(100); 
         self.anim_contrast_slider.setToolTip("0.0x to 2.0x")
-        import_options_layout.addWidget(self.anim_contrast_slider, row, 1)
+        import_options_layout.addWidget(self.anim_contrast_slider, row, SLIDER_COL)
         self.anim_contrast_value_label = QLabel("1.00x"); 
         self.anim_contrast_value_label.setMinimumWidth(VALUE_LABEL_MIN_WIDTH); 
         self.anim_contrast_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        import_options_layout.addWidget(self.anim_contrast_value_label, row, 2)
+        import_options_layout.addWidget(self.anim_contrast_value_label, row, VALUE_LABEL_COL)
         self.reset_contrast_button = QPushButton(RESET_SYMBOL); 
         self.reset_contrast_button.setObjectName("ResetButton")
         self.reset_contrast_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_contrast_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Contrast")
-        import_options_layout.addWidget(self.reset_contrast_button, row, 3)
+        import_options_layout.addWidget(self.reset_contrast_button, row, RESET_BUTTON_COL)
 
-        # --- Sharpen ---
         row += 1; import_options_layout.addWidget(QLabel("Sharpen:"), row, 0)
         self.anim_sharpen_slider = QSlider(Qt.Orientation.Horizontal); 
         self.anim_sharpen_slider.setRange(0, 100); self.anim_sharpen_slider.setValue(0); 
         self.anim_sharpen_slider.setToolTip("Sharpen amount (0-100)")
-        import_options_layout.addWidget(self.anim_sharpen_slider, row, 1)
+        import_options_layout.addWidget(self.anim_sharpen_slider, row, SLIDER_COL)
         self.anim_sharpen_value_label = QLabel("0"); 
         self.anim_sharpen_value_label.setMinimumWidth(VALUE_LABEL_MIN_WIDTH); 
         self.anim_sharpen_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        import_options_layout.addWidget(self.anim_sharpen_value_label, row, 2)
+        import_options_layout.addWidget(self.anim_sharpen_value_label, row, VALUE_LABEL_COL)
         self.reset_sharpen_button = QPushButton(RESET_SYMBOL); 
         self.reset_sharpen_button.setObjectName("ResetButton")
         self.reset_sharpen_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_sharpen_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Sharpen")
-        import_options_layout.addWidget(self.reset_sharpen_button, row, 3)
+        import_options_layout.addWidget(self.reset_sharpen_button, row, RESET_BUTTON_COL)
 
-        # --- Pre-Dither Blur ---
         row += 1; import_options_layout.addWidget(QLabel("Pre-Dither Blur:"), row, 0)
         self.anim_blur_slider = QSlider(Qt.Orientation.Horizontal); self.anim_blur_slider.setRange(0, 20); 
         self.anim_blur_slider.setValue(0); self.anim_blur_slider.setToolTip("Blur radius (0.0-2.0)")
-        import_options_layout.addWidget(self.anim_blur_slider, row, 1)
+        import_options_layout.addWidget(self.anim_blur_slider, row, SLIDER_COL)
         self.anim_blur_value_label = QLabel("0.0"); self.anim_blur_value_label.setMinimumWidth(VALUE_LABEL_MIN_WIDTH); 
         self.anim_blur_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        import_options_layout.addWidget(self.anim_blur_value_label, row, 2)
+        import_options_layout.addWidget(self.anim_blur_value_label, row, VALUE_LABEL_COL)
         self.reset_blur_button = QPushButton(RESET_SYMBOL); 
         self.reset_blur_button.setObjectName("ResetButton")
         self.reset_blur_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_blur_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Blur")
-        import_options_layout.addWidget(self.reset_blur_button, row, 3)
+        import_options_layout.addWidget(self.reset_blur_button, row, RESET_BUTTON_COL)
         
-        # --- Noise Controls ---
         row += 1; import_options_layout.addWidget(QLabel("Noise Type:"), row, 0)
         self.anim_noise_type_combo = QComboBox(); self.anim_noise_type_combo.addItems(["Off", "Pre-Dither (Subtle)", "Post-Dither (Grainy)"])
-        import_options_layout.addWidget(self.anim_noise_type_combo, row, 1, 1, 2) # Span 2 for combo
+        import_options_layout.addWidget(self.anim_noise_type_combo, row, SLIDER_COL, 1, 2) # Span Slider and ValueLabel cols
         self.reset_noise_settings_button = QPushButton(RESET_SYMBOL); 
         self.reset_noise_settings_button.setObjectName("ResetButton")
         self.reset_noise_settings_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_noise_settings_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Noise Settings")
-        import_options_layout.addWidget(self.reset_noise_settings_button, row, 3) # Reset button in last column
+        import_options_layout.addWidget(self.reset_noise_settings_button, row, RESET_BUTTON_COL) 
 
         row += 1; import_options_layout.addWidget(QLabel("Noise Amount:"), row, 0)
         self.anim_noise_amount_slider = QSlider(Qt.Orientation.Horizontal); 
         self.anim_noise_amount_slider.setRange(0, 100); self.anim_noise_amount_slider.setValue(0); 
         self.anim_noise_amount_slider.setToolTip("Amount of noise (0-100%)")
-        import_options_layout.addWidget(self.anim_noise_amount_slider, row, 1)
+        import_options_layout.addWidget(self.anim_noise_amount_slider, row, SLIDER_COL)
         self.anim_noise_amount_value_label = QLabel("0%"); 
         self.anim_noise_amount_value_label.setMinimumWidth(VALUE_LABEL_MIN_WIDTH); 
         self.anim_noise_amount_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        import_options_layout.addWidget(self.anim_noise_amount_value_label, row, 2)
-        # The reset for noise amount is handled by the single reset_noise_settings_button
+        import_options_layout.addWidget(self.anim_noise_amount_value_label, row, VALUE_LABEL_COL)
         self.anim_noise_amount_slider.setEnabled(False) 
         
         row += 1
         self.anim_invert_colors_checkbox = QCheckBox("Invert Colors (Black/White)")
-        import_options_layout.addWidget(self.anim_invert_colors_checkbox, row, 0, 1, 4) # Span all 4
+        import_options_layout.addWidget(self.anim_invert_colors_checkbox, row, 0, 1, RESET_BUTTON_COL + 1) 
         
-        import_options_layout.setColumnStretch(1, 1) # Slider column takes up space
+        import_options_layout.setColumnStretch(SLIDER_COL, 1) # Slider column takes up space
         anim_editor_layout.addWidget(import_options_group)
 
-        playback_options_group = QGroupBox("Playback Options") # Unchanged
+        playback_options_group = QGroupBox("Playback Options")
         playback_options_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         playback_options_layout = QGridLayout(playback_options_group)
         playback_options_layout.addWidget(QLabel("Target Playback FPS:"), 0, 0)
@@ -626,7 +622,7 @@ class OLEDCustomizerDialog(QDialog):
         playback_options_layout.setColumnStretch(1, 1)
         anim_editor_layout.addWidget(playback_options_group)
 
-        action_buttons_layout = QHBoxLayout() # Unchanged
+        action_buttons_layout = QHBoxLayout() 
         self.anim_process_button = QPushButton("Process Frames"); 
         action_buttons_layout.addWidget(self.anim_process_button)
         self.anim_play_preview_button = QPushButton("▶️ Play Preview"); 
@@ -648,10 +644,11 @@ class OLEDCustomizerDialog(QDialog):
         self.save_this_animation_button = QPushButton("💾 Save Animation Item"); outer_layout.addWidget(self.save_this_animation_button, 0, Qt.AlignmentFlag.AlignRight)
 
         if not IMAGE_PROCESSING_AVAILABLE:
+            # Keep this disable logic for all relevant anim controls
             all_anim_controls = [
                 self.anim_browse_button, self.anim_resize_mode_combo, self.anim_mono_conversion_combo, 
                 self.anim_threshold_slider, self.reset_threshold_button,
-                self.anim_brightness_slider, self.reset_brightness_button,
+                self.anim_brightness_slider, self.reset_brightness_button, # self.anim_brightness_dial would be here too
                 self.anim_sharpen_slider, self.reset_sharpen_button,
                 self.anim_gamma_slider, self.reset_gamma_button,
                 self.anim_blur_slider, self.reset_blur_button,
@@ -665,6 +662,7 @@ class OLEDCustomizerDialog(QDialog):
                 if w: w.setEnabled(False)
             if self.anim_source_file_label: self.anim_source_file_label.setText("<i>Image processing unavailable</i>")
         return page_widget
+
 
     def _update_editor_panel_visibility(self, item_type_to_show: str | None):
         if item_type_to_show is not None:

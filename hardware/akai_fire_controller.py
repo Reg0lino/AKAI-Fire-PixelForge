@@ -70,6 +70,8 @@ class AkaiFireController(QObject):
     perform_button_pressed = pyqtSignal()
     shift_button_event = pyqtSignal(bool)
     alt_button_event = pyqtSignal(bool)
+    pattern_up_button_pressed = pyqtSignal()
+    pattern_down_button_pressed = pyqtSignal()
     control_change_event = pyqtSignal(int, int) # control_cc, value
 
     def __init__(self, default_port_name_to_try: str | None = None, auto_connect: bool = True):
@@ -236,8 +238,7 @@ class AkaiFireController(QObject):
 
     def clear_all_pads(self):
         if not self.is_connected(): return
-        self.set_multiple_pads_color([(r*16+c,0,0,0) for r in range(4) for c in range(16)])
-
+        self.set_multiple_pads_color([(r*16+c,0,0,0) for r in range(4) for c in range(16)])    
     def _parse_midi_message(self, msg: mido.Message):
         if msg.type == 'note_on':
             # print(f"DEBUG AkaiFireController: Note ON: {hex(msg.note)}")  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<THIS IS THE DEBUG CALL TO SEE WHAT IS BEING INPUTTED****************
@@ -246,6 +247,8 @@ class AkaiFireController(QObject):
             elif msg.note == FIRE_BUTTON_STOP: self.stop_button_pressed.emit()
             elif msg.note == FIRE_BUTTON_SHIFT: self.shift_button_event.emit(True)
             elif msg.note == FIRE_BUTTON_ALT: self.alt_button_event.emit(True)
+            elif msg.note == FIRE_BUTTON_PATTERN_UP: self.pattern_up_button_pressed.emit()
+            elif msg.note == FIRE_BUTTON_PATTERN_DOWN: self.pattern_down_button_pressed.emit()
         elif msg.type == 'note_off':
             self.fire_button_event.emit(msg.note, False)
             if msg.note == FIRE_BUTTON_PLAY: self.play_button_released.emit()
