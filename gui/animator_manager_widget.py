@@ -25,6 +25,15 @@ except ImportError as e:
     class SequenceModel(object): pass
     class AnimationFrame(object): pass
 
+FPS_MIN_DISCRETE_VALUES_AMW = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
+FPS_MAX_TARGET_VALUE_AMW = 90.0
+MIN_FRAME_DELAY_MS_LIMIT_AMW = int(1000.0 / FPS_MAX_TARGET_VALUE_AMW) if FPS_MAX_TARGET_VALUE_AMW > 0 else 10 # e.g., 11ms
+MAX_FRAME_DELAY_MS_LIMIT_AMW = int(1000.0 / FPS_MIN_DISCRETE_VALUES_AMW[0]) if FPS_MIN_DISCRETE_VALUES_AMW else 2000 # e.g., 2000ms
+
+# Default FPS if no model or other info available
+DEFAULT_FALLBACK_FPS_AMW = 10.0
+DEFAULT_FALLBACK_DELAY_AMW = int(1000.0 / DEFAULT_FALLBACK_FPS_AMW)
+
 class AnimatorManagerWidget(QWidget):
     # Signals to MainWindow
     active_frame_data_for_display = pyqtSignal(list) # list of hex color strings for the grid
@@ -254,31 +263,64 @@ class AnimatorManagerWidget(QWidget):
             self.active_sequence_model.end_paint_stroke()
 
     def get_current_sequence_fps(self) -> float:
+        """
+        Calculates and returns the current sequence's playback speed in FPS.
+        Uses model's delay primarily, falls back to UI or a hardcoded default.
+        """
         if self.active_sequence_model and self.active_sequence_model.frame_delay_ms > 0:
-            return 1000.0 / self.active_sequence_model.frame_delay_ms
-        elif self.active_sequence_model and self.active_sequence_model.frame_delay_ms == 0:
-            return 60.0
+            # Ensure the calculated FPS is within the system's defined min/max FPS capabilities
+            fps_from_model = 1000.0 / self.active_sequence_model.frame_delay_ms
+            return max(FPS_MIN_DISCRETE_VALUES_AMW[0], min(fps_from_model, FPS_MAX_TARGET_VALUE_AMW))
+        
+        # Fallback if model's delay is not usable (e.g., 0 or model doesn't exist)
+        # Try to get from controls widget as a secondary source
         if hasattr(self, 'sequence_controls_widget') and self.sequence_controls_widget:
-            initial_delay_ms = self.sequence_controls_widget.get_current_delay_ms()
-            if initial_delay_ms > 0:
-                return 1000.0 / initial_delay_ms
-        return 10.0
+            current_delay_from_controls = self.sequence_controls_widget.get_current_delay_ms()
+            if current_delay_from_controls > 0:
+                fps_from_controls = 1000.0 / current_delay_from_controls
+                return max(FPS_MIN_DISCRETE_VALUES_AMW[0], min(fps_from_controls, FPS_MAX_TARGET_VALUE_AMW))
+                
+        return DEFAULT_FALLBACK_FPS_AMW # Last resort fallback
+
 
     def set_playback_fps(self, fps: float):
+        """
+        Sets the playback speed of the current sequence based on FPS.
+        Updates the model's frame_delay_ms, the playback timer if active,
+        and the speed control UI.
+        """
         if not self.active_sequence_model:
+            print("AMW WARNING: set_playback_fps called but no active sequence model.")
             return
-        min_fps = 0.1
-        max_fps = 100.0
-        clamped_fps = max(min_fps, min(fps, max_fps))
-        new_delay_ms = int(round(1000.0 / clamped_fps)
-                            ) if clamped_fps > 0 else 1000
-        actual_delay_ms = max(10, new_delay_ms)
-        self.active_sequence_model.set_frame_delay_ms(actual_delay_ms)
+
+        # Clamp the target FPS to the system's defined capabilities
+        clamped_fps = max(FPS_MIN_DISCRETE_VALUES_AMW[0], min(fps, FPS_MAX_TARGET_VALUE_AMW))
+
+        if clamped_fps <= 0: # Should be caught by min_fps from constants, but defensive
+            # This case implies an issue with FPS constants if reached
+            actual_delay_ms = MAX_FRAME_DELAY_MS_LIMIT_AMW 
+        else:
+            calculated_delay_ms = int(round(1000.0 / clamped_fps))
+            # Clamp the calculated delay to the system's min/max delay limits
+            actual_delay_ms = max(MIN_FRAME_DELAY_MS_LIMIT_AMW, min(calculated_delay_ms, MAX_FRAME_DELAY_MS_LIMIT_AMW))
+        
+        # print(f"AMW DEBUG: set_playback_fps: target_fps={fps}, clamped_fps={clamped_fps}, actual_delay_ms_to_set={actual_delay_ms}")
+
+        # Update the model
+        self.active_sequence_model.set_frame_delay_ms(actual_delay_ms) # This will emit properties_changed
+
+        # If playback is currently active, restart the timer with the new interval
         if self.playback_timer.isActive():
             self.playback_timer.start(actual_delay_ms)
+
+        # Update the SequenceControlsWidget UI to reflect the new speed
         if hasattr(self, 'sequence_controls_widget') and self.sequence_controls_widget:
             self.sequence_controls_widget.set_frame_delay_ui(actual_delay_ms)
-        self._emit_state_updates()
+        
+        # Model's properties_changed signal should trigger _update_ui_for_current_sequence_properties,
+        # which in turn calls _emit_state_updates(). If not, call it explicitly here.
+        # self._emit_state_updates() # Usually handled by model's signal connection
+
 
     def get_navigation_item_count(self) -> int:
         if self.sequence_selection_combo:

@@ -95,6 +95,22 @@ except ImportError:
         DEFAULT_ADJUSTMENTS = {'brightness': 1.0, 'contrast': 1.0,
                             'saturation': 1.0, 'hue_shift': 0.0}  # ensure float for hue
 
+
+MW_FPS_MIN_DISCRETE_VALUES = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
+MW_FPS_LINEAR_START_VALUE = 6.0
+MW_FPS_MAX_TARGET_VALUE = 90.0  # Or your chosen max for Knob 4
+
+_MW_NUM_DISCRETE_FPS_STEPS = len(MW_FPS_MIN_DISCRETE_VALUES)
+_MW_SLIDER_IDX_FOR_LINEAR_START = _MW_NUM_DISCRETE_FPS_STEPS
+MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL = 0  # Raw min for QDial range
+MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL = _MW_SLIDER_IDX_FOR_LINEAR_START + \
+    int(MW_FPS_MAX_TARGET_VALUE - MW_FPS_LINEAR_START_VALUE)
+# This should result in 0 to 90 for the example values
+
+# Knob step for physical encoder (delta is +/-1, maps to 1 step on the raw slider value)
+MW_ANIMATOR_SPEED_KNOB_STEP = 1
+
+
 # --- Constants ---
 INITIAL_WINDOW_WIDTH = 1100
 INITIAL_WINDOW_HEIGHT = 900
@@ -113,6 +129,10 @@ DEFAULT_OLED_FONT_SIZE_PX_FALLBACK: int = 20
 USER_OLED_PRESETS_DIR_NAME = "OLEDCustomPresets"
 USER_OLED_TEXT_ITEMS_SUBDIR = "TextItems"
 USER_OLED_ANIM_ITEMS_SUBDIR = "ImageAnimations"
+
+
+
+
 
 # --- Path Helper Functions (Module Level - Keep as they are) ---
 def get_user_documents_presets_path(app_specific_folder_name: str = USER_PRESETS_APP_FOLDER_NAME) -> str:
@@ -1201,6 +1221,42 @@ class MainWindow(QMainWindow):
         else:
             self.oled_play_pause_icon_label.setToolTip("Pause OLED Active Graphic (Click) -- fast graphic playback effects animator performance")
 
+    def _slider_raw_value_to_fps_for_knob(self, slider_raw_value: int) -> float:
+        """Converts a raw QDial/slider value (0-90) to an FPS value for Knob 4."""
+        clamped_slider_val = max(MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL,
+                                 min(slider_raw_value, MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL))
+
+        if clamped_slider_val < _MW_NUM_DISCRETE_FPS_STEPS:
+            return MW_FPS_MIN_DISCRETE_VALUES[clamped_slider_val]
+        else:
+            linear_offset_from_discrete_end = clamped_slider_val - _MW_NUM_DISCRETE_FPS_STEPS
+            return MW_FPS_LINEAR_START_VALUE + linear_offset_from_discrete_end
+
+    def _fps_to_slider_raw_value_for_knob(self, fps_value: float) -> int:
+        """Converts an FPS value back to a raw QDial/slider value for Knob 4."""
+        clamped_fps = max(MW_FPS_MIN_DISCRETE_VALUES[0], min(
+            fps_value, MW_FPS_MAX_TARGET_VALUE))
+
+        for i, discrete_fps in enumerate(MW_FPS_MIN_DISCRETE_VALUES):
+            if abs(clamped_fps - discrete_fps) < 0.01:
+                return i
+
+        if clamped_fps >= MW_FPS_LINEAR_START_VALUE:
+            slider_val = _MW_SLIDER_IDX_FOR_LINEAR_START + \
+                int(round(clamped_fps - MW_FPS_LINEAR_START_VALUE))
+            return max(_MW_SLIDER_IDX_FOR_LINEAR_START,
+                       min(slider_val, MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL))
+
+        closest_discrete_idx = 0
+        min_diff = float('inf')
+        for i, discrete_fps in enumerate(MW_FPS_MIN_DISCRETE_VALUES):
+            diff = abs(clamped_fps - discrete_fps)
+            if diff < min_diff:
+                min_diff = diff
+                closest_discrete_idx = i
+        return closest_discrete_idx
+
+
     def _create_edit_actions(self):
         """Creates global QActions for menu items and keyboard shortcuts."""
         # Undo/Redo (Connected to AnimatorManagerWidget)
@@ -1389,33 +1445,40 @@ class MainWindow(QMainWindow):
             self.screen_sampler_manager.set_overall_enabled_state(is_out_conn, is_out_conn) # Base enable, specific button enable also in global states
         QTimer.singleShot(0, self._update_global_ui_interaction_states) # Refresh all UI element states
 
+
     def _update_contextual_knob_configs(self):
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
         # self.is_animator_playing is updated by the signal from AnimatorManagerWidget
+
         # Disconnect all current valueChanged signals from knobs 1-4 first
-        for knob in [self.gui_knob1, self.gui_knob2, self.gui_knob3, self.gui_knob4]:
-            if knob:
+        for knob_widget in [self.gui_knob1, self.gui_knob2, self.gui_knob3, self.gui_knob4]: # Renamed 'knob' to 'knob_widget'
+            if knob_widget: # Check if the knob widget exists
                 try:
-                    knob.valueChanged.disconnect()
+                    knob_widget.valueChanged.disconnect()
                 except TypeError:
-                    pass
-        # Configure Knob 1 (Global Brightness or Sampler Brightness)
-        if sampler_is_active:
-            # Setup Knob 1 for Sampler Brightness
+                    pass # No connections or already disconnected
+                except Exception as e_disc: # Catch any other potential errors during disconnect
+                    print(f"MW WARN: Error disconnecting knob signal for {knob_widget.objectName()}: {e_disc}")
+
+
+        # Configure Knob 1 (Global Brightness OR Sampler Brightness)
+        # Physical Encoder 1 is now context-aware due to changes in _on_physical_encoder_rotated
+        if sampler_is_active and self.gui_knob1: # Check if gui_knob1 exists
+            # Setup Knob 1 for Sampler Brightness (as per your earlier request for physical knob behavior)
             adj_s = self.screen_sampler_manager.current_sampler_params.get(
                 'adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy())
-            if self.gui_knob1:
-                val_b = int(adj_s.get('brightness', 1.0) * 100)
-                self.gui_knob1.setRange(
-                    self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX)
-                self.gui_knob1.setValue(val_b)
-                self.gui_knob1.setToolTip(
-                    f"Sampler: Brightness ({adj_s.get('brightness', 1.0):.2f}x)")
-                self.gui_knob1.valueChanged.connect(
-                    self._on_sampler_brightness_knob_changed)
-        else:
+            val_b_sampler = int(adj_s.get('brightness', 1.0) * 100)
+            self.gui_knob1.setRange(
+                self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX) # 0-400
+            self.gui_knob1.setValue(val_b_sampler)
+            self.gui_knob1.setToolTip(
+                f"Sampler: Brightness ({adj_s.get('brightness', 1.0):.2f}x)")
+            self.gui_knob1.valueChanged.connect(
+                self._on_sampler_brightness_knob_changed)
+        elif self.gui_knob1: # Sampler OFF or gui_knob1 not used for sampler
             # Setup Knob 1 for Global Pad Brightness
-            self._setup_global_brightness_knob()  # This already connects its signal
+            self._setup_global_brightness_knob()  # This connects to _on_global_brightness_knob_changed
+
         # Configure Knobs 2 & 3 (Sampler Saturation/Contrast or Global Unassigned)
         if sampler_is_active:
             adj_s = self.screen_sampler_manager.current_sampler_params.get(
@@ -1441,52 +1504,44 @@ class MainWindow(QMainWindow):
         else:  # Sampler OFF - Global mode for Knobs 2 & 3
             if self.gui_knob2:
                 self.gui_knob2.setToolTip("Pan (Global - Unassigned)")
-                self.gui_knob2.setRange(0, 127)
-                self.gui_knob2.setValue(64)
+                self.gui_knob2.setRange(0, 127); self.gui_knob2.setValue(64)
             if self.gui_knob3:
                 self.gui_knob3.setToolTip("Filter (Global - Unassigned)")
-                self.gui_knob3.setRange(0, 127)
-                self.gui_knob3.setValue(64)
+                self.gui_knob3.setRange(0, 127); self.gui_knob3.setValue(64)
+
         # Configure Knob 4 (Animator Speed OR Sampler Hue OR Global Unassigned)
-        if self.is_animator_playing and self.animator_manager and self.animator_manager.active_sequence_model:
-            # Animator is PLAYING - Knob 4 controls Animator Speed
-            # New method needed in AMW
+        if self.is_animator_playing and self.animator_manager and self.animator_manager.active_sequence_model and self.gui_knob4:
+            # Animator is PLAYING - Knob 4 controls Animator Speed (FPS)
             current_fps = self.animator_manager.get_current_sequence_fps()
-            # Define FPS range for the knob, e.g., 1 to 60 FPS
-            # These should be constants in MainWindow
-            ANIMATOR_FPS_KNOB_MIN, ANIMATOR_FPS_KNOB_MAX = 1, 60
-            if self.gui_knob4:
-                self.gui_knob4.setRange(
-                    ANIMATOR_FPS_KNOB_MIN, ANIMATOR_FPS_KNOB_MAX)
-                self.gui_knob4.setValue(int(round(current_fps)))
-                self.gui_knob4.setToolTip(f"Anim Speed: {current_fps:.1f} FPS")
-                self.gui_knob4.valueChanged.connect(
-                    self._on_animator_speed_knob_changed)
-                # print("MW TRACE: Knob 4 configured for ANIMATOR SPEED.")
-        elif sampler_is_active and self.screen_sampler_manager:
+            # Convert current FPS to the raw slider value for the QDial
+            knob_raw_value = self._fps_to_slider_raw_value_for_knob(current_fps)
+            
+            self.gui_knob4.setRange(MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL, MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL) # e.g., 0-90
+            self.gui_knob4.setValue(knob_raw_value)
+            self.gui_knob4.setToolTip(f"Anim Speed: {current_fps:.1f} FPS")
+            self.gui_knob4.valueChanged.connect(
+                self._on_animator_speed_knob_changed)
+            # print(f"MW TRACE: Knob 4 Config: ANIMATOR SPEED. FPS: {current_fps}, KnobRawVal: {knob_raw_value}")
+
+        elif sampler_is_active and self.screen_sampler_manager and self.gui_knob4:
             # Sampler is ACTIVE, Animator is NOT PLAYING - Knob 4 controls Sampler Hue
             adj_s = self.screen_sampler_manager.current_sampler_params.get(
                 'adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy())
-            if self.gui_knob4:
-                hue_val_float = adj_s.get('hue_shift', 0)
-                hue_val_int = int(round(hue_val_float))
-                self.gui_knob4.setRange(
-                    self.SAMPLER_HUE_KNOB_MIN, self.SAMPLER_HUE_KNOB_MAX)
-                self.gui_knob4.setValue(hue_val_int)
-                self.gui_knob4.setToolTip(
-                    f"Sampler: Hue Shift ({hue_val_int:+d})")
-                self.gui_knob4.valueChanged.connect(
-                    self._on_sampler_hue_knob_changed)
-                # print("MW TRACE: Knob 4 configured for SAMPLER HUE.")
-        else:
-            # NEITHER Animator Playing NOR Sampler Active - Knob 4 is Global Resonance (or Unassigned)
-            if self.gui_knob4:
-                self.gui_knob4.setToolTip("Resonance (Global - Unassigned)")
-                self.gui_knob4.setRange(0, 127)
-                self.gui_knob4.setValue(64)
-                # self.gui_knob4.valueChanged.connect(self._on_global_resonance_knob_changed) # Future
-                # print("MW TRACE: Knob 4 configured for GLOBAL RESONANCE/UNASSIGNED.")
-        # --- Global UI State Management ---
+            hue_val_float = adj_s.get('hue_shift', 0.0) # Ensure float
+            hue_val_int = int(round(hue_val_float))
+            self.gui_knob4.setRange(
+                self.SAMPLER_HUE_KNOB_MIN, self.SAMPLER_HUE_KNOB_MAX) # -180 to 180
+            self.gui_knob4.setValue(hue_val_int)
+            self.gui_knob4.setToolTip(
+                f"Sampler: Hue Shift ({hue_val_int:+d})") # No degree symbol for tooltip consistency
+            self.gui_knob4.valueChanged.connect(
+                self._on_sampler_hue_knob_changed)
+            # print("MW TRACE: Knob 4 Config: SAMPLER HUE.")
+        elif self.gui_knob4: # Neither Animator Playing NOR Sampler Active (and gui_knob4 exists)
+            self.gui_knob4.setToolTip("Resonance (Global - Unassigned)")
+            self.gui_knob4.setRange(0, 127); self.gui_knob4.setValue(64)
+            # print("MW TRACE: Knob 4 Config: GLOBAL RESONANCE/UNASSIGNED.")
+
 
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
@@ -2558,15 +2613,22 @@ class MainWindow(QMainWindow):
             self.gui_knob4.setToolTip(f"Sampler: Hue Shift ({hue_val_int_for_knob_and_tooltip:+d})")
             self.gui_knob4.blockSignals(False)
 
-    def _on_animator_speed_knob_changed(self, knob_value: int): # knob_value is FPS (e.g., 1-60)
+
+    def _on_animator_speed_knob_changed(self, knob_raw_slider_value: int): # Value is now 0-90 (raw slider/dial value)
         if self.is_animator_playing and self.animator_manager:
-            new_fps = float(knob_value)
-            self.animator_manager.set_playback_fps(new_fps) # New method needed in AMW
-            if self.gui_knob4:
-                self.gui_knob4.setToolTip(f"Anim Speed: {new_fps:.1f} FPS")        
+            # Convert the raw slider value from the QDial (knob_raw_slider_value) to FPS
+            new_fps = self._slider_raw_value_to_fps_for_knob(knob_raw_slider_value)
+            
+            self.animator_manager.set_playback_fps(new_fps) # Tell AnimatorManager the target FPS
+            
+            if self.gui_knob4: # Update GUI knob's tooltip
+                self.gui_knob4.setToolTip(f"Anim Speed: {new_fps:.1f} FPS")
+            
             # OLED Feedback for Animator Speed
-            oled_feedback_text = f"Spd: {new_fps:.1f}"
+            oled_feedback_text = f"Spd: {new_fps:.1f}" # Display FPS with one decimal
             self._show_knob_feedback_on_oled(oled_feedback_text)
+            # print(f"MW TRACE: Animator speed knob changed. RawVal: {knob_raw_slider_value}, FPS: {new_fps:.1f}")
+
 
     def _on_animator_playback_status_for_oled(self, is_playing: bool):
         """Updates OLED with temporary Play/Pause/Stop message based on animator status."""

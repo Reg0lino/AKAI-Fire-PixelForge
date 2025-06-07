@@ -4,26 +4,37 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLa
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence
 
-try:
-    from .model import DEFAULT_FRAME_DELAY_MS
-except ImportError:
-    DEFAULT_FRAME_DELAY_MS = 200
+# --- NEW FPS-based Speed Control Constants ---
+FPS_MIN_DISCRETE_VALUES = [0.5, 1.0, 2.0,
+                           3.0, 4.0, 5.0]  # Desired low FPS steps
+FPS_LINEAR_START_VALUE = 6.0  # FPS from which linear steps begin
+FPS_MAX_TARGET_VALUE = 90.0  # New maximum FPS
+DEFAULT_START_FPS_VALUE = 20.0
 
-MIN_SPEED_VALUE = 1
-MAX_SPEED_VALUE = 100
-DEFAULT_SPEED_VALUE = 50
-MIN_FRAME_DELAY_MS = 5
-MAX_FRAME_DELAY_MS = 1667
+_NUM_DISCRETE_FPS_STEPS = len(FPS_MIN_DISCRETE_VALUES)
+_SLIDER_IDX_FOR_LINEAR_START = _NUM_DISCRETE_FPS_STEPS
+
+SLIDER_MIN_RAW_VALUE = 0
+SLIDER_MAX_RAW_VALUE = _SLIDER_IDX_FOR_LINEAR_START + \
+    int(FPS_MAX_TARGET_VALUE - FPS_LINEAR_START_VALUE)
+
+MIN_FRAME_DELAY_MS_LIMIT = int(
+    1000.0 / FPS_MAX_TARGET_VALUE) if FPS_MAX_TARGET_VALUE > 0 else 10
+MAX_FRAME_DELAY_MS_LIMIT = int(
+    1000.0 / FPS_MIN_DISCRETE_VALUES[0]) if FPS_MIN_DISCRETE_VALUES else 2000
+
+DEFAULT_FRAME_DELAY_MS_FALLBACK = int(1000.0 / DEFAULT_START_FPS_VALUE)
+
 
 # --- Icons (Unicode Emojis) ---
 ICON_ADD_FRAME = "✚"
 ICON_ADD_SNAPSHOT = "📷"
 ICON_ADD_BLANK = "⬛"
-ICON_DUPLICATE = "⿻"  
+ICON_DUPLICATE = "⿻"
 ICON_DELETE = "🗑"
 ICON_COPY = "🗐"
 ICON_CUT = "✂"
-ICON_PASTE = "⤵" 
+ICON_PASTE = "⤵"
 ICON_NAV_FIRST = "|◀"
 ICON_NAV_PREV = "◀"
 ICON_NAV_NEXT = "▶"
@@ -40,7 +51,6 @@ class SequenceControlsWidget(QWidget):
     copy_frames_requested = pyqtSignal()
     cut_frames_requested = pyqtSignal()
     paste_frames_requested = pyqtSignal()
-    # REMOVED: undo_requested and redo_requested signals
 
     navigate_first_requested = pyqtSignal()
     navigate_prev_requested = pyqtSignal()
@@ -51,7 +61,56 @@ class SequenceControlsWidget(QWidget):
     pause_requested = pyqtSignal()
     stop_requested = pyqtSignal()
 
-    frame_delay_changed = pyqtSignal(int)
+    frame_delay_changed = pyqtSignal(int)  # Emits delay in MS
+
+    # --- NEW HELPER METHODS ---
+    def _slider_raw_value_to_fps(self, slider_raw_value: int) -> float:
+        clamped_slider_val = max(SLIDER_MIN_RAW_VALUE, min(
+            slider_raw_value, SLIDER_MAX_RAW_VALUE))
+        if clamped_slider_val < _NUM_DISCRETE_FPS_STEPS:
+            return FPS_MIN_DISCRETE_VALUES[clamped_slider_val]
+        else:
+            linear_offset_from_discrete_end = clamped_slider_val - _NUM_DISCRETE_FPS_STEPS
+            return FPS_LINEAR_START_VALUE + linear_offset_from_discrete_end
+
+    def _fps_to_slider_raw_value(self, fps_value: float) -> int:
+        clamped_fps = max(FPS_MIN_DISCRETE_VALUES[0], min(
+            fps_value, FPS_MAX_TARGET_VALUE))
+        for i, discrete_fps in enumerate(FPS_MIN_DISCRETE_VALUES):
+            if abs(clamped_fps - discrete_fps) < 0.01:
+                return i
+        if clamped_fps >= FPS_LINEAR_START_VALUE:
+            slider_val = _SLIDER_IDX_FOR_LINEAR_START + \
+                int(round(clamped_fps - FPS_LINEAR_START_VALUE))
+            return max(_SLIDER_IDX_FOR_LINEAR_START, min(slider_val, SLIDER_MAX_RAW_VALUE))
+
+        closest_discrete_idx = 0
+        min_diff = float('inf')
+        for i, discrete_fps in enumerate(FPS_MIN_DISCRETE_VALUES):
+            diff = abs(clamped_fps - discrete_fps)
+            if diff < min_diff:
+                min_diff = diff
+                closest_discrete_idx = i
+        return closest_discrete_idx
+
+    def _fps_to_delay_ms(self, fps: float) -> int:
+        if fps <= 0:
+            return MAX_FRAME_DELAY_MS_LIMIT
+        delay_ms = 1000.0 / fps
+        return int(max(MIN_FRAME_DELAY_MS_LIMIT, min(round(delay_ms), MAX_FRAME_DELAY_MS_LIMIT)))
+
+    def _delay_ms_to_fps(self, delay_ms: int) -> float:
+        clamped_delay = max(MIN_FRAME_DELAY_MS_LIMIT, min(
+            delay_ms, MAX_FRAME_DELAY_MS_LIMIT))
+        if clamped_delay <= 0:
+            return FPS_MIN_DISCRETE_VALUES[0]
+        return 1000.0 / clamped_delay
+
+    def _update_speed_display_label(self, current_fps: float, current_delay_ms: int):
+        if self.current_speed_display_label:
+            self.current_speed_display_label.setText(
+                f"{current_fps:.1f} FPS ({current_delay_ms}ms)")
+    # --- END NEW HELPER METHODS ---
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -64,8 +123,6 @@ class SequenceControlsWidget(QWidget):
 
         self.add_frame_button = QPushButton(f"{ICON_ADD_BLANK} Add Blank")
         self.add_frame_button.setToolTip("Add New Blank Frame (Ctrl+Shift+B)")
-        self.add_frame_button.setStatusTip(
-            "Adds a new blank frame to the sequence.")
         self.add_frame_button.clicked.connect(
             lambda: self.add_frame_requested.emit("blank"))
         bar1_layout.addWidget(self.add_frame_button)
@@ -73,8 +130,6 @@ class SequenceControlsWidget(QWidget):
         self.duplicate_frame_button = QPushButton(ICON_DUPLICATE)
         self.duplicate_frame_button.setToolTip(
             "Duplicate Selected Frame(s) (Ctrl+D)")
-        self.duplicate_frame_button.setStatusTip(
-            f"Create copies of the currently selected frame(s) after them (Shortcut: Ctrl+D).")
         self.duplicate_frame_button.clicked.connect(
             self.duplicate_selected_frame_requested)
         bar1_layout.addWidget(self.duplicate_frame_button)
@@ -82,65 +137,48 @@ class SequenceControlsWidget(QWidget):
         self.delete_frame_button = QPushButton(ICON_DELETE)
         self.delete_frame_button.setToolTip(
             "Delete Selected Frame(s) (Delete)")
-        self.delete_frame_button.setStatusTip(
-            f"Remove the currently selected frame(s) from the sequence (Shortcut: Delete).")
         self.delete_frame_button.clicked.connect(
             self.delete_selected_frame_requested)
         bar1_layout.addWidget(self.delete_frame_button)
 
         self.copy_frames_button = QPushButton(ICON_COPY)
         self.copy_frames_button.setToolTip(f"Copy Selected Frame(s) (Ctrl+C)")
-        self.copy_frames_button.setStatusTip(
-            f"Copy the selected frame(s) to the internal clipboard (Shortcut: Ctrl+C).")
         self.copy_frames_button.clicked.connect(self.copy_frames_requested)
         bar1_layout.addWidget(self.copy_frames_button)
 
         self.cut_frames_button = QPushButton(ICON_CUT)
         self.cut_frames_button.setToolTip(f"Cut Selected Frame(s) (Ctrl+X)")
-        self.cut_frames_button.setStatusTip(
-            f"Cut the selected frame(s) to the internal clipboard (Shortcut: Ctrl+X).")
         self.cut_frames_button.clicked.connect(self.cut_frames_requested)
         bar1_layout.addWidget(self.cut_frames_button)
 
         self.paste_frames_button = QPushButton(ICON_PASTE)
         self.paste_frames_button.setToolTip(
             f"Paste Frame(s) from Clipboard (Ctrl+V)")
-        self.paste_frames_button.setStatusTip(
-            f"Paste frame(s) from the internal clipboard after the current selection (Shortcut: Ctrl+V).")
         self.paste_frames_button.clicked.connect(self.paste_frames_requested)
         bar1_layout.addWidget(self.paste_frames_button)
-
-        # REMOVED: self.undo_button and self.redo_button creation and addWidget calls
 
         bar1_layout.addSpacerItem(QSpacerItem(
             20, 10, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
 
         self.first_frame_button = QPushButton(ICON_NAV_FIRST)
         self.first_frame_button.setToolTip("Go to First Frame")
-        self.first_frame_button.setStatusTip(
-            "Jump to the first frame of the animation.")
         self.first_frame_button.clicked.connect(self.navigate_first_requested)
         bar1_layout.addWidget(self.first_frame_button)
 
         self.prev_frame_button = QPushButton(ICON_NAV_PREV)
         self.prev_frame_button.setToolTip("Go to Previous Frame")
-        self.prev_frame_button.setStatusTip("Move to the previous frame.")
         self.prev_frame_button.clicked.connect(self.navigate_prev_requested)
         bar1_layout.addWidget(self.prev_frame_button)
 
         self.next_frame_button = QPushButton(ICON_NAV_NEXT)
         self.next_frame_button.setToolTip("Go to Next Frame")
-        self.next_frame_button.setStatusTip("Move to the next frame.")
         self.next_frame_button.clicked.connect(self.navigate_next_requested)
         bar1_layout.addWidget(self.next_frame_button)
 
         self.last_frame_button = QPushButton(ICON_NAV_LAST)
         self.last_frame_button.setToolTip("Go to Last Frame")
-        self.last_frame_button.setStatusTip(
-            "Jump to the last frame of the animation.")
         self.last_frame_button.clicked.connect(self.navigate_last_requested)
         bar1_layout.addWidget(self.last_frame_button)
-
         self_main_layout.addLayout(bar1_layout)
 
         bar2_layout = QHBoxLayout()
@@ -149,15 +187,11 @@ class SequenceControlsWidget(QWidget):
         self.play_pause_button = QPushButton(ICON_PLAY + " Play")
         self.play_pause_button.setCheckable(True)
         self.play_pause_button.setToolTip("Play/Pause Sequence (Spacebar)")
-        self.play_pause_button.setStatusTip(
-            f"Play or Pause the animation sequence (Shortcut: Spacebar).")
         self.play_pause_button.toggled.connect(self._on_play_pause_toggled)
         bar2_layout.addWidget(self.play_pause_button)
 
         self.stop_button = QPushButton(ICON_STOP + " Stop")
         self.stop_button.setToolTip("Stop Sequence and Reset")
-        self.stop_button.setStatusTip(
-            "Stop the animation and return to the first frame (or selected edit frame).")
         self.stop_button.clicked.connect(self.stop_requested)
         bar2_layout.addWidget(self.stop_button)
 
@@ -166,14 +200,10 @@ class SequenceControlsWidget(QWidget):
 
         bar2_layout.addWidget(QLabel("Speed:"))
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
-        self.speed_slider.setRange(MIN_SPEED_VALUE, MAX_SPEED_VALUE)
-        initial_slider_val = self._delay_to_slider_value(
-            DEFAULT_FRAME_DELAY_MS)
-        self.speed_slider.setValue(initial_slider_val)
+        self.speed_slider.setRange(
+            SLIDER_MIN_RAW_VALUE, SLIDER_MAX_RAW_VALUE)  # USE NEW RAW RANGE
         self.speed_slider.setSingleStep(1)
-        self.speed_slider.setPageStep(10)
-        self.speed_slider.setTickInterval(
-            (MAX_SPEED_VALUE - MIN_SPEED_VALUE) // 10 if MAX_SPEED_VALUE > MIN_SPEED_VALUE else 1)
+        self.speed_slider.setPageStep(5)
         self.speed_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.speed_slider.valueChanged.connect(self._on_speed_slider_changed)
         self.speed_slider.setStatusTip(
@@ -181,23 +211,28 @@ class SequenceControlsWidget(QWidget):
         bar2_layout.addWidget(self.speed_slider, 1)
 
         self.current_speed_display_label = QLabel()
-        self.current_speed_display_label.setMinimumWidth(80)
+        self.current_speed_display_label.setMinimumWidth(85)
         self.current_speed_display_label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.current_speed_display_label.setStatusTip(
             "Current animation speed in Frames Per Second (FPS) and milliseconds per frame (ms).")
-        self._update_speed_display_label(initial_slider_val)
         bar2_layout.addWidget(self.current_speed_display_label)
-
         self_main_layout.addLayout(bar2_layout)
 
         self.delay_ms_spinbox = QSpinBox()
         self.delay_ms_spinbox.setRange(
-            MIN_FRAME_DELAY_MS, MAX_FRAME_DELAY_MS * 2)
-        self.delay_ms_spinbox.setValue(DEFAULT_FRAME_DELAY_MS)
+            MIN_FRAME_DELAY_MS_LIMIT, MAX_FRAME_DELAY_MS_LIMIT)
         self.delay_ms_spinbox.valueChanged.connect(
             self._on_delay_spinbox_changed)
         self.delay_ms_spinbox.setVisible(False)
+
+        initial_slider_raw_val = self._fps_to_slider_raw_value(
+            DEFAULT_START_FPS_VALUE)
+        self.speed_slider.setValue(initial_slider_raw_val)
+        initial_delay_ms = self._fps_to_delay_ms(DEFAULT_START_FPS_VALUE)
+        self.delay_ms_spinbox.setValue(initial_delay_ms)
+        self._update_speed_display_label(
+            DEFAULT_START_FPS_VALUE, initial_delay_ms)
 
     def _on_play_pause_toggled(self, checked):
         if checked:
@@ -224,93 +259,58 @@ class SequenceControlsWidget(QWidget):
                                    frame_selected: bool = False,
                                    has_frames: bool = False,
                                    clipboard_has_content: bool = False,
-                                   can_undo: bool = False,  # Parameter still received
-                                   can_redo: bool = False):  # Parameter still received
+                                   can_undo: bool = False,
+                                   can_redo: bool = False):
         self.add_frame_button.setEnabled(enabled)
-
         can_operate_on_selection = enabled and frame_selected and has_frames
-
         self.duplicate_frame_button.setEnabled(can_operate_on_selection)
         self.delete_frame_button.setEnabled(can_operate_on_selection)
         self.copy_frames_button.setEnabled(can_operate_on_selection)
         self.cut_frames_button.setEnabled(can_operate_on_selection)
-
         self.paste_frames_button.setEnabled(enabled and clipboard_has_content)
-
-        # REMOVED: self.undo_button.setEnabled(...)
-        # REMOVED: self.redo_button.setEnabled(...)
-
         self.first_frame_button.setEnabled(enabled and has_frames)
         self.prev_frame_button.setEnabled(enabled and has_frames)
         self.next_frame_button.setEnabled(enabled and has_frames)
         self.last_frame_button.setEnabled(enabled and has_frames)
-
         self.play_pause_button.setEnabled(enabled and has_frames)
         self.stop_button.setEnabled(enabled and has_frames)
-
         self.speed_slider.setEnabled(enabled and has_frames)
         self.current_speed_display_label.setEnabled(enabled and has_frames)
 
-    def _slider_value_to_delay(self, slider_value: int) -> int:
-        s_val = max(MIN_SPEED_VALUE, min(slider_value, MAX_SPEED_VALUE))
-        if MAX_SPEED_VALUE == MIN_SPEED_VALUE:
-            return MIN_FRAME_DELAY_MS
-        normalized_speed = (s_val - MIN_SPEED_VALUE) / \
-            (MAX_SPEED_VALUE - MIN_SPEED_VALUE)
-        delay_range = MAX_FRAME_DELAY_MS - MIN_FRAME_DELAY_MS
-        delay = MAX_FRAME_DELAY_MS - (normalized_speed * delay_range)
-        return int(max(MIN_FRAME_DELAY_MS, min(round(delay), MAX_FRAME_DELAY_MS)))
-
-    def _delay_to_slider_value(self, delay_ms: int) -> int:
-        if MAX_FRAME_DELAY_MS == MIN_FRAME_DELAY_MS:
-            return MIN_SPEED_VALUE
-        clamped_delay_ms = max(MIN_FRAME_DELAY_MS, min(
-            delay_ms, MAX_FRAME_DELAY_MS))
-        delay_range = MAX_FRAME_DELAY_MS - MIN_FRAME_DELAY_MS
-        if delay_range == 0:
-            return MIN_SPEED_VALUE
-        normalized_delay_pos_inverted = (
-            MAX_FRAME_DELAY_MS - clamped_delay_ms) / delay_range
-        slider_range = MAX_SPEED_VALUE - MIN_SPEED_VALUE
-        slider_value = MIN_SPEED_VALUE + \
-            (normalized_delay_pos_inverted * slider_range)
-        return int(round(slider_value))
-
-    def _update_speed_display_label(self, speed_slider_val_for_calc: int):
-        delay_ms = self._slider_value_to_delay(speed_slider_val_for_calc)
-        fps = 1000.0 / delay_ms if delay_ms > 0 else 0
-        self.current_speed_display_label.setText(
-            f"{fps:.1f} FPS ({delay_ms}ms)")
-
-    def _on_speed_slider_changed(self, slider_logical_value: int):
-        delay_ms = self._slider_value_to_delay(slider_logical_value)
-        self._update_speed_display_label(slider_logical_value)
+    # --- UPDATED METHODS using FPS logic ---
+    def _on_speed_slider_changed(self, slider_raw_value: int):
+        current_fps = self._slider_raw_value_to_fps(slider_raw_value)
+        current_delay_ms = self._fps_to_delay_ms(current_fps)
+        self._update_speed_display_label(current_fps, current_delay_ms)
         self.delay_ms_spinbox.blockSignals(True)
-        self.delay_ms_spinbox.setValue(delay_ms)
+        self.delay_ms_spinbox.setValue(current_delay_ms)
         self.delay_ms_spinbox.blockSignals(False)
-        self.frame_delay_changed.emit(delay_ms)
+        self.frame_delay_changed.emit(current_delay_ms)
 
     def _on_delay_spinbox_changed(self, delay_ms_from_spinbox: int):
-        slider_val_to_set = self._delay_to_slider_value(delay_ms_from_spinbox)
+        current_fps = self._delay_ms_to_fps(delay_ms_from_spinbox)
+        slider_raw_val_to_set = self._fps_to_slider_raw_value(current_fps)
         self.speed_slider.blockSignals(True)
-        self.speed_slider.setValue(slider_val_to_set)
+        self.speed_slider.setValue(slider_raw_val_to_set)
         self.speed_slider.blockSignals(False)
-        self._update_speed_display_label(slider_val_to_set)
-        self.frame_delay_changed.emit(delay_ms_from_spinbox)
+        self._update_speed_display_label(current_fps, delay_ms_from_spinbox)
+        # Avoid re-emitting frame_delay_changed if slider change already did
+        # self.frame_delay_changed.emit(delay_ms_from_spinbox)
 
     def set_frame_delay_ui(self, delay_ms: int):
-        slider_val = self._delay_to_slider_value(delay_ms)
+        target_fps = self._delay_ms_to_fps(delay_ms)
+        slider_raw_val = self._fps_to_slider_raw_value(target_fps)
         self.speed_slider.blockSignals(True)
         self.delay_ms_spinbox.blockSignals(True)
-        self.speed_slider.setValue(slider_val)
+        self.speed_slider.setValue(slider_raw_val)
         self.delay_ms_spinbox.setValue(delay_ms)
-        self._update_speed_display_label(slider_val)
+        self._update_speed_display_label(target_fps, delay_ms)
         self.speed_slider.blockSignals(False)
         self.delay_ms_spinbox.blockSignals(False)
 
     def get_current_delay_ms(self) -> int:
-        if self.delay_ms_spinbox:
-            return self.delay_ms_spinbox.value()
         if self.speed_slider:
-            return self._slider_value_to_delay(self.speed_slider.value())
-        return DEFAULT_FRAME_DELAY_MS
+            current_fps = self._slider_raw_value_to_fps(
+                self.speed_slider.value())
+            return self._fps_to_delay_ms(current_fps)
+        return DEFAULT_FRAME_DELAY_MS_FALLBACK
