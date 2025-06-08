@@ -1648,50 +1648,67 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Visualizer Error", "Visualizer components are not initialized.")
             return
 
-        current_mode_key = "classic_spectrum_bars"
+        current_mode_key = "classic_spectrum_bars" # Default
         if self.audio_visualizer_ui_manager.visualization_mode_combo:
-            current_mode_key = self.audio_visualizer_ui_manager.visualization_mode_combo.currentData()
-            if not current_mode_key: current_mode_key = "classic_spectrum_bars"
-
-        # --- Fetch ALL current settings from AudioVisualizerManager ---
-        # This now uses the new get_all_mode_settings() method
+            # Get the mode key ('classic_spectrum_bars', 'pulse_wave_matrix', etc.)
+            selected_data = self.audio_visualizer_ui_manager.visualization_mode_combo.currentData()
+            if selected_data:
+                current_mode_key = str(selected_data) 
+        
         all_current_settings_from_manager = self.audio_visualizer_manager.get_all_mode_settings()
         
-        # The settings from AVM's get_all_mode_settings() are already in manager's scale.
-        # The dialog's _populate_ui_from_settings needs to convert these to UI scale (0-100/0-99).
-        # And _collect_settings_from_all_tabs in dialog will give UI scale values back.
-        # The AVM's update_all_settings_from_dialog will convert them back to manager scale.
-        # So, we need to ensure the initial values passed to dialog are in DIALOG UI SCALE.
-
+        # Prepare settings for the dialog (convert manager scale to UI scale where needed)
         settings_for_dialog = {}
         for mode_k, mode_v_manager_scale in all_current_settings_from_manager.items():
             settings_for_dialog[mode_k] = mode_v_manager_scale.copy() # Start with a copy
+            
             if mode_k == "classic_spectrum_bars":
-                if "sensitivity" in settings_for_dialog[mode_k]: # Convert manager float to dialog int
-                    settings_for_dialog[mode_k]["sensitivity"] = int(mode_v_manager_scale["sensitivity"] * 50.0)
-                if "smoothing" in settings_for_dialog[mode_k]: # Convert manager float to dialog int
-                    settings_for_dialog[mode_k]["smoothing"] = int(mode_v_manager_scale["smoothing"] * 100.0)
-                # band_colors are already hex strings, which is fine for dialog
-            # TODO: Add elif for other modes to convert their manager-scale settings to dialog-UI-scale
-            # elif mode_k == "pulse_wave_matrix":
-            #     if "pulse_speed" in settings_for_dialog[mode_k]: # Manager 0.0-1.0 to Dialog 0-100
-            #         settings_for_dialog[mode_k]["pulse_speed"] = int(mode_v_manager_scale["pulse_speed"] * 100.0)
-        
+                # Sensitivity: manager (0.0-2.0) to UI (0-100)
+                if "sensitivity" in settings_for_dialog[mode_k]:
+                    settings_for_dialog[mode_k]["sensitivity"] = int(round(mode_v_manager_scale.get("sensitivity", 1.0) * 50.0))
+                else:
+                    settings_for_dialog[mode_k]["sensitivity"] = VisualizerSettingsDialog.DEFAULT_SENSITIVITY_SLIDER
+                
+                # Smoothing: manager (0.0-0.99) to UI (0-99)
+                if "smoothing" in settings_for_dialog[mode_k]:
+                    settings_for_dialog[mode_k]["smoothing"] = int(round(mode_v_manager_scale.get("smoothing", 0.2) * 100.0))
+                else:
+                    settings_for_dialog[mode_k]["smoothing"] = VisualizerSettingsDialog.DEFAULT_SMOOTHING_SLIDER
+                
+                # grow_downwards is already boolean, no conversion needed
+                settings_for_dialog[mode_k].setdefault("grow_downwards", False)
+                settings_for_dialog[mode_k].setdefault("band_colors", list(VisualizerSettingsDialog.DEFAULT_SPECTRUM_BAR_COLORS_HEX))
+
+            elif mode_k == "pulse_wave_matrix":
+                # Speed: manager (0.0-1.0) to UI (0-100)
+                if "speed" in settings_for_dialog[mode_k]:
+                    settings_for_dialog[mode_k]["speed"] = int(round(mode_v_manager_scale.get("speed", 0.5) * 100.0))
+                else:
+                    settings_for_dialog[mode_k]["speed"] = 50 # Default UI scale
+
+                # Brightness Sensitivity: manager (0.0-2.0) to UI (0-100)
+                if "brightness_sensitivity" in settings_for_dialog[mode_k]:
+                    settings_for_dialog[mode_k]["brightness_sensitivity"] = int(round(mode_v_manager_scale.get("brightness_sensitivity", 1.0) * 50.0))
+                else:
+                    settings_for_dialog[mode_k]["brightness_sensitivity"] = 75 # Default UI scale
+                
+                settings_for_dialog[mode_k].setdefault("color", QColor("cyan").name())
+            
+            # Add elif for other modes as they get implemented
+
         dialog = VisualizerSettingsDialog(
-            current_mode_key=str(current_mode_key),
-            all_current_settings=settings_for_dialog, # Pass dialog-scale settings
-            config_save_path_func=get_user_config_file_path,
+            current_mode_key=current_mode_key, # Pass the actual current mode
+            all_current_settings=settings_for_dialog, # Pass dialog-UI-scale settings
+            config_save_path_func=get_user_config_file_path, # Pass the function itself
             parent=self
         )
 
         try: dialog.all_settings_applied.disconnect(self._handle_visualizer_settings_applied)
-        except TypeError: pass
+        except TypeError: pass # Was not connected
         dialog.all_settings_applied.connect(self._handle_visualizer_settings_applied)
 
         if dialog.exec():
-            pass # print("MW: VisualizerSettingsDialog accepted.")
-        # else:
-            # print("MW: VisualizerSettingsDialog cancelled.")
+            pass
         dialog.deleteLater()
 
     def _handle_visualizer_settings_applied(self, all_new_settings_from_dialog: dict):
