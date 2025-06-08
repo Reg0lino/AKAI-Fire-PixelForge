@@ -11,8 +11,9 @@ from PyQt6.QtCore import Qt, pyqtSignal, QPoint
 
 from .sv_picker import SVPicker
 from .hue_slider import HueSlider
+from PyQt6.QtWidgets import QSizePolicy
 
-MAX_SAVED_COLORS = 16 # 2 rows of 8
+MAX_SAVED_COLORS = 24 # 2 rows of 8
 CONFIG_FILE_NAME = "fire_controller_config.json"
 CONFIG_KEY_SAVED_COLORS = "color_picker_swatches"
 
@@ -24,8 +25,22 @@ class ColorPickerManager(QGroupBox):
 
     final_color_selected = pyqtSignal(QColor)
     status_message_requested = pyqtSignal(str, int)
+    ICON_ADD_SWATCH_COLOR = "➕"
+    ICON_CLEAR_ALL_SWATCHES = "🗑️"
+    ICON_MENU_DELETE = "🗑️"
+    ICON_MENU_SET_COLOR = "🎨"
 
-    def __init__(self, initial_color=QColor("red"), parent_group_title="🎨 Advanced Color Picker", config_save_path_func=None):
+    final_color_selected = pyqtSignal(QColor)
+    status_message_requested = pyqtSignal(str, int)
+
+    # --- ADDED NEW SIGNALS ---
+    request_clear_all_pads = pyqtSignal()
+    # To sync with MainWindow's eyedropper state
+    eyedropper_button_toggled = pyqtSignal(bool)
+    # --- END ADDED NEW SIGNALS ---
+
+
+    def __init__(self, initial_color=QColor("red"), parent_group_title="🎨 Color Picker", config_save_path_func=None):
         super().__init__(parent_group_title)
         self._current_color = QColor(initial_color)
         self.config_save_path_func = config_save_path_func
@@ -33,18 +48,28 @@ class ColorPickerManager(QGroupBox):
         self.sv_picker = SVPicker()
         self.hue_slider = HueSlider()
 
-        self.r_input = QLineEdit(); self.g_input = QLineEdit(); self.b_input = QLineEdit()
+        self.r_input = QLineEdit()
+        self.g_input = QLineEdit()
+        self.b_input = QLineEdit()
         self.hex_input = QLineEdit()
-        self.preview_box = QFrame() # This is the main color preview
-        self.preview_box.setObjectName("MainColorPreview") # Set object name for QSS styling if needed
+        self.hex_input.setObjectName("HexColorInputLineEdit")
 
         self.saved_color_buttons: list['ColorSwatchButton'] = []
+        # self.saved_colors_hex is initialized using the NEW MAX_SAVED_COLORS
         self.saved_colors_hex: list[str | None] = [None] * MAX_SAVED_COLORS
+
+        self.eyedropper_button: QPushButton | None = None
+        self.set_black_button: QPushButton | None = None
+        self.clear_pads_button: QPushButton | None = None
+
+        self.setObjectName("ColorPickerManagerGroup")
 
         self._init_ui()
         self._connect_signals()
+        # This will now correctly handle 24 slots
         self.load_color_picker_swatches_from_config()
         self._update_ui_from_color(self._current_color, source="init")
+
 
     def _get_config_file_path(self):
         if self.config_save_path_func:
@@ -63,75 +88,171 @@ class ColorPickerManager(QGroupBox):
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(8)
 
+        # --- Top line for RGB, Hex, and Eyedropper inputs ---
+        top_input_line_layout = QHBoxLayout()
+        top_input_line_layout.setContentsMargins(0, 0, 0, 0)
+
+        rgb_group_layout = QHBoxLayout()
+        rgb_group_layout.setSpacing(3)
+        rgb_group_layout.setContentsMargins(0, 0, 0, 0)
+        int_validator = QIntValidator(0, 255, self)
+
+        rgb_group_layout.addWidget(QLabel("R:"))
+        self.r_input.setValidator(int_validator)
+        self.r_input.setFixedWidth(38)
+        self.r_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.r_input.setToolTip("Red component (0-255)")
+        rgb_group_layout.addWidget(self.r_input)
+        rgb_group_layout.addSpacing(10)
+
+        rgb_group_layout.addWidget(QLabel("G:"))
+        self.g_input.setValidator(int_validator)
+        self.g_input.setFixedWidth(38)
+        self.g_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.g_input.setToolTip("Green component (0-255)")
+        rgb_group_layout.addWidget(self.g_input)
+        rgb_group_layout.addSpacing(10)
+
+        rgb_group_layout.addWidget(QLabel("B:"))
+        self.b_input.setValidator(int_validator)
+        self.b_input.setFixedWidth(38)
+        self.b_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.b_input.setToolTip("Blue component (0-255)")
+        rgb_group_layout.addWidget(self.b_input)
+
+        top_input_line_layout.addLayout(rgb_group_layout)
+        top_input_line_layout.addStretch(1)
+
+        hex_eyedropper_group_layout = QHBoxLayout()
+        hex_eyedropper_group_layout.setSpacing(3)
+        hex_eyedropper_group_layout.setContentsMargins(0, 0, 0, 0)
+
+        hex_eyedropper_group_layout.addWidget(QLabel("Hex:"))
+        self.hex_input.setFixedWidth(70)
+        self.hex_input.setMaxLength(7)
+        self.hex_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.hex_input.setToolTip("Hexadecimal color code (#RRGGBB)")
+        hex_eyedropper_group_layout.addWidget(self.hex_input)
+        hex_eyedropper_group_layout.addSpacing(5)
+
+        self.eyedropper_button = QPushButton("💧")
+        self.eyedropper_button.setObjectName("EyedropperToolButton")
+        self.eyedropper_button.setToolTip(
+            "Toggle Eyedropper mode (I): Click a pad to pick its color.")
+        self.eyedropper_button.setCheckable(True)
+        hex_eyedropper_group_layout.addWidget(self.eyedropper_button)
+
+        top_input_line_layout.addLayout(hex_eyedropper_group_layout)
+        main_layout.addLayout(top_input_line_layout)
+
+        # --- SV Picker and Hue Slider ---
         pickers_layout = QHBoxLayout()
+        pickers_layout.setSpacing(6)
         pickers_layout.addWidget(self.sv_picker, 3)
         pickers_layout.addWidget(self.hue_slider, 1)
         main_layout.addLayout(pickers_layout)
 
-        inputs_preview_layout = QHBoxLayout()
-        rgb_hex_group = QGroupBox("Numeric Input")
-        rgb_hex_layout = QGridLayout(rgb_hex_group)
-
-        int_validator = QIntValidator(0, 255, self)
-        for i, (label_text, line_edit_widget) in enumerate([("R:", self.r_input), ("G:", self.g_input), ("B:", self.b_input)]):
-            line_edit_widget.setValidator(int_validator); line_edit_widget.setFixedWidth(45)
-            line_edit_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            rgb_hex_layout.addWidget(QLabel(label_text), i, 0)
-            rgb_hex_layout.addWidget(line_edit_widget, i, 1)
-
-        rgb_hex_layout.addWidget(QLabel("Hex:"), 0, 2)
-        self.hex_input.setFixedWidth(80); self.hex_input.setMaxLength(7) # #RRGGBB
-        self.hex_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        rgb_hex_layout.addWidget(self.hex_input, 0, 3, 1, 2) # Span 1 row, 2 columns
-        inputs_preview_layout.addWidget(rgb_hex_group, 2) # Give more space to inputs
-
-        # Configure the main color preview box
-        self.preview_box.setFrameShape(QFrame.Shape.StyledPanel) # Or QFrame.Shape.Box for a simple border
-        self.preview_box.setFrameShadow(QFrame.Shadow.Sunken)   # Or QFrame.Shadow.Plain
-        self.preview_box.setFixedSize(60, 60)
-        # self.preview_box.setAutoFillBackground(True) # No longer needed if using setStyleSheet
-        # self.preview_box.setObjectName("MainColorPreview") # Already set in __init__
-        inputs_preview_layout.addWidget(self.preview_box, 1, Qt.AlignmentFlag.AlignCenter) # Give it less space
-        main_layout.addLayout(inputs_preview_layout)
-
-
+        # --- "My Colors" Swatches Group ---
         my_colors_group = QGroupBox("My Colors")
         my_colors_layout = QVBoxLayout(my_colors_group)
+        my_colors_layout.setSpacing(4)  # Spacing between grid and button row
 
         swatches_grid_layout = QGridLayout()
         swatches_grid_layout.setSpacing(5)
-        for i in range(MAX_SAVED_COLORS):
-            row, col = divmod(i, MAX_SAVED_COLORS // 2)
+
+        NUM_SWATCH_COLUMNS = 8  # Define number of columns for swatches
+
+        self.saved_color_buttons.clear()  # Clear existing buttons before repopulating
+        for i in range(MAX_SAVED_COLORS):  # MAX_SAVED_COLORS is now 24
+            row, col = divmod(i, NUM_SWATCH_COLUMNS)  # Use NUM_SWATCH_COLUMNS
             swatch = ColorSwatchButton(parent=self)
-            swatch.clicked.connect(lambda checked=False, s=swatch: self._on_swatch_clicked(s))
-            swatch.rightClicked.connect(lambda pos, s=swatch, idx=i: self._show_swatch_context_menu(s, idx, pos))
+            swatch.clicked.connect(lambda checked=False,
+                                   s=swatch: self._on_swatch_clicked(s))
+            swatch.rightClicked.connect(
+                lambda pos, s=swatch, idx=i: self._show_swatch_context_menu(s, idx, pos))
             self.saved_color_buttons.append(swatch)
             swatches_grid_layout.addWidget(swatch, row, col)
         my_colors_layout.addLayout(swatches_grid_layout)
 
-        my_colors_buttons_layout = QHBoxLayout()
-        self.add_saved_color_button = QPushButton(f"{self.ICON_ADD_SWATCH_COLOR} Add")
-        self.add_saved_color_button.setToolTip("Add current color to an empty swatch or overwrite selected.")
-        self.add_saved_color_button.setStatusTip("Save the currently selected color to your personal swatches.")
-        my_colors_buttons_layout.addWidget(self.add_saved_color_button)
+        # --- ADDED: Vertical spacing between swatches and buttons ---
+        # Adjust this value (e.g., 8 or 10) for desired gap
+        my_colors_layout.addSpacing(8)
+        # --- END ADDED ---
 
-        self.clear_swatches_button = QPushButton(f"{self.ICON_CLEAR_ALL_SWATCHES} Clear All")
-        self.clear_swatches_button.setToolTip("Clear all saved color swatches.")
-        self.clear_swatches_button.setStatusTip("Remove all colors from your personal swatches.")
+        my_colors_buttons_layout = QHBoxLayout()
+        self.add_saved_color_button = QPushButton(
+            f"{self.ICON_ADD_SWATCH_COLOR} Add")
+        self.add_saved_color_button.setObjectName("SwatchAddButton")
+        self.add_saved_color_button.setToolTip(
+            "Add current color to an empty swatch.")
+        self.add_saved_color_button.setSizePolicy(
+            QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+
+        self.clear_swatches_button = QPushButton(
+            f"{self.ICON_CLEAR_ALL_SWATCHES} Clear All")
+        self.clear_swatches_button.setObjectName("SwatchClearAllButton")
+        self.clear_swatches_button.setToolTip(
+            "Clear all saved color swatches.")
+        self.clear_swatches_button.setSizePolicy(
+            QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+
+        my_colors_buttons_layout.addStretch(1)
+        my_colors_buttons_layout.addWidget(self.add_saved_color_button)
+        my_colors_buttons_layout.addSpacing(5)
         my_colors_buttons_layout.addWidget(self.clear_swatches_button)
+
         my_colors_layout.addLayout(my_colors_buttons_layout)
         main_layout.addWidget(my_colors_group)
 
+        # --- Integrated "Set Black" and "Clear Pads" buttons ---
+        action_tools_layout = QHBoxLayout()
+        action_tools_layout.setSpacing(6)
+        action_tools_layout.setContentsMargins(0, 4, 0, 0)
+
+        self.set_black_button = QPushButton("Set Black")
+        self.set_black_button.setToolTip(
+            "Set current painting color to Black (Off).")
+        action_tools_layout.addWidget(self.set_black_button)
+
+        action_tools_layout.addStretch(1)
+
+        self.clear_pads_button = QPushButton("Clear Pads")
+        self.clear_pads_button.setToolTip(
+            "Clear all hardware pads and the current GUI/Animator frame to Black.")
+        action_tools_layout.addWidget(self.clear_pads_button)
+
+        main_layout.addLayout(action_tools_layout)
+
+
     def _connect_signals(self):
+        # Existing picker signals
         self.sv_picker.sv_changed.connect(self._on_sv_changed)
         self.hue_slider.hue_changed.connect(self._on_hue_changed)
         self.r_input.editingFinished.connect(self._on_rgb_input_changed)
         self.g_input.editingFinished.connect(self._on_rgb_input_changed)
         self.b_input.editingFinished.connect(self._on_rgb_input_changed)
         self.hex_input.editingFinished.connect(self._on_hex_input_changed)
+        # My Colors swatch management signals
         self.add_saved_color_button.clicked.connect(self._add_current_color_to_swatches)
         self.clear_swatches_button.clicked.connect(self._clear_all_swatches)
+        # --- ADDED: Connect signals for new integrated tool buttons ---
+        if self.eyedropper_button: # Check if button was created
+            self.eyedropper_button.toggled.connect(self.eyedropper_button_toggled) # Emit signal
+        if self.set_black_button:
+            self.set_black_button.clicked.connect(self._handle_set_black_request)
+        if self.clear_pads_button:
+            self.clear_pads_button.clicked.connect(self.request_clear_all_pads) # Emit signal
+
+    def _handle_set_black_request(self):
+        """Sets the color picker's current color to black."""
+        black_color = QColor("black")
+        # Call set_current_selected_color to update UI and emit final_color_selected
+        self.set_current_selected_color(black_color, source="set_black_button")
+        # Status message for this action can be emitted by MainWindow when it receives the black color.
+        # Or, if ColorPickerManager handles its own status:
+        # self.status_message_requested.emit("Active painting color set to: Black (Off)", 2000)
 
     def _on_sv_changed(self, s, v):
         h = self.hue_slider.get_hue() / 360.0
@@ -158,7 +279,7 @@ class ColorPickerManager(QGroupBox):
                 self._update_ui_from_color(self._current_color, source="rgb_input")
                 self.final_color_selected.emit(self._current_color)
         except ValueError:
-             # Optionally revert to current color if input is invalid
+            # Optionally revert to current color if input is invalid
             self.r_input.setText(str(self._current_color.red()))
             self.g_input.setText(str(self._current_color.green()))
             self.b_input.setText(str(self._current_color.blue()))
@@ -175,52 +296,82 @@ class ColorPickerManager(QGroupBox):
         elif not new_color.isValid():
             self.hex_input.setText(self._current_color.name().upper()) # Revert to valid hex
 
+
     def _update_ui_from_color(self, color: QColor, source: str):
-        # print(f"DEBUG CPM: _update_ui_from_color CALLED. Source: '{source}', Color: {color.name()}")
-
-        # Update main preview box using setStyleSheet
-        if self.preview_box:
-            hex_color_for_preview = color.name()
-            # Determine text color (e.g., hex code) for contrast
-            # luminance = (0.299 * color.redF() + 0.587 * color.greenF() + 0.114 * color.blueF())
-            # text_preview_color = "#000000" if luminance > 0.5 else "#FFFFFF"
-            
-            # For QFrame, often you don't put text directly. If it were a QLabel, the text color matters more.
-            # For QFrame, just the background.
-            style_sheet = f"QFrame#MainColorPreview {{ background-color: {hex_color_for_preview}; border: 1px solid #707070; border-radius: 3px; }}"
-            self.preview_box.setStyleSheet(style_sheet)
-            self.preview_box.update() # Ensure repaint
-
-        # Update RGB inputs
+        # Update RGB inputs (if not the source)
         if source != "rgb_input":
-            r_text = str(color.red())
-            g_text = str(color.green())
-            b_text = str(color.blue())
-            # print(f"DEBUG CPM: Preparing to set RGB text: R='{r_text}', G='{g_text}', B='{b_text}'")
-            self.r_input.setText(r_text)
-            self.g_input.setText(g_text)
-            self.b_input.setText(b_text)
-            # print(f"DEBUG CPM: AFTER setText - R.text()='{self.r_input.text()}', G.text()='{self.g_input.text()}', B.text()='{self.b_input.text()}'")
-        # else:
-            # print(f"DEBUG CPM: Skipping RGB input update because source is '{source}'")
+            self.r_input.blockSignals(True)
+            self.g_input.blockSignals(True)
+            self.b_input.blockSignals(True)
+            self.r_input.setText(str(color.red()))
+            self.g_input.setText(str(color.green()))
+            self.b_input.setText(str(color.blue()))
+            self.r_input.blockSignals(False)
+            self.g_input.blockSignals(False)
+            self.b_input.blockSignals(False)
 
-        # Update Hex input
+        # Update Hex input text (if not the source) and its dynamic style
+        current_hex_for_display = color.name().upper()
         if source != "hex_input":
-            hex_text = color.name().upper()
-            # print(f"DEBUG CPM: Preparing to set Hex text: HEX='{hex_text}'")
-            self.hex_input.setText(hex_text)
-            # print(f"DEBUG CPM: AFTER setText - HEX.text()='{self.hex_input.text()}'")
-        # else:
-            # print(f"DEBUG CPM: Skipping Hex input update because source is '{source}'")
+            self.hex_input.blockSignals(True)
+            self.hex_input.setText(current_hex_for_display)
+            self.hex_input.blockSignals(False)
 
-        # Update SV Picker and Hue Slider if the change didn't originate from them
+        # Always update hex_input style based on the 'color' parameter,
+        # which represents the new authoritative color.
+        if self.hex_input and color.isValid():  # Ensure color is valid for styling
+            luminance = (0.299 * color.redF() + 0.587 *
+                         color.greenF() + 0.114 * color.blueF())
+            text_color_for_hex = "#000000" if luminance > 0.5 else "#FFFFFF"
+
+            # Base style parts from your QSS to maintain consistency
+            base_border = "1px solid #4D4D4D"       # From general QLineEdit
+            base_radius = "3px"                     # From general QLineEdit
+            base_padding = "1px 3px"                # Matching reduced QLineEdit padding
+            base_min_height = "18px"                # Matching reduced QLineEdit min-height
+
+            # If you have a specific QSS for QLineEdit#HexColorInputLineEdit that defines these,
+            # it's better. Otherwise, we reconstruct a compatible style.
+            # The objectName selector in QSS is more robust than setting full style here.
+
+            # If QLineEdit#HexColorInputLineEdit is styled in QSS, we only need to override
+            # background-color and color. Otherwise, include all necessary base styles.
+            hex_input_style = f"""
+                QLineEdit#HexColorInputLineEdit {{
+                    background-color: {color.name()};
+                    color: {text_color_for_hex};
+                    border: {base_border};
+                    border-radius: {base_radius};
+                    padding: {base_padding};
+                    min-height: {base_min_height};
+                    font-weight: bold;
+                    text-align: center;
+                }}
+                QLineEdit#HexColorInputLineEdit:focus {{
+                    border: 1px solid #60a0ff; /* Brighter focus */
+                }}
+            """
+            self.hex_input.setStyleSheet(hex_input_style)
+        elif self.hex_input:  # Color is invalid, reset hex_input style
+            # Revert to QSS default for QLineEdit or QLineEdit#HexColorInputLineEdit
+            self.hex_input.setStyleSheet("")
+
+        # Update SV Picker and Hue Slider (if not the source of the change)
         if source != "sv_picker" and source != "hue_slider":
-            h, s, v, _a = color.getHsvF() # Use HsvF for float values 0.0-1.0
-            if source != "hue_slider": # Avoid recursive update if only SV changed
-                self.hue_slider.set_hue(int(h * 359.99), emit_signal=False) # HueSlider expects 0-359
-            # Always update SVPicker unless it was the source, and ensure its hue is correct
-            self.sv_picker.setHue(int(h * 359.99)) # SVPicker needs hue for its gradient
-            self.sv_picker.setSV(s, v) # <<< CORRECTED to match SVPicker.setSV(s,v)
+            h, s, v, _a = color.getHsvF()
+            if source != "hue_slider":
+                self.hue_slider.blockSignals(True)
+                self.hue_slider.set_hue(int(h * 359.99), emit_signal=False)
+                self.hue_slider.blockSignals(False)
+
+            self.sv_picker.setHue(int(h * 359.99))
+            if source != "sv_picker":
+                # sv_picker.setSV internally checks if values changed before emitting,
+                # but blocking can be an extra precaution if strict avoidance of re-emission is needed.
+                # self.sv_picker.blockSignals(True)
+                self.sv_picker.setSV(s, v)
+                # self.sv_picker.blockSignals(False)
+
 
     def _on_swatch_clicked(self, swatch_button: 'ColorSwatchButton'):
         color_hex = swatch_button.get_color_hex()

@@ -1,5 +1,67 @@
 # Changelog - Akai Fire PixelForge
 
+## [Version 1.0.1] - 2025-6-8 
+
+This version introduces a significant overhaul and initial detailed implementation of the Audio Visualizer feature, focusing on the "Classic Spectrum Bars" mode, robust settings management, and user profile/prefab support.
+
+### ✨ NEW FEATURE: Advanced Audio Visualizer - Classic Spectrum Bars (Part 1)
+
+*   **Core Visualization Engine (`AudioVisualizerManager`):**
+    *   Successfully captures audio from selected loopback devices using `pyaudiowpatch` in a dedicated `AudioProcessingThread`.
+    *   Performs FFT on audio data to derive frequency magnitudes.
+    *   Calculates 8 distinct band powers using logarithmic frequency spacing.
+    *   Applies user-configurable global sensitivity and smoothing factors to band powers.
+    *   Maps processed band powers to the 4x16 Akai Fire pad grid for the "Classic Spectrum Bars" mode, controlling the height and brightness of bars.
+    *   Includes foundational logic for other modes ("Pulse Wave Matrix", "Dual VU Meters with Color Spectrum"), awaiting detailed UI and mapping implementation.
+*   **Comprehensive Settings Management (`AudioVisualizerManager`):**
+    *   Introduced `all_mode_settings_cache` to store detailed configurations for all visualizer modes.
+    *   Settings are persisted to `user_settings/visualizer_main_settings.json` and loaded on startup, ensuring user preferences are remembered across sessions.
+    *   Handles conversion between UI-scale settings (e.g., sliders 0-100) and internal manager-scale operational values (e.g., floats for sensitivity factors).
+*   **Detailed Settings Dialog (`VisualizerSettingsDialog`):**
+    *   **"📊 Spectrum Bars" Tab Overhaul:**
+        *   Provides UI controls for customizing 8 individual bar colors using `ColorGradientButton` pickers.
+        *   Includes a "Sensitivity" QSlider (0-100, representing factors like 0.0x-2.0x) with a live text label showing the current factor.
+        *   Includes a "Smoothing Factor" QSlider (0-99, representing 0.00-0.99) with a live text label.
+        *   Changes to sliders and color pickers immediately update the dialog's internal working copy of settings for `"classic_spectrum_bars"`.
+        *   **Integrated Palette Management:**
+            *   **User Profiles:** Users can save the current "Spectrum Bars" settings (8 colors, sensitivity, smoothing) as a named profile.
+            *   Profiles are listed in "My Saved Palettes" `QListWidget` on the same tab.
+            *   Users can load a selected profile, instantly applying its settings to the "Spectrum Bars" UI controls and the dialog's working copy.
+            *   Users can delete saved profiles.
+            *   All user profiles are saved to/loaded from `user_settings/visualizer_color_profiles.json`.
+            *   **Prefab Palettes:** A selection of pre-defined color palettes (e.g., "Rainbow," "Fire & Ice," "Synthwave," "Forest Greens," "Ocean Sunset") can be applied to the current "Spectrum Bars" settings with a single click. Prefabs also include default sensitivity/smoothing values.
+        *   **"Reset Bar Settings" Button:** Allows users to revert all settings on the "Spectrum Bars" tab (colors, sensitivity, smoothing) to application defaults.
+    *   **Dialog Workflow:**
+        *   Dialog now uses only "OK" and "Cancel" buttons. The "Apply All" button on the dialog itself has been removed to simplify the flow.
+        *   Clicking "OK" applies all settings currently configured in the dialog (from its internal `all_settings` working copy) to the main `AudioVisualizerManager` and closes the dialog.
+        *   Clicking "Cancel" discards any changes made within the dialog session.
+*   **Main Application Integration (`MainWindow` & `AudioVisualizerUIManager`):**
+    *   `AudioVisualizerUIManager` provides sidebar controls for audio device selection, visualizer mode selection, and an enable/disable button for the visualizer.
+    *   A "Setup..." button in the `AudioVisualizerUIManager` opens the `VisualizerSettingsDialog`.
+    *   Robust state management for enabling/disabling the visualizer, ensuring proper start/stop of the `AudioVisualizerManager`'s capture thread.
+    *   The `MainWindow`'s GUI pad grid now mirrors the live output of the audio visualizer when active.
+    *   Resolved an issue where the visualizer enable/disable button could cause an immediate re-toggle due to signal handling intricacies; now uses a more robust state management flow relying on signals from `AudioVisualizerManager` for `capture_started` and `capture_stopped`.
+
+### 🐛 Bug Fixes & Stability (Audio Visualizer)
+
+*   **Resolved Key Mismatch:** Fixed a critical bug where inconsistent string keys (e.g., `"Classic Spectrum Bars"` vs. `"classic_spectrum_bars"`) prevented `AudioVisualizerManager` from correctly applying cached/loaded settings, resulting in default colors always being used.
+*   **Corrected Profile List Updates:** Ensured the "My Saved Palettes" list in `VisualizerSettingsDialog` reliably updates when new profiles are saved or existing ones are deleted.
+*   **Fixed Premature Visualizer Stop:** Addressed an issue where the audio processing thread would start and then immediately stop. Implemented a more robust start/stop signaling mechanism between `MainWindow` and `AudioVisualizerManager`.
+*   **Reduced Confirmation Popups:** Removed several informational `QMessageBox` popups in `VisualizerSettingsDialog` for actions like loading prefabs or resetting settings, as the UI changes themselves provide sufficient feedback. Error popups are retained.
+
+### 🔮 Future Considerations & UI Consolidation
+
+*   **Current UI Layout (`VisualizerSettingsDialog` - "Spectrum Bars" Tab):** The "Spectrum Bars" tab now contains both the direct visualizer settings (colors, sensitivity, smoothing) and the full palette management UI (user profiles, save, load, delete, prefabs). While functional, this makes the tab quite dense.
+*   **Potential for UI Overcrowding:** As more visualizer modes ("Pulse Wave," "Dual VU") get their own detailed settings and potentially their own integrated palette management on their respective tabs, the `VisualizerSettingsDialog` could become very wide or require significant scrolling if maintaining a similar side-by-side settings/palette layout for each.
+*   **Alternative UI Consolidation Strategies for Palette Management:**
+    1.  **Dedicated Global Palette Manager Tab (Revisit):** Reintroduce a "Color Palettes" tab, but its role would be primarily for *managing* (viewing all, renaming, deleting) profiles across *all* modes. The "Save Current As" and "Load to Current Mode" actions would still be initiated from within each specific mode's settings tab. This keeps mode-specific actions contextual but provides a central place for an overview.
+    2.  **Popup/Sub-Dialog for Palette Actions:** Instead of embedding the full palette list and save/load UI directly on each mode tab, the "Spectrum Bars" (and future mode) tabs could have smaller buttons like "Save Palette...", "Load Palette...". Clicking these would open a *smaller, dedicated modal dialog* specifically for palette selection/naming related to the *currently active mode tab*. This keeps the main mode tabs cleaner.
+    3.  **Collapsible Sections within Mode Tabs:** Keep palette management on each mode tab but place the "My Saved Palettes," "Save Current," and "Prefab Palettes" sections within collapsible `QGroupBox`es or a hideable side panel within the tab itself, allowing users to expand them only when needed.
+    4.  **Contextual Right-Click Menu for Palettes:** The primary color controls (e.g., the grid of `ColorGradientButton`s) could have a context menu (right-click) offering "Save these 8 colors as Palette...", "Load Palette to these 8 colors...". This is very direct but less discoverable.
+*   **User Feedback will be Key:** The best approach for UI consolidation will depend on how complex the settings for other visualizer modes become and what feels most intuitive during use. For now, the integrated approach on the "Spectrum Bars" tab, while dense, directly solves the "cannot determine active mode" errors.
+
+---
+
 ## [Version 1.0.0] - 2025-06-05
 
 This landmark v1.0.0 release introduces the highly anticipated **"LazyDOOM" on OLED** feature, transforming your Akai Fire into a mini retro gaming console! This version also finalizes and fully integrates the advanced OLED image processing and dithering capabilities previously in experimentation, solidifying PixelForge as a powerful platform for creative and interactive experiences on the Akai Fire.

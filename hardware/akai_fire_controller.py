@@ -46,9 +46,11 @@ class MidiInputThread(QThread):
         try:
             if self.in_port and not self.in_port.closed: self.in_port.close()
             with mido.open_input(self.port_name) as self.in_port:
-                print(f"MidiInputThread: Successfully opened port '{self.port_name}'")
+                print(f"MidiInputThread ({self.objectName()}): Successfully opened port '{self.port_name}'")
                 while self._running:
-                    for msg in self.in_port.iter_pending(): self.message_received.emit(msg)
+                    for msg in self.in_port.iter_pending():
+                        # print(f"MIDI INPUT THREAD ({self.objectName()}) RAW MSG: {msg}")  # Debug print
+                        self.message_received.emit(msg)
                     self.msleep(10)
         except Exception as e: print(f"MidiInputThread: Error for '{self.port_name}': {e}")
         finally:
@@ -234,6 +236,8 @@ class AkaiFireController(QObject):
             count += 1
         if not payload: return
         length = count * 4 # Each pad entry is 4 bytes (idx, r, g, b) in the SysEx payload
+        # print(
+        #     f"AFC DEBUG Sysex Payload: Count={count}, Length={length}, Payload Sample (first 20 bytes): {payload[:20]}")
         self._send_sysex([0x65, (length >> 7) & 0x7F, length & 0x7F] + payload)
 
     def clear_all_pads(self):

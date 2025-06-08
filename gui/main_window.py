@@ -1,4 +1,6 @@
 # AKAI_Fire_RGB_Controller/gui/main_window.py
+from .visualizer_settings_dialog import VisualizerSettingsDialog
+from .audio_visualizer_ui_manager import AudioVisualizerUIManager
 from appdirs import user_config_dir
 import sys
 import json
@@ -77,6 +79,8 @@ from .static_layouts_manager import StaticLayoutsManager
 from .interactive_pad_grid import InteractivePadGridFrame
 from .screen_sampler_manager import ScreenSamplerManager
 from .animator_manager_widget import AnimatorManagerWidget
+from .audio_visualizer_ui_manager import AudioVisualizerUIManager
+from managers.audio_visualizer_manager import AudioVisualizerManager
 from hardware.akai_fire_controller import AkaiFireController
 from managers.oled_display_manager import OLEDDisplayManager
 from managers.hardware_input_manager import HardwareInputManager
@@ -95,11 +99,9 @@ except ImportError:
         DEFAULT_ADJUSTMENTS = {'brightness': 1.0, 'contrast': 1.0,
                             'saturation': 1.0, 'hue_shift': 0.0}  # ensure float for hue
 
-
 MW_FPS_MIN_DISCRETE_VALUES = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
 MW_FPS_LINEAR_START_VALUE = 6.0
 MW_FPS_MAX_TARGET_VALUE = 90.0  # Or your chosen max for Knob 4
-
 _MW_NUM_DISCRETE_FPS_STEPS = len(MW_FPS_MIN_DISCRETE_VALUES)
 _MW_SLIDER_IDX_FOR_LINEAR_START = _MW_NUM_DISCRETE_FPS_STEPS
 MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL = 0  # Raw min for QDial range
@@ -109,7 +111,6 @@ MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL = _MW_SLIDER_IDX_FOR_LINEAR_START + \
 
 # Knob step for physical encoder (delta is +/-1, maps to 1 step on the raw slider value)
 MW_ANIMATOR_SPEED_KNOB_STEP = 1
-
 
 # --- Constants ---
 INITIAL_WINDOW_WIDTH = 1100
@@ -131,17 +132,16 @@ USER_OLED_TEXT_ITEMS_SUBDIR = "TextItems"
 USER_OLED_ANIM_ITEMS_SUBDIR = "ImageAnimations"
 
 
-
-
-
 # --- Path Helper Functions (Module Level - Keep as they are) ---
+from .visualizer_settings_dialog import VisualizerSettingsDialog  # Add this import at the top, adjust path as needed
+
 def get_user_documents_presets_path(app_specific_folder_name: str = USER_PRESETS_APP_FOLDER_NAME) -> str:
     try:
-        documents_path = ""
         if sys.platform == "win32":
             import ctypes.wintypes
             CSIDL_PERSONAL = 5
             SHGFP_TYPE_CURRENT = 0
+            import ctypes
             buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
             ctypes.windll.shell32.SHGetFolderPathW(
                 None, CSIDL_PERSONAL, None, SHGFP_TYPE_CURRENT, buf)
@@ -353,7 +353,6 @@ class MainWindow(QMainWindow):
         self.available_oled_items_cache.sort(key=lambda x: x['name'].lower())
         return self.available_oled_items_cache
 
-
     def _load_oled_item_data(self, relative_item_path: str | None) -> dict | None:
         if not relative_item_path:
             return None
@@ -458,7 +457,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar) # Set it as the main window's status bar
         self.status_bar.showMessage("Ready. Please connect to AKAI Fire.") # Initial message
         # print(f"MW DEBUG: _init_ui_layout - Status bar created and set: {self.status_bar}")
-        print("MW DEBUG: _init_ui_layout COMPLETE")
+        # print("MW DEBUG: _init_ui_layout COMPLETE")
 
     def _create_hardware_top_strip(self) -> QGroupBox:
         top_strip_group = QGroupBox("Device Controls")
@@ -737,97 +736,72 @@ class MainWindow(QMainWindow):
         input_layout.addWidget(self.input_port_combo_direct_ref, 1)
         return input_connection_group
 
-    def _init_direct_controls_right_panel(self) -> QGroupBox:
-        """Initializes the 'Quick Tools' QGroupBox for direct pad/color operations."""
-        tool_buttons_group = QGroupBox("🛠️ Quick Tools")
-        tool_buttons_layout = QHBoxLayout(tool_buttons_group) # Horizontal layout for buttons
-        # Button to set current painting color to black
-        color_button_off = QPushButton("Set Black") # Local var, assign to self if needed elsewhere
-        color_button_off.setToolTip("Set current painting color to Black (Off).")
-        color_button_off.clicked.connect(self._handle_paint_black_button)
-        tool_buttons_layout.addWidget(color_button_off)        
-        # Button to clear all pads (hardware and current GUI/Animator frame)
-        clear_all_button = QPushButton("Clear Pads") # Local var
-        clear_all_button.setToolTip("Clear all hardware pads and the current GUI/Animator frame to Black.")
-        clear_all_button.clicked.connect(self.clear_all_hardware_and_gui_pads)
-        tool_buttons_layout.addWidget(clear_all_button)
-        # Eyedropper toggle button
-        self.eyedropper_button = QPushButton("💧 Eyedropper") # Assign to self for QAction sync
-        self.eyedropper_button.setToolTip("Toggle Eyedropper mode (I): Click a pad to pick its color.")
-        self.eyedropper_button.setCheckable(True)
-        self.eyedropper_button.toggled.connect(self._on_eyedropper_button_toggled)
-        tool_buttons_layout.addWidget(self.eyedropper_button)                
-        return tool_buttons_group
-
     def _populate_right_panel(self):
         if self.right_panel_layout_v is None:
-            print(
-                "MW CRITICAL ERROR: _populate_right_panel - self.right_panel_layout_v is None!")
+            print("MW CRITICAL ERROR: _populate_right_panel - self.right_panel_layout_v is None!")
             return
-        # print(f"MW TRACE: _populate_right_panel - START")
+        
         # --- MIDI Connection Group (Output) ---
         connection_group = QGroupBox("🔌 MIDI Output")
         connection_layout = QHBoxLayout(connection_group)
         self.port_combo_direct_ref = QComboBox()
         self.port_combo_direct_ref.setPlaceholderText("Select MIDI Output")
         if hasattr(self, '_on_port_combo_changed'):
-            self.port_combo_direct_ref.currentIndexChanged.connect(
-                self._on_port_combo_changed)
+            self.port_combo_direct_ref.currentIndexChanged.connect(self._on_port_combo_changed)
         self.connect_button_direct_ref = QPushButton("Connect")
         if hasattr(self, 'toggle_connection'):
-            self.connect_button_direct_ref.clicked.connect(
-                self.toggle_connection)
+            self.connect_button_direct_ref.clicked.connect(self.toggle_connection)
         self.connect_button_direct_ref.setEnabled(False)
         connection_layout.addWidget(QLabel("Port:"))
         connection_layout.addWidget(self.port_combo_direct_ref, 1)
         connection_layout.addWidget(self.connect_button_direct_ref)
         self.right_panel_layout_v.addWidget(connection_group)
-        # --- MIDI Input Group ---
-        if hasattr(self, '_create_midi_input_section'):
-            midi_input_gb = self._create_midi_input_section()
-            if midi_input_gb:
-                self.right_panel_layout_v.addWidget(midi_input_gb)
-        # --- Color Picker Manager UI ---
+
+        # --- Color Picker Manager UI (Now contains integrated tools) ---
         if self.color_picker_manager:
             self.right_panel_layout_v.addWidget(self.color_picker_manager)
-        # --- Quick Tools Group Box ---
-        if hasattr(self, '_init_direct_controls_right_panel'):
-            quick_tools_widget = self._init_direct_controls_right_panel()
-            if quick_tools_widget:
-                self.quick_tools_group_ref = quick_tools_widget
-                self.right_panel_layout_v.addWidget(self.quick_tools_group_ref)
+        
         # --- Static Layouts Manager UI ---
         if self.static_layouts_manager:
             self.right_panel_layout_v.addWidget(self.static_layouts_manager)
+
+        # --- Audio Visualizer UI Section ---
+        if self.audio_visualizer_ui_manager: 
+            self.audio_visualizer_group_box = QGroupBox("🎵 Audio Visualizer (WIP)")
+            # self.audio_visualizer_group_box.setObjectName("AudioVisualizerGroup") # Optional for QSS
+            visualizer_main_layout = QVBoxLayout(self.audio_visualizer_group_box)
+            visualizer_main_layout.addWidget(self.audio_visualizer_ui_manager)
+            self.right_panel_layout_v.addWidget(self.audio_visualizer_group_box)
+        else:
+            print("MW WARNING: _populate_right_panel - self.audio_visualizer_ui_manager is None. Visualizer UI not added.")
+        
         # --- Container for Bottom Buttons (App Guide & DOOM) ---
         bottom_buttons_container_widget = QWidget()
-        bottom_buttons_outer_layout = QVBoxLayout(
-            bottom_buttons_container_widget)
+        # ... (rest of bottom buttons layout as before) ...
+        bottom_buttons_outer_layout = QVBoxLayout(bottom_buttons_container_widget)
         bottom_buttons_outer_layout.setContentsMargins(0, 10, 0, 0)
         actual_buttons_hbox = QHBoxLayout()
         actual_buttons_hbox.addStretch(1)
         self.app_guide_button = QPushButton("🚀 App Guide && Hotkey List")
         self.app_guide_button.setToolTip("Open the App Guide and Hotkey List")
         self.app_guide_button.setObjectName("AppGuideButton")
-        self.app_guide_button.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
-        self.app_guide_button.clicked.connect(self._open_app_guide_dialog)
+        self.app_guide_button.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
+        if hasattr(self, '_open_app_guide_dialog'): # Check method exists
+            self.app_guide_button.clicked.connect(self._open_app_guide_dialog)
         actual_buttons_hbox.addWidget(self.app_guide_button)
         actual_buttons_hbox.addSpacing(10)
         self.button_lazy_doom = QPushButton("👹 LazyDOOM")
-        self.button_lazy_doom.setToolTip(
-            "Launch the LazyDOOM on OLED experience!")
+        self.button_lazy_doom.setToolTip("Launch the LazyDOOM on OLED experience!")
         self.button_lazy_doom.setObjectName("LazyDoomButton")
-        self.button_lazy_doom.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
-        self.button_lazy_doom.clicked.connect(self._toggle_doom_mode)
+        self.button_lazy_doom.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
+        if hasattr(self, '_toggle_doom_mode'): # Check method exists
+            self.button_lazy_doom.clicked.connect(self._toggle_doom_mode)
         actual_buttons_hbox.addWidget(self.button_lazy_doom)
         actual_buttons_hbox.addStretch(1)
         bottom_buttons_outer_layout.addLayout(actual_buttons_hbox)
         self.right_panel_layout_v.addWidget(bottom_buttons_container_widget)
-        # --- END Bottom Buttons ---
+        
         self.right_panel_layout_v.addStretch(1)
-        # print(f"MW TRACE: _populate_right_panel - FINISHED")
 
     def _populate_left_panel(self):
         """Populates the left panel with the hardware top strip, pad grid, animator UI, and sampler UI."""
@@ -919,204 +893,890 @@ class MainWindow(QMainWindow):
         if self.current_oled_nav_target_widget and hasattr(self.current_oled_nav_target_widget, 'get_navigation_item_count'):
             self._oled_nav_item_count = self.current_oled_nav_target_widget.get_navigation_item_count()
 
+# In class MainWindow(QMainWindow):
+
     def _connect_signals(self):
-        # print("MW TRACE: _connect_signals CALLED.")
-        # --- AkaiFireController raw pad/button events ---
+        # AkaiFireController raw pad/button events
         if self.akai_controller and hasattr(self.akai_controller, 'fire_button_event'):
             try:
                 self.akai_controller.fire_button_event.disconnect(
                     self._handle_fire_pad_event_INTERNAL)
             except TypeError:
                 pass
-            except Exception as e_disc_fbe:
-                print(
-                    f"MW WARNING: Error trying to disconnect fire_button_event: {e_disc_fbe}")
             self.akai_controller.fire_button_event.connect(
                 self._handle_fire_pad_event_INTERNAL)
-            # print(
-            #     "MW TRACE: Connected akai_controller.fire_button_event to _handle_fire_pad_event_INTERNAL.")
-        elif not self.akai_controller:
-            print(
-                "MW WARNING: _connect_signals - self.akai_controller is None. Cannot connect fire_button_event.")
-        elif not hasattr(self.akai_controller, 'fire_button_event'):
-            print(
-                "MW WARNING: _connect_signals - self.akai_controller does not have fire_button_event.")
-        
+
         # InteractivePadGridFrame signals
         if self.pad_grid_frame:
+            try:
+                self.pad_grid_frame.pad_action_requested.disconnect(
+                    self._handle_grid_pad_action)
+            except TypeError:
+                pass
             self.pad_grid_frame.pad_action_requested.connect(
                 self._handle_grid_pad_action)
+
+            try:
+                self.pad_grid_frame.pad_context_menu_requested_from_button.disconnect(
+                    self.show_pad_context_menu)
+            except TypeError:
+                pass
             self.pad_grid_frame.pad_context_menu_requested_from_button.connect(
                 self.show_pad_context_menu)
+
+            try:
+                self.pad_grid_frame.pad_single_left_click_action_requested.disconnect(
+                    self._handle_grid_pad_single_left_click)
+            except TypeError:
+                pass
             self.pad_grid_frame.pad_single_left_click_action_requested.connect(
                 self._handle_grid_pad_single_left_click)
-            if self.animator_manager: 
-                try: 
+
+            if self.animator_manager:
+                try:
                     self.pad_grid_frame.paint_stroke_started.disconnect(
                         self.animator_manager.on_paint_stroke_started)
+                except TypeError:
+                    pass
+                self.pad_grid_frame.paint_stroke_started.connect(
+                    self.animator_manager.on_paint_stroke_started)
+
+                try:
                     self.pad_grid_frame.paint_stroke_ended.disconnect(
                         self.animator_manager.on_paint_stroke_ended)
                 except TypeError:
-                    pass 
-                except Exception as e_disc_paint:
-                    print(
-                        f"MW WARNING: Error disconnecting paint stroke signals: {e_disc_paint}")
-                self.pad_grid_frame.paint_stroke_started.connect(
-                self.animator_manager.on_paint_stroke_started)
+                    pass
                 self.pad_grid_frame.paint_stroke_ended.connect(
-                self.animator_manager.on_paint_stroke_ended)
-        
+                    self.animator_manager.on_paint_stroke_ended)
+
         # Color Picker Manager signals
         if self.color_picker_manager:
+            try:
+                self.color_picker_manager.final_color_selected.disconnect(
+                    self._handle_final_color_selection_from_manager)
+            except TypeError:
+                pass
             self.color_picker_manager.final_color_selected.connect(
                 self._handle_final_color_selection_from_manager)
+
+            try:
+                self.color_picker_manager.status_message_requested.disconnect(
+                    self.status_bar.showMessage)
+            except TypeError:
+                pass
             self.color_picker_manager.status_message_requested.connect(
                 self.status_bar.showMessage)
-        
+
+            if hasattr(self.color_picker_manager, 'request_clear_all_pads'):
+                try:
+                    self.color_picker_manager.request_clear_all_pads.disconnect(
+                        self.clear_all_hardware_and_gui_pads)
+                except TypeError:
+                    pass
+                self.color_picker_manager.request_clear_all_pads.connect(
+                    self.clear_all_hardware_and_gui_pads)
+
+            if hasattr(self.color_picker_manager, 'eyedropper_button_toggled'):
+                try:
+                    self.color_picker_manager.eyedropper_button_toggled.disconnect(
+                        self._on_picker_eyedropper_button_toggled)
+                except TypeError:
+                    pass
+                self.color_picker_manager.eyedropper_button_toggled.connect(
+                    self._on_picker_eyedropper_button_toggled)
+
         # Static Layouts Manager signals
         if self.static_layouts_manager:
+            try:
+                self.static_layouts_manager.apply_layout_data_requested.disconnect(
+                    self._handle_apply_static_layout_data)
+            except TypeError:
+                pass
             self.static_layouts_manager.apply_layout_data_requested.connect(
                 self._handle_apply_static_layout_data)
+
+            try:
+                self.static_layouts_manager.request_current_grid_colors.disconnect(
+                    self._provide_grid_colors_for_static_save)
+            except TypeError:
+                pass
             self.static_layouts_manager.request_current_grid_colors.connect(
                 self._provide_grid_colors_for_static_save)
+
+            try:
+                self.static_layouts_manager.status_message_requested.disconnect(
+                    self.status_bar.showMessage)
+            except TypeError:
+                pass
             self.static_layouts_manager.status_message_requested.connect(
                 self.status_bar.showMessage)
-        
+
         # Screen Sampler Manager signals
         if self.screen_sampler_manager:
+            try:
+                self.screen_sampler_manager.sampled_colors_for_display.disconnect()
+            except TypeError:
+                pass
             self.screen_sampler_manager.sampled_colors_for_display.connect(
                 lambda colors: self.apply_colors_to_main_pad_grid(
-                    [QColor(r, g, b).name() for r, g, b in colors], update_hw=True, is_sampler_output=True
-                )
-            )
+                    [QColor(r, g, b).name() for r, g, b in colors], update_hw=True, is_sampler_output=True))
+
+            try:
+                self.screen_sampler_manager.sampler_status_update.disconnect(
+                    self.status_bar.showMessage)
+            except TypeError:
+                pass
             self.screen_sampler_manager.sampler_status_update.connect(
                 self.status_bar.showMessage)
+
+            try:
+                self.screen_sampler_manager.sampling_activity_changed.disconnect(
+                    self._on_sampler_activity_changed)
+            except TypeError:
+                pass
             self.screen_sampler_manager.sampling_activity_changed.connect(
                 self._on_sampler_activity_changed)
+
+            try:
+                self.screen_sampler_manager.sampling_activity_changed.disconnect(
+                    self._on_sampler_activity_changed_for_knobs)
+            except TypeError:
+                pass
             self.screen_sampler_manager.sampling_activity_changed.connect(
                 self._on_sampler_activity_changed_for_knobs)
+
+            try:
+                self.screen_sampler_manager.new_sequence_from_recording_ready.disconnect(
+                    self._handle_load_sequence_request)
+            except TypeError:
+                pass
             self.screen_sampler_manager.new_sequence_from_recording_ready.connect(
                 self._handle_load_sequence_request)
+
+            try:
+                self.screen_sampler_manager.sampler_monitor_changed.disconnect(
+                    self._on_sampler_monitor_cycled_for_oled)
+            except TypeError:
+                pass
             self.screen_sampler_manager.sampler_monitor_changed.connect(
                 self._on_sampler_monitor_cycled_for_oled)
+
+            try:
+                self.screen_sampler_manager.sampler_adjustments_changed.disconnect(
+                    self._on_sampler_adjustments_updated_for_knobs)
+            except TypeError:
+                pass
             self.screen_sampler_manager.sampler_adjustments_changed.connect(
                 self._on_sampler_adjustments_updated_for_knobs)
-        
+
         # AnimatorManagerWidget Signals
         if self.animator_manager:
+            try:
+                self.animator_manager.active_frame_data_for_display.disconnect(
+                    self._on_animator_frame_data_for_display)
+            except TypeError:
+                pass
             self.animator_manager.active_frame_data_for_display.connect(
                 self._on_animator_frame_data_for_display)
+
+            try:
+                self.animator_manager.playback_status_update.disconnect(
+                    self.status_bar.showMessage)
+            except TypeError:
+                pass
             self.animator_manager.playback_status_update.connect(
                 self.status_bar.showMessage)
+
+            try:
+                self.animator_manager.sequence_modified_status_changed.disconnect(
+                    self._update_oled_and_title_on_sequence_change)
+            except TypeError:
+                pass
             self.animator_manager.sequence_modified_status_changed.connect(
                 self._update_oled_and_title_on_sequence_change)
+
+            try:
+                self.animator_manager.animator_playback_active_status_changed.disconnect(
+                    self._update_fire_transport_leds)
+            except TypeError:
+                pass
             self.animator_manager.animator_playback_active_status_changed.connect(
                 self._update_fire_transport_leds)
+
+            try:
+                self.animator_manager.animator_playback_active_status_changed.disconnect(
+                    self._on_animator_playback_status_for_oled)
+            except TypeError:
+                pass
             self.animator_manager.animator_playback_active_status_changed.connect(
                 self._on_animator_playback_status_for_oled)
+
+            try:
+                self.animator_manager.animator_playback_active_status_changed.disconnect(
+                    self._on_animator_playback_status_changed_for_knobs)
+            except TypeError:
+                pass
             self.animator_manager.animator_playback_active_status_changed.connect(
                 self._on_animator_playback_status_changed_for_knobs)
+
+            try:
+                self.animator_manager.undo_redo_state_changed.disconnect(
+                    self._on_animator_undo_redo_state_changed)
+            except TypeError:
+                pass
             self.animator_manager.undo_redo_state_changed.connect(
                 self._on_animator_undo_redo_state_changed)
+
+            try:
+                self.animator_manager.clipboard_state_changed.disconnect(
+                    self._on_animator_clipboard_state_changed)
+            except TypeError:
+                pass
             self.animator_manager.clipboard_state_changed.connect(
                 self._on_animator_clipboard_state_changed)
+
+            try:
+                self.animator_manager.request_sampler_disable.disconnect(
+                    self._handle_request_sampler_disable)
+            except TypeError:
+                pass
             self.animator_manager.request_sampler_disable.connect(
                 self._handle_request_sampler_disable)
+
+            try:
+                self.animator_manager.request_load_sequence_with_prompt.disconnect(
+                    self._handle_animator_request_load_prompt)
+            except TypeError:
+                pass
             self.animator_manager.request_load_sequence_with_prompt.connect(
                 self._handle_animator_request_load_prompt)
-        
+
         # HardwareInputManager Signals
         if self.hardware_input_manager:
             if hasattr(self.hardware_input_manager, 'physical_encoder_rotated'):
+                try:
+                    self.hardware_input_manager.physical_encoder_rotated.disconnect(
+                        self._on_physical_encoder_rotated)
+                except TypeError:
+                    pass
                 self.hardware_input_manager.physical_encoder_rotated.connect(
                     self._on_physical_encoder_rotated)
-            if self.animator_manager: 
+
+            if self.animator_manager:
+                try:
+                    self.hardware_input_manager.request_animator_play_pause.disconnect(
+                        self.animator_manager.action_play_pause_toggle)
+                except TypeError:
+                    pass
                 self.hardware_input_manager.request_animator_play_pause.connect(
                     self.animator_manager.action_play_pause_toggle)
+
+                try:
+                    self.hardware_input_manager.request_animator_stop.disconnect(
+                        self._handle_hardware_animator_stop_request)
+                except TypeError:
+                    pass
                 self.hardware_input_manager.request_animator_stop.connect(
                     self._handle_hardware_animator_stop_request)
+
+            try:
+                self.hardware_input_manager.grid_left_pressed.disconnect(
+                    self._handle_grid_left_pressed)
+            except TypeError:
+                pass
             self.hardware_input_manager.grid_left_pressed.connect(
                 self._handle_grid_left_pressed)
+
+            try:
+                self.hardware_input_manager.grid_right_pressed.disconnect(
+                    self._handle_grid_right_pressed)
+            except TypeError:
+                pass
             self.hardware_input_manager.grid_right_pressed.connect(
                 self._handle_grid_right_pressed)
+
+            try:
+                self.hardware_input_manager.select_encoder_turned.disconnect(
+                    self._handle_select_encoder_turned)
+            except TypeError:
+                pass
             self.hardware_input_manager.select_encoder_turned.connect(
                 self._handle_select_encoder_turned)
+
+            try:
+                self.hardware_input_manager.select_encoder_pressed.disconnect(
+                    self._handle_select_encoder_pressed)
+            except TypeError:
+                pass
             self.hardware_input_manager.select_encoder_pressed.connect(
                 self._handle_select_encoder_pressed)
+
+            try:
+                self.hardware_input_manager.request_toggle_screen_sampler.disconnect(
+                    self._on_request_toggle_screen_sampler)
+            except TypeError:
+                pass
             self.hardware_input_manager.request_toggle_screen_sampler.connect(
                 self._on_request_toggle_screen_sampler)
+
+            try:
+                self.hardware_input_manager.request_cycle_sampler_monitor.disconnect(
+                    self._on_request_cycle_sampler_monitor)
+            except TypeError:
+                pass
             self.hardware_input_manager.request_cycle_sampler_monitor.connect(
                 self._on_request_cycle_sampler_monitor)
 
-            # --- START OF MODIFICATIONS for OLED PATTERN & BROWSER hardware buttons ---
-            # Disconnect old cueing signals for PATTERN UP/DOWN if they were connected
-            if hasattr(self.hardware_input_manager, 'oled_pattern_up_pressed'):
-                try:
-                    self.hardware_input_manager.oled_pattern_up_pressed.disconnect(self._handle_oled_pattern_up)
-                except TypeError: pass 
-            if hasattr(self.hardware_input_manager, 'oled_pattern_down_pressed'):
-                try:
-                    self.hardware_input_manager.oled_pattern_down_pressed.disconnect(self._handle_oled_pattern_down)
-                except TypeError: pass
-            
-            # Connect new signals for direct cycling of active OLED graphic
             if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_next'):
-                self.hardware_input_manager.request_cycle_active_oled_graphic_next.connect(
-                    self._handle_cycle_active_oled_next_request
-                )
-            if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_prev'):
-                self.hardware_input_manager.request_cycle_active_oled_graphic_prev.connect(
-                    self._handle_cycle_active_oled_prev_request
-                )
-
-            # For the BROWSER button (oled_browser_activate_pressed signal from HIM):
-            # If its primary role was to activate a cued item, and cueing is now
-            # effectively replaced, this connection to _handle_oled_browser_activate
-            # might result in _handle_oled_browser_activate finding no cued item.
-            # Keep it if BROWSER button has other roles or if _handle_oled_browser_activate
-            # has fallback behavior. Otherwise, this connection could be removed or repurposed.
-            if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
-                # Ensure it's connected if it still has a purpose.
-                # If you've changed HIM to not emit oled_browser_activate_pressed, this won't hurt.
                 try:
-                    # Disconnect first to avoid multiple connections if this runs more than once (unlikely for init)
-                    self.hardware_input_manager.oled_browser_activate_pressed.disconnect(self._handle_oled_browser_activate)
-                except TypeError: pass
-                self.hardware_input_manager.oled_browser_activate_pressed.connect(self._handle_oled_browser_activate)
-            # --- END OF MODIFICATIONS ---
+                    self.hardware_input_manager.request_cycle_active_oled_graphic_next.disconnect(
+                        self._handle_cycle_active_oled_next_request)
+                except TypeError:
+                    pass
+                self.hardware_input_manager.request_cycle_active_oled_graphic_next.connect(
+                    self._handle_cycle_active_oled_next_request)
+
+            if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_prev'):
+                try:
+                    self.hardware_input_manager.request_cycle_active_oled_graphic_prev.disconnect(
+                        self._handle_cycle_active_oled_prev_request)
+                except TypeError:
+                    pass
+                self.hardware_input_manager.request_cycle_active_oled_graphic_prev.connect(
+                    self._handle_cycle_active_oled_prev_request)
+
+            if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
+                try:
+                    self.hardware_input_manager.oled_browser_activate_pressed.disconnect(
+                        self._handle_oled_browser_activate)
+                except TypeError:
+                    pass
+                self.hardware_input_manager.oled_browser_activate_pressed.connect(
+                    self._handle_oled_browser_activate)
 
         # OLEDDisplayManager Signals
         if self.oled_display_manager:
-            if self.akai_controller: 
-                try: 
+            if self.akai_controller:
+                try:
                     self.oled_display_manager.request_send_bitmap_to_fire.disconnect(
                         self.akai_controller.oled_send_full_bitmap)
-                    # Also disconnect from _update_oled_mirror before reconnecting
-                    self.oled_display_manager.request_send_bitmap_to_fire.disconnect( 
+                except TypeError:
+                    pass
+                self.oled_display_manager.request_send_bitmap_to_fire.connect(
+                    self.akai_controller.oled_send_full_bitmap)
+
+            if self.oled_display_mirror_widget:
+                try:
+                    self.oled_display_manager.request_send_bitmap_to_fire.disconnect(
                         self._update_oled_mirror)
                 except TypeError:
                     pass
-                except Exception as e_disc_oled:
-                    print(
-                        f"MW WARNING: Error disconnecting OLED signals: {e_disc_oled}")
-                self.oled_display_manager.request_send_bitmap_to_fire.connect(
-                    self.akai_controller.oled_send_full_bitmap)
-            if self.oled_display_mirror_widget: 
                 self.oled_display_manager.request_send_bitmap_to_fire.connect(
                     self._update_oled_mirror)
+
             if hasattr(self.oled_display_manager, 'active_graphic_pause_state_changed'):
-                try: 
+                try:
                     self.oled_display_manager.active_graphic_pause_state_changed.disconnect(
                         self._update_oled_play_pause_button_ui)
                 except TypeError:
                     pass
-                except Exception as e_disc_pause_ui:
-                    print(
-                        f"MW WARNING: Error disconnecting pause UI signal: {e_disc_pause_ui}")
                 self.oled_display_manager.active_graphic_pause_state_changed.connect(
                     self._update_oled_play_pause_button_ui)
-        # print("MW TRACE: _connect_signals FINISHED.")
 
+        # --- Audio Visualizer Manager/UI Manager Signals ---
+        if self.audio_visualizer_manager:
+            try:
+                self.audio_visualizer_manager.pad_data_ready.disconnect(
+                    self._handle_visualizer_pad_data)
+            except TypeError:
+                pass
+            self.audio_visualizer_manager.pad_data_ready.connect(
+                self._handle_visualizer_pad_data)
+
+            try:
+                self.audio_visualizer_manager.pad_data_ready.disconnect(
+                    self._update_gui_pads_from_visualizer)
+            except TypeError:
+                pass
+            self.audio_visualizer_manager.pad_data_ready.connect(
+                self._update_gui_pads_from_visualizer)
+
+            try:
+                self.audio_visualizer_manager.available_devices_updated.disconnect(
+                    self._on_visualizer_available_devices_updated)
+            except TypeError:
+                pass
+            self.audio_visualizer_manager.available_devices_updated.connect(
+                self._on_visualizer_available_devices_updated)
+
+            try:
+                self.audio_visualizer_manager.capture_error.disconnect(
+                    self._handle_visualizer_capture_error)
+            except TypeError:
+                pass
+            self.audio_visualizer_manager.capture_error.connect(
+                self._handle_visualizer_capture_error)
+
+            if hasattr(self.audio_visualizer_manager, 'capture_started_signal'):
+                try:
+                    self.audio_visualizer_manager.capture_started_signal.disconnect(
+                        self._on_avm_capture_started)
+                except TypeError:
+                    pass
+                self.audio_visualizer_manager.capture_started_signal.connect(
+                    self._on_avm_capture_started)
+            else:
+                print(
+                    "MW WARN _connect_signals: audio_visualizer_manager does NOT have 'capture_started_signal'")
+
+            if hasattr(self.audio_visualizer_manager, 'capture_stopped_signal'):
+                try:
+                    self.audio_visualizer_manager.capture_stopped_signal.disconnect(
+                        self._on_avm_capture_stopped)
+                except TypeError:
+                    pass
+                self.audio_visualizer_manager.capture_stopped_signal.connect(
+                    self._on_avm_capture_stopped)
+            else:
+                print(
+                    "MW WARN _connect_signals: audio_visualizer_manager does NOT have 'capture_stopped_signal'")
+
+        if self.audio_visualizer_ui_manager:
+            # The AudioVisualizerUIManager itself emits 'enable_visualizer_toggled'
+            # based on clicks of its internal start/stop buttons.
+            try:
+                self.audio_visualizer_ui_manager.enable_visualizer_toggled.disconnect(
+                    self._handle_visualizer_toggle_request)
+            except TypeError:
+                pass
+            self.audio_visualizer_ui_manager.enable_visualizer_toggled.connect(
+                self._handle_visualizer_toggle_request)
+
+            if self.audio_visualizer_manager:
+                try:
+                    self.audio_visualizer_ui_manager.device_selection_changed.disconnect(
+                        self.audio_visualizer_manager.set_selected_device_index)
+                except TypeError:
+                    pass
+                self.audio_visualizer_ui_manager.device_selection_changed.connect(
+                    self.audio_visualizer_manager.set_selected_device_index)
+
+                try:
+                    self.audio_visualizer_ui_manager.mode_selection_changed.disconnect(
+                        self.audio_visualizer_manager.update_visualization_mode)
+                except TypeError:
+                    pass
+                self.audio_visualizer_ui_manager.mode_selection_changed.connect(
+                    self.audio_visualizer_manager.update_visualization_mode)
+
+            try:
+                self.audio_visualizer_ui_manager.configure_button_clicked.disconnect(
+                    self._open_visualizer_settings_dialog)
+            except TypeError:
+                pass
+            self.audio_visualizer_ui_manager.configure_button_clicked.connect(
+                self._open_visualizer_settings_dialog)
+
+
+    def _populate_visualizer_audio_devices(self):
+        """
+        Called on startup to populate the audio device dropdown in the visualizer UI.
+        """
+        if self.audio_visualizer_manager and self.audio_visualizer_ui_manager:
+            # The manager's refresh_audio_devices emits available_devices_updated
+            # We connect to that signal to populate the UI.
+            # So, just trigger a refresh here.
+            self.audio_visualizer_manager.refresh_audio_devices()
+            # print("MW INFO: Requested audio device list refresh for visualizer.")
+        else:
+            print("MW WARNING: Audio visualizer manager/ui not ready for device population.")
+
+    def _on_visualizer_available_devices_updated(self, devices_list: list):
+        """
+        Slot for AudioVisualizerManager's available_devices_updated signal.
+        Populates the QComboBox in AudioVisualizerUIManager.
+        """
+        if self.audio_visualizer_ui_manager:
+            default_device_info = None
+            if self.audio_visualizer_manager: # Check if manager exists before calling
+                 default_device_info = self.audio_visualizer_manager.get_default_loopback_device_info()
+            
+            default_idx_to_select = default_device_info['index'] if default_device_info else None
+            self.audio_visualizer_ui_manager.populate_audio_devices(devices_list, default_idx_to_select)
+            
+            # If a default was selected, also update the logic manager
+            if default_idx_to_select is not None and self.audio_visualizer_manager:
+                QTimer.singleShot(0, lambda: self.audio_visualizer_manager.set_selected_device_index(default_idx_to_select))
+
+    def _on_visualizer_enable_toggled(self, requested_enable_state: bool):
+        # --- ADD THIS PRINT ---
+        # print(
+        #     f"MW TRACE: _on_visualizer_enable_toggled called with requested_enable_state: {requested_enable_state}, current self.is_visualizer_active: {self.is_visualizer_active}")
+        import traceback
+        # traceback.print_stack(limit=5) # Optional: print a short stack trace
+        # --- END ADDED PRINT ---
+
+        if not self.audio_visualizer_manager or not self.audio_visualizer_ui_manager:
+            print("MW ERROR: Visualizer managers not available for enable/toggle.")
+            if self.audio_visualizer_ui_manager:  # Try to reset button if managers are missing
+                self.audio_visualizer_ui_manager.update_enable_button_appearance(
+                    False)
+            return
+
+    # Prevent re-entry or conflicting calls if already processing a toggle
+    # This is a common pattern to avoid issues with rapid signal emissions.
+        # if hasattr(self, '_visualizer_toggle_in_progress') and self._visualizer_toggle_in_progress:
+        #     print("MW TRACE: Visualizer toggle already in progress, ignoring call.")
+        #     return
+        # self._visualizer_toggle_in_progress = True
+
+        if requested_enable_state:  # User wants to enable / UI button is now ON
+            if self.is_visualizer_active:  # If app logic already thinks it's active
+                # print("MW TRACE: _on_visualizer_enable_toggled(True) called, but already self.is_visualizer_active=True. Syncing button.")
+                if self.audio_visualizer_ui_manager:  # Ensure button reflects true state
+                    self.audio_visualizer_ui_manager.update_enable_button_appearance(
+                        True)
+                # self._visualizer_toggle_in_progress = False
+                return
+
+            # This is your existing print
+            # print("MW DEBUG: Visualizer enabling, clearing main pad grid.")
+            if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+                self.screen_sampler_manager.stop_sampling_thread(emit_status=False)
+            if self.animator_manager and self.animator_manager.active_sequence_model and \
+                self.animator_manager.active_sequence_model.get_is_playing():
+                self.animator_manager.action_stop()
+
+            self.clear_main_pad_grid_ui(update_hw=True)
+
+        # Attempt to start capture
+        # start_capture will use _check_thread_started_status which updates self.is_capturing in AVM
+        # and emits capture_error if it fails.
+            self.audio_visualizer_manager.start_capture()
+        # We need to wait for AVM's self.is_capturing to be set by _check_thread_started_status
+        # So, we can't immediately know if it succeeded here.
+        # The UI button and self.is_visualizer_active will be updated based on success/failure
+        # through the capture_error signal or by directly checking AVM.is_capturing after a delay.
+        # For now, let's assume it might succeed and let _handle_visualizer_capture_error fix it if not.
+        # OR, a better way is to update MainWindow's state based on AVM's state after the attempt.
+
+        # Let's defer updating MainWindow's self.is_visualizer_active and the button.
+        # This will be handled by _check_thread_started_status in AVM emitting an error,
+        # or if we add a success signal from AVM.
+        # For now, _update_global_ui_interaction_states will query AVM.is_capturing.
+
+        else:  # User wants to disable / UI button is now OFF
+            if not self.is_visualizer_active:  # If app logic already thinks it's inactive
+                # print("MW TRACE: _on_visualizer_enable_toggled(False) called, but already self.is_visualizer_active=False. Syncing button.")
+                if self.audio_visualizer_ui_manager:  # Ensure button reflects true state
+                    self.audio_visualizer_ui_manager.update_enable_button_appearance(
+                        False)
+                # self._visualizer_toggle_in_progress = False
+                return
+
+            # print("MW TRACE: Visualizer disabling logic entered.")
+            if self.audio_visualizer_manager:  # Check if manager exists
+                self.audio_visualizer_manager.stop_capture()
+            self.is_visualizer_active = False
+            self.status_bar.showMessage("Audio Visualizer Disabled.", 2000)
+
+            if self.animator_manager and self.animator_manager.active_sequence_model:
+                edit_idx = self.animator_manager.active_sequence_model.get_current_edit_frame_index()
+                colors = self.animator_manager.active_sequence_model.get_frame_colors(
+                    edit_idx)
+                self._on_animator_frame_data_for_display(
+                    colors if colors else ["#000000"] * 64)
+            elif self.akai_controller and self.akai_controller.is_connected():
+                self.clear_main_pad_grid_ui(update_hw=True)
+    # Update button appearance based on the NEW intended state
+    # This should use self.is_visualizer_active which reflects the outcome of start/stop attempt
+    # However, start_capture is now async for its success check.
+    # A better approach is to have AVM emit signals for capture_started and capture_stopped (or use capture_error for failed start).
+    # For now, let's make it simpler: update based on requested_enable_state, and _handle_visualizer_capture_error will correct it if start fails.
+        if self.audio_visualizer_ui_manager:
+        # This update should reflect the action we just attempted.
+        # If requested_enable_state is True, we *attempted* to start. If it fails,
+        # _handle_visualizer_capture_error will call this method again with False.
+            self.audio_visualizer_ui_manager.update_enable_button_appearance(
+            requested_enable_state)
+        # If requested_enable_state is True, we set self.is_visualizer_active to True optimistically
+        # If False, we set it to False
+        self.is_visualizer_active = requested_enable_state
+    # This will query AVM.is_capturing for final truth
+        self._update_global_ui_interaction_states()
+    # self._visualizer_toggle_in_progress = False
+
+# In class MainWindow(QMainWindow):
+
+    # Name and parameter updated
+    def _handle_visualizer_toggle_request(self, requested_to_enable: bool):
+        # print(
+        #     f"MW TRACE: === _handle_visualizer_toggle_request START === (Request is to enable: {requested_to_enable})")
+
+        if self._visualizer_is_being_toggled:
+        #     print(
+        #         f"MW TRACE: Visualizer toggle already in progress. Request to enable '{requested_to_enable}' ignored.")
+            return
+        self._visualizer_is_being_toggled = True
+        # print(
+        #     f"MW TRACE: Set _visualizer_is_being_toggled = True. Processing request to enable: {requested_to_enable}")
+
+        if requested_to_enable:
+            if self.audio_visualizer_manager:
+                if not self.audio_visualizer_manager.is_capturing:
+        #             print("MW TRACE: Requesting AVM to START capture.")
+                    if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+                        self.screen_sampler_manager.stop_sampling_thread(
+                            emit_status=False)
+                    if self.animator_manager and self.animator_manager.active_sequence_model and \
+                       self.animator_manager.active_sequence_model.get_is_playing():
+                        self.animator_manager.action_stop()
+                    self.clear_main_pad_grid_ui(update_hw=True)
+                    self.audio_visualizer_manager.start_capture()
+                else:
+        #             print(
+        #                 "MW TRACE: Request to enable, but AVM already capturing. Releasing guard.")
+                    self._visualizer_is_being_toggled = False
+            else:
+        #         print("MW ERROR: AVM not available. Releasing guard.")
+                self._visualizer_is_being_toggled = False
+
+        else:  # requested_to_enable is False (request to disable)
+            if self.audio_visualizer_manager:
+                if self.audio_visualizer_manager.is_capturing:
+        #             print("MW TRACE: Requesting AVM to STOP capture.")
+                    self.audio_visualizer_manager.stop_capture()
+                else:
+        #             print(
+        #                 "MW TRACE: Request to disable, but AVM already not capturing. Releasing guard.")
+                    self._visualizer_is_being_toggled = False
+            else:
+                print("MW ERROR: AVM not available. Releasing guard.")
+                self._visualizer_is_being_toggled = False
+
+        # print(
+        #     f"MW TRACE: === _handle_visualizer_toggle_request END === (Guard is: {self._visualizer_is_being_toggled})")
+
+
+
+    def _on_avm_capture_started(self):
+        # print("MW TRACE: _on_avm_capture_started slot called (AVM signaled capture has started).")
+        self.is_visualizer_active = True 
+        self.status_bar.showMessage("Audio Visualizer Enabled.", 2000)
+        self._sync_visualizer_button_to_avm_state() # Update button to checked
+        self._update_global_ui_interaction_states()
+        self._visualizer_is_being_toggled = False # Release guard
+        # print("MW TRACE: _on_avm_capture_started - Guard released.")
+
+    def _on_avm_capture_stopped(self): 
+        # print("MW TRACE: _on_avm_capture_stopped slot called (AVM signaled capture has stopped).")
+        was_logically_active_in_mw = self.is_visualizer_active
+        self.is_visualizer_active = False
+
+        if was_logically_active_in_mw :
+             self.status_bar.showMessage("Audio Visualizer Disabled.", 2000)
+        
+        if self.animator_manager and self.animator_manager.active_sequence_model and \
+           not (self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()):
+            edit_idx = self.animator_manager.active_sequence_model.get_current_edit_frame_index()
+            colors = self.animator_manager.active_sequence_model.get_frame_colors(edit_idx)
+            self._on_animator_frame_data_for_display(colors if colors else ["#000000"] * 64)
+        elif self.akai_controller and self.akai_controller.is_connected() and \
+             not (self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()):
+            self.clear_main_pad_grid_ui(update_hw=True)
+
+        self._sync_visualizer_button_to_avm_state() # Update button to unchecked
+        self._update_global_ui_interaction_states()
+        self._visualizer_is_being_toggled = False # Release guard
+        # print("MW TRACE: _on_avm_capture_stopped - Guard released.")
+
+    def _handle_visualizer_capture_error(self, error_message: str):
+        # print(f"MW TRACE: _handle_visualizer_capture_error received: '{error_message}'")
+        QMessageBox.warning(self, "Audio Visualizer Error", error_message)
+        self.status_bar.showMessage(f"Visualizer Error: {error_message}", 5000)
+        
+        self.is_visualizer_active = False # Ensure MW state is false
+        
+        # AVM's _handle_audio_thread_error should call AVM.stop_capture(),
+        # which will emit capture_stopped_signal, triggering _on_avm_capture_stopped.
+        # So, _on_avm_capture_stopped will handle UI sync and guard release.
+        # If AVM.stop_capture was already called, this ensures consistency.
+        if self.audio_visualizer_manager and self.audio_visualizer_manager.is_capturing:
+            self.audio_visualizer_manager.stop_capture() 
+        else: # If AVM wasn't capturing but an error related to it occurred
+            self._sync_visualizer_button_to_avm_state() # Sync button based on AVM's (now false) state
+            self._update_global_ui_interaction_states()
+            self._visualizer_is_being_toggled = False # Release guard here too
+        #     print("MW TRACE: _handle_visualizer_capture_error - AVM not capturing, guard released directly.")
+
+
+
+    def _sync_visualizer_button_to_avm_state(self):
+        # print("MW TRACE: _sync_visualizer_button_to_avm_state called.") # Optional for debugging
+        if self.audio_visualizer_ui_manager and self.audio_visualizer_manager:
+            current_avm_capturing_state = self.audio_visualizer_manager.is_capturing
+            # print(f"MW TRACE: AVM is_capturing: {current_avm_capturing_state} - Will update AVM_UI_Manager buttons.") # Optional
+            
+            # Simply call the UI manager's method to update button visibility/state
+            self.audio_visualizer_ui_manager.update_visualizer_action_buttons(current_avm_capturing_state)
+            
+            # Also ensure MainWindow's logical flag is in sync with AVM's state
+            if self.is_visualizer_active != current_avm_capturing_state:
+            #     print(f"MW TRACE: Syncing self.is_visualizer_active from {self.is_visualizer_active} to {current_avm_capturing_state}") # Optional
+                self.is_visualizer_active = current_avm_capturing_state
+        # else:
+        #     print("MW WARN: _sync_visualizer_button_to_avm_state - AVM or AVM UI Manager not available.")
+
+
+    def _try_start_visualizer_capture(self):
+        """Attempts to start visualizer capture and updates UI based on success."""
+        if self.audio_visualizer_manager.start_capture():
+            self.is_visualizer_active = True
+            self.status_bar.showMessage("Audio Visualizer Enabled.", 2000)
+        else:
+            self.is_visualizer_active = False  # Failed to start
+            self.status_bar.showMessage(
+                "Failed to start Audio Visualizer.", 3000)
+
+        if self.audio_visualizer_ui_manager:
+            self.audio_visualizer_ui_manager.update_enable_button_appearance(
+                self.is_visualizer_active)
+        self._update_global_ui_interaction_states()  # Update all UI states
+
+    def _open_visualizer_settings_dialog(self):
+        if not self.audio_visualizer_manager or not self.audio_visualizer_ui_manager:
+            QMessageBox.warning(self, "Visualizer Error", "Visualizer components are not initialized.")
+            return
+
+        current_mode_key = "classic_spectrum_bars"
+        if self.audio_visualizer_ui_manager.visualization_mode_combo:
+            current_mode_key = self.audio_visualizer_ui_manager.visualization_mode_combo.currentData()
+            if not current_mode_key: current_mode_key = "classic_spectrum_bars"
+
+        # --- Fetch ALL current settings from AudioVisualizerManager ---
+        # This now uses the new get_all_mode_settings() method
+        all_current_settings_from_manager = self.audio_visualizer_manager.get_all_mode_settings()
+        
+        # The settings from AVM's get_all_mode_settings() are already in manager's scale.
+        # The dialog's _populate_ui_from_settings needs to convert these to UI scale (0-100/0-99).
+        # And _collect_settings_from_all_tabs in dialog will give UI scale values back.
+        # The AVM's update_all_settings_from_dialog will convert them back to manager scale.
+        # So, we need to ensure the initial values passed to dialog are in DIALOG UI SCALE.
+
+        settings_for_dialog = {}
+        for mode_k, mode_v_manager_scale in all_current_settings_from_manager.items():
+            settings_for_dialog[mode_k] = mode_v_manager_scale.copy() # Start with a copy
+            if mode_k == "classic_spectrum_bars":
+                if "sensitivity" in settings_for_dialog[mode_k]: # Convert manager float to dialog int
+                    settings_for_dialog[mode_k]["sensitivity"] = int(mode_v_manager_scale["sensitivity"] * 50.0)
+                if "smoothing" in settings_for_dialog[mode_k]: # Convert manager float to dialog int
+                    settings_for_dialog[mode_k]["smoothing"] = int(mode_v_manager_scale["smoothing"] * 100.0)
+                # band_colors are already hex strings, which is fine for dialog
+            # TODO: Add elif for other modes to convert their manager-scale settings to dialog-UI-scale
+            # elif mode_k == "pulse_wave_matrix":
+            #     if "pulse_speed" in settings_for_dialog[mode_k]: # Manager 0.0-1.0 to Dialog 0-100
+            #         settings_for_dialog[mode_k]["pulse_speed"] = int(mode_v_manager_scale["pulse_speed"] * 100.0)
+        
+        dialog = VisualizerSettingsDialog(
+            current_mode_key=str(current_mode_key),
+            all_current_settings=settings_for_dialog, # Pass dialog-scale settings
+            config_save_path_func=get_user_config_file_path,
+            parent=self
+        )
+
+        try: dialog.all_settings_applied.disconnect(self._handle_visualizer_settings_applied)
+        except TypeError: pass
+        dialog.all_settings_applied.connect(self._handle_visualizer_settings_applied)
+
+        if dialog.exec():
+            pass # print("MW: VisualizerSettingsDialog accepted.")
+        # else:
+            # print("MW: VisualizerSettingsDialog cancelled.")
+        dialog.deleteLater()
+
+    def _handle_visualizer_settings_applied(self, all_new_settings_from_dialog: dict):
+        """
+        Receives the complete settings dictionary (with UI scale values)
+        from VisualizerSettingsDialog and passes it to AudioVisualizerManager,
+        which will handle conversion and persistence.
+        """
+        # print(f"MW DEBUG: _handle_visualizer_settings_applied received (UI scale): {all_new_settings_from_dialog}")
+        if not self.audio_visualizer_manager:
+            print("MW ERROR: AudioVisualizerManager not available to apply settings.")
+            return
+
+        # AudioVisualizerManager's update_all_settings_from_dialog will handle
+        # converting UI-scale values (e.g., sensitivity 0-100) to manager-scale (e.g., 0.0-2.0)
+        # and then saving them.
+        self.audio_visualizer_manager.update_all_settings_from_dialog(
+            all_new_settings_from_dialog)
+
+        self.status_bar.showMessage("Visualizer settings applied.", 2000)
+        # If visualizer is active, changes in AVM should take effect.
+
+    def _update_gui_pads_from_visualizer(self, hex_colors_list: list):
+        if not self.is_visualizer_active or not self.pad_grid_frame:
+            return  # Only update GUI if visualizer is active and grid exists
+
+        if len(hex_colors_list) == 64:
+            for i, hex_color_str in enumerate(hex_colors_list):
+                row, col = divmod(i, 16)
+                try:
+                    q_color = QColor(
+                        hex_color_str if hex_color_str else "#000000")
+                    if not q_color.isValid():
+                        q_color = QColor("#000000")
+                    # update_pad_gui_color expects r, g, b integers
+                    self.pad_grid_frame.update_pad_gui_color(
+                        row, col, q_color.red(), q_color.green(), q_color.blue())
+                except Exception as e:
+                    # This might happen if hex_color_str is malformed beyond QColor's tolerance
+                    # print(f"MW WARN: Error converting visualizer hex color '{hex_color_str}' for GUI pad ({row},{col}): {e}")
+                    self.pad_grid_frame.update_pad_gui_color(
+                        row, col, 0, 0, 0)  # Fallback to black
+        # else:
+            # print(f"MW WARN (_update_gui_pads_from_visualizer): Received incorrect number of colors: {len(hex_colors_list)}")
+
+    def _handle_visualizer_pad_data(self, colors_hex_list: list):
+        """
+        Slot for AudioVisualizerManager's pad_data_ready signal.
+        Converts hex colors to RGB tuples and sends to the Akai Fire pads.
+        """
+        if not (self.akai_controller and self.akai_controller.is_connected() and
+                self.audio_visualizer_manager and self.audio_visualizer_manager.is_capturing):
+            return
+
+        pad_data_for_controller = []
+        if len(colors_hex_list) == 64:
+            for i, hex_color_str in enumerate(colors_hex_list):
+                try:
+                    q_color = QColor(hex_color_str if hex_color_str else "#000000")
+                    if not q_color.isValid():
+                        q_color = QColor("#000000")
+                    pad_data_for_controller.append(
+                        (i, q_color.red(), q_color.green(), q_color.blue())
+                    )
+                except Exception:
+                    pad_data_for_controller.append((i, 0, 0, 0))
+        else:
+            return
+        if not pad_data_for_controller:
+            return
+
+        self.akai_controller.set_multiple_pads_color(pad_data_for_controller, bypass_global_brightness=True)
+
+    def _on_picker_eyedropper_button_toggled(self, checked: bool):
+        """
+        Handles the toggled signal from ColorPickerManager's eyedropper button.
+        Updates MainWindow's internal eyedropper state and syncs the global QAction.
+        """
+        # Call the existing method that handles the logic and UI updates
+        self.set_eyedropper_mode(checked) 
+        
+        # Ensure the global QAction for eyedropper reflects this state
+        if hasattr(self, 'eyedropper_action') and self.eyedropper_action:
+            if self.eyedropper_action.isChecked() != checked:
+                self.eyedropper_action.setChecked(checked)
 
     def keyPressEvent(self, event: QKeyEvent):
         # Existing print for MW_PAD_ROUTER in _handle_fire_pad_event_INTERNAL will show routing
@@ -1256,7 +1916,6 @@ class MainWindow(QMainWindow):
                 closest_discrete_idx = i
         return closest_discrete_idx
 
-
     def _create_edit_actions(self):
         """Creates global QActions for menu items and keyboard shortcuts."""
         # Undo/Redo (Connected to AnimatorManagerWidget)
@@ -1390,61 +2049,91 @@ class MainWindow(QMainWindow):
         self._on_port_combo_changed(self.port_combo_direct_ref.currentIndex())
 
     def populate_midi_input_ports(self):
-        """Populates the MIDI input port selection QComboBox."""
-        # print("DEBUG MW: populate_midi_input_ports CALLED") # Optional
-        if self.input_port_combo_direct_ref is None:
-            print("MW CRITICAL ERROR: Input port combo is None. Cannot populate.")
-            return
-        self.input_port_combo_direct_ref.blockSignals(True)
-        self.input_port_combo_direct_ref.clear()
+        """
+        Scans for MIDI input ports and attempts to select a default 'Akai Fire' input port.
+        Stores the selected port name in self._selected_midi_input_port_name.
+        This method no longer interacts with a UI ComboBox.
+        """
+        # print("MW DEBUG: populate_midi_input_ports (backend selection) CALLED")
+        self._selected_midi_input_port_name = None # Reset
         ports = []
         try:
             ports = AkaiFireController.get_available_input_ports()
         except Exception as e:
-            print(f"MW ERROR: Failed to get MIDI input ports: {e}")
+            print(f"MW ERROR: Failed to get MIDI input ports for backend selection: {e}")
+            return
+
         if ports:
-            self.input_port_combo_direct_ref.addItems(ports)
-            fire_port_idx = -1
-            for i, port_name in enumerate(ports):
-                if isinstance(port_name, str) and ("fire" in port_name.lower() or "akai" in port_name.lower()):
-                    # No need to check for "midiin" as these are already input ports
-                    fire_port_idx = i
-                    break
-            if fire_port_idx != -1:
-                self.input_port_combo_direct_ref.setCurrentIndex(fire_port_idx)
-            elif self.input_port_combo_direct_ref.count() > 0:
-                self.input_port_combo_direct_ref.setCurrentIndex(0)
-            self.input_port_combo_direct_ref.setEnabled(True)
-        if self.input_port_combo_direct_ref.count() == 0:
-            self.input_port_combo_direct_ref.addItem(
-                "No MIDI input ports found")
-            self.input_port_combo_direct_ref.setEnabled(False)
-        self.input_port_combo_direct_ref.blockSignals(False)
-        # print("DEBUG MW: populate_midi_input_ports FINISHED.") # Optional
+            fire_port_name = None
+            # Prioritize ports that are explicitly "Fire" and not also an output name from a common conflict
+            # (e.g., some systems might list "FL STUDIO FIRE" for both input and output)
+            for port_name_candidate in ports:
+                if isinstance(port_name_candidate, str):
+                    pn_lower = port_name_candidate.lower()
+                    if "fire" in pn_lower and not any(kw in pn_lower for kw in ["midiout", "output", "kontrol"]): # Try to avoid output/other controllers
+                        # More specific check if possible, e.g., "FL STUDIO FIRE 1" vs "FL STUDIO FIRE 2"
+                        # This simple check is often good enough.
+                        fire_port_name = port_name_candidate
+                        break # Take the first good match
+
+            if not fire_port_name: # Fallback to any "akai" if specific "fire" not found
+                for port_name_candidate in ports:
+                    if isinstance(port_name_candidate, str) and "akai" in port_name_candidate.lower() and \
+                       not any(kw in port_name_candidate.lower() for kw in ["midiout", "output", "kontrol"]):
+                        fire_port_name = port_name_candidate
+                        break
+            
+            if fire_port_name:
+                self._selected_midi_input_port_name = fire_port_name
+                print(f"MW INFO: Auto-selected MIDI Input Port for backend: '{self._selected_midi_input_port_name}'")
+            elif ports: # If no specific "Fire" or "Akai" port, but other ports exist, don't select one.
+                print(f"MW WARNING: No specific 'Fire' or 'Akai' MIDI input port found. Found: {ports}. Input might not work automatically.")
+                # Let it be None, user might have to configure manually if we add that option later.
+            else:
+                print("MW INFO: No MIDI input ports found at all.")
+        else:
+            print("MW INFO: No MIDI input ports found (get_available_input_ports returned empty).")
 
     def update_connection_status(self):
         """Updates UI elements based on MIDI connection state."""
-        is_out_conn = self.akai_controller.is_connected()
-        is_in_conn = self.akai_controller.is_input_connected()
+        is_out_conn = self.akai_controller.is_connected() if self.akai_controller else False
+        is_in_conn = self.akai_controller.is_input_connected() if self.akai_controller else False
         is_any_conn = is_out_conn or is_in_conn
+
         if self.connect_button_direct_ref:
             self.connect_button_direct_ref.setText("Disconnect" if is_any_conn else "Connect")
-            can_attempt_connect = False
-            if self.port_combo_direct_ref and not is_out_conn : # Only enable connect if output not connected
+            can_attempt_connect_out = False
+            if self.port_combo_direct_ref and not is_out_conn:
                 current_out_text = self.port_combo_direct_ref.currentText()
                 if current_out_text and current_out_text != "No MIDI output ports found":
-                    can_attempt_connect = True
-            self.connect_button_direct_ref.setEnabled(is_any_conn or can_attempt_connect)
-        status_parts = []
-        if is_out_conn: status_parts.append(f"Output: {self.akai_controller.port_name_used}")
-        if is_in_conn: status_parts.append(f"Input: {self.akai_controller.in_port_name_used}")
-        self.status_bar.showMessage("Connected. " + " | ".join(status_parts) if status_parts else "Disconnected.")        
-        if self.port_combo_direct_ref: self.port_combo_direct_ref.setEnabled(not is_out_conn)
-        if self.input_port_combo_direct_ref: self.input_port_combo_direct_ref.setEnabled(not is_in_conn)        
-        if self.screen_sampler_manager: # Enable/disable sampler UI based on connection
-            self.screen_sampler_manager.set_overall_enabled_state(is_out_conn, is_out_conn) # Base enable, specific button enable also in global states
-        QTimer.singleShot(0, self._update_global_ui_interaction_states) # Refresh all UI element states
+                    can_attempt_connect_out = True
+            
+            # Connect button should be enabled if:
+            # 1. Already connected (to allow disconnect)
+            # 2. Not connected, but a valid output port is selected (to allow connect)
+            self.connect_button_direct_ref.setEnabled(is_any_conn or can_attempt_connect_out)
 
+        status_parts = []
+        if is_out_conn and self.akai_controller: # Check akai_controller exists
+            status_parts.append(f"Output: {self.akai_controller.port_name_used}")
+        if is_in_conn and self.akai_controller: # Check akai_controller exists
+            status_parts.append(f"Input: {self.akai_controller.in_port_name_used}")
+        
+        self.status_bar.showMessage("Connected: " + " | ".join(status_parts) if status_parts else "Disconnected.")
+        
+        if self.port_combo_direct_ref:
+            self.port_combo_direct_ref.setEnabled(not is_out_conn)
+        
+        # --- REMOVED/COMMENTED OUT section for input_port_combo_direct_ref ---
+        # if self.input_port_combo_direct_ref: # This UI element no longer exists
+        #     self.input_port_combo_direct_ref.setEnabled(not is_in_conn)
+        # --- END REMOVED/COMMENTED OUT ---
+                
+        if self.screen_sampler_manager:
+            self.screen_sampler_manager.update_ui_for_global_state(is_out_conn, is_out_conn)
+        
+        # Using QTimer.singleShot to ensure UI updates happen after current event processing
+        QTimer.singleShot(0, self._update_global_ui_interaction_states)
 
     def _update_contextual_knob_configs(self):
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
@@ -1545,136 +2234,142 @@ class MainWindow(QMainWindow):
 
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
-        # --- NEW: If DOOM mode is active, most other things are disabled ---
-        if self.is_doom_mode_active:
-            if self.animator_manager:
-                self.animator_manager.set_overall_enabled_state(False)
-            if self.screen_sampler_manager:
-                self.screen_sampler_manager.update_ui_for_global_state(
-                    False, False)
-            if self.pad_grid_frame:
-                self.pad_grid_frame.setEnabled(False)
-            if self.color_picker_manager:
-                self.color_picker_manager.set_enabled(False)
-            if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
-                self.quick_tools_group_ref.setEnabled(False)
-            if self.static_layouts_manager:
-                self.static_layouts_manager.set_enabled_state(False)
-            # Keep "Exit LazyDOOM" button enabled, disable "App Guide"
-            if self.button_lazy_doom:
-                # Can only exit if connected? Or always? Let's say always.
-                self.button_lazy_doom.setEnabled(is_connected)
-            if self.app_guide_button:
-                self.app_guide_button.setEnabled(False)
-            # Disable menu actions related to animator, etc.
-            if hasattr(self, 'new_sequence_action'):
-                self.new_sequence_action.setEnabled(False)
-            # ... disable other animator QActions ...
-            if hasattr(self, 'eyedropper_action'):
-                self.eyedropper_action.setEnabled(False)
-            if hasattr(self, 'play_pause_action'):
-                self.play_pause_action.setEnabled(False)
-            # ... etc. for all actions that conflict with DOOM mode
-            return  # Skip normal UI state logic if DOOM is active
-        is_anim_playing = False
+        
+        # Determine primary active mode
+        # Use AVM's is_capturing as the source of truth for visualizer_active_now
+        is_visualizer_active_now = self.audio_visualizer_manager.is_capturing if self.audio_visualizer_manager else False
+        is_sampler_active_now = self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False
+        is_anim_playing_now = False
         if self.animator_manager and self.animator_manager.active_sequence_model:
-            is_anim_playing = self.animator_manager.active_sequence_model.get_is_playing()
-        is_sampler_on = False
-        if self.screen_sampler_manager:
-            is_sampler_on = self.screen_sampler_manager.is_sampling_active()
-        can_use_animator = is_connected and not is_sampler_on
-        can_paint_direct = is_connected and not is_sampler_on and not is_anim_playing
-        can_toggle_sampler = is_connected and not is_anim_playing
+            is_anim_playing_now = self.animator_manager.active_sequence_model.get_is_playing()
+        is_doom_active_now = self.is_doom_mode_active
+
+        # --- DOOM Mode takes precedence ---
+        if is_doom_active_now:
+            if self.animator_manager: self.animator_manager.set_overall_enabled_state(False)
+            if self.screen_sampler_manager: self.screen_sampler_manager.update_ui_for_global_state(False, False)
+            if self.audio_visualizer_ui_manager: self.audio_visualizer_ui_manager.setEnabled(False)
+            if self.pad_grid_frame: self.pad_grid_frame.setEnabled(False)
+            if self.color_picker_manager: self.color_picker_manager.set_enabled(False)
+            if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(False)
+            if self.button_lazy_doom: self.button_lazy_doom.setEnabled(True)
+            if self.app_guide_button: self.app_guide_button.setEnabled(False)
+            # Disable menu actions
+            actions_to_disable = ['new_sequence_action', 'save_sequence_as_action', 'undo_action', 
+                                    'redo_action', 'copy_action', 'cut_action', 'paste_action',
+                                    'duplicate_action', 'delete_action', 'add_blank_global_action',
+                                    'eyedropper_action', 'play_pause_action']
+            for action_name in actions_to_disable:
+                if hasattr(self, action_name) and getattr(self, action_name):
+                    getattr(self, action_name).setEnabled(False)
+            return
+
+        # --- Non-DOOM states ---
+        can_use_animator = is_connected and not is_sampler_active_now and not is_visualizer_active_now
+        can_paint_direct = is_connected and not is_sampler_active_now and not is_visualizer_active_now and not is_anim_playing_now
+        can_toggle_sampler = is_connected and not is_anim_playing_now and not is_visualizer_active_now
+        can_toggle_visualizer_start = is_connected and not is_sampler_active_now and not is_anim_playing_now # Can we *start* it?
+        can_toggle_visualizer_stop = is_connected and is_visualizer_active_now # Can we *stop* it?
+
+
         # Animator Manager and related QActions
         if self.animator_manager:
             self.animator_manager.set_overall_enabled_state(can_use_animator)
-            has_frames = False
-            has_sel = False
-            # ---  Explicitly cast to bool ---
-            can_undo_anim = bool(
-                self.animator_manager.active_sequence_model._undo_stack) if self.animator_manager.active_sequence_model else False
-            can_redo_anim = bool(
-                self.animator_manager.active_sequence_model._redo_stack) if self.animator_manager.active_sequence_model else False
+            has_frames_anim, has_sel_anim, can_undo_anim, can_redo_anim, has_clip_anim = False, False, False, False, bool(self.animator_manager.frame_clipboard)
             if self.animator_manager.active_sequence_model:
-                has_frames = self.animator_manager.active_sequence_model.get_frame_count() > 0
+                has_frames_anim = self.animator_manager.active_sequence_model.get_frame_count() > 0
+                can_undo_anim = bool(self.animator_manager.active_sequence_model._undo_stack)
+                can_redo_anim = bool(self.animator_manager.active_sequence_model._redo_stack)
             if self.animator_manager.sequence_timeline_widget:
-                has_sel = len(
-                    self.animator_manager.sequence_timeline_widget.get_selected_item_indices()) > 0
-            has_clip = bool(self.animator_manager.frame_clipboard)
-            # Global QActions for Animator
-            if hasattr(self, 'new_sequence_action') and self.new_sequence_action:
-                self.new_sequence_action.setEnabled(can_use_animator)
-            if hasattr(self, 'save_sequence_as_action') and self.save_sequence_as_action:
-                self.save_sequence_as_action.setEnabled(
-                    can_use_animator and has_frames)
-            if hasattr(self, 'undo_action') and self.undo_action:
-                self.undo_action.setEnabled(can_use_animator and can_undo_anim)
-            if hasattr(self, 'redo_action') and self.redo_action:
-                self.redo_action.setEnabled(can_use_animator and can_redo_anim)
-            if hasattr(self, 'copy_action') and self.copy_action:
-                self.copy_action.setEnabled(can_use_animator and has_sel)
-            if hasattr(self, 'cut_action') and self.cut_action:
-                self.cut_action.setEnabled(can_use_animator and has_sel)
-            if hasattr(self, 'paste_action') and self.paste_action:
-                self.paste_action.setEnabled(can_use_animator and has_clip)
-            if hasattr(self, 'duplicate_action') and self.duplicate_action:
-                self.duplicate_action.setEnabled(can_use_animator and has_sel)
-            if hasattr(self, 'delete_action') and self.delete_action:
-                self.delete_action.setEnabled(can_use_animator and has_sel)
-            if hasattr(self, 'play_pause_action') and self.play_pause_action:
-                self.play_pause_action.setEnabled(
-                    can_use_animator and has_frames)
-            if hasattr(self, 'add_blank_global_action') and self.add_blank_global_action:
-                self.add_blank_global_action.setEnabled(can_use_animator)
+                has_sel_anim = len(self.animator_manager.sequence_timeline_widget.get_selected_item_indices()) > 0
+
+            if hasattr(self, 'new_sequence_action'): self.new_sequence_action.setEnabled(can_use_animator)
+            if hasattr(self, 'save_sequence_as_action'): self.save_sequence_as_action.setEnabled(can_use_animator and has_frames_anim)
+            if hasattr(self, 'undo_action'): self.undo_action.setEnabled(can_use_animator and can_undo_anim)
+            if hasattr(self, 'redo_action'): self.redo_action.setEnabled(can_use_animator and can_redo_anim)
+            if hasattr(self, 'copy_action'): self.copy_action.setEnabled(can_use_animator and has_sel_anim)
+            if hasattr(self, 'cut_action'): self.cut_action.setEnabled(can_use_animator and has_sel_anim)
+            if hasattr(self, 'paste_action'): self.paste_action.setEnabled(can_use_animator and has_clip_anim)
+            if hasattr(self, 'duplicate_action'): self.duplicate_action.setEnabled(can_use_animator and has_sel_anim)
+            if hasattr(self, 'delete_action'): self.delete_action.setEnabled(can_use_animator and has_sel_anim)
+            if hasattr(self, 'play_pause_action'): self.play_pause_action.setEnabled(can_use_animator and has_frames_anim)
+            if hasattr(self, 'add_blank_global_action'): self.add_blank_global_action.setEnabled(can_use_animator)
+
         # Screen Sampler Manager
         if self.screen_sampler_manager:
-            self.screen_sampler_manager.update_ui_for_global_state(
-                is_connected, can_toggle_sampler)
+            self.screen_sampler_manager.update_ui_for_global_state(is_connected, can_toggle_sampler)
+
+        # Audio Visualizer UI Manager
+        if self.audio_visualizer_ui_manager:
+            self.audio_visualizer_ui_manager.setEnabled(is_connected) # Overall panel enable
+            
+            # Update visibility/enable state of start/stop buttons based on actual AVM capture state
+            # This is now the primary way to control these buttons' appearance from MainWindow.
+            self.audio_visualizer_ui_manager.update_visualizer_action_buttons(is_visualizer_active_now)
+
+            # Enable/disable other interactive elements within the AVM UI Panel
+            # (device combo, mode combo, setup button)
+            # These should be disabled if visualizer is running, or if it *cannot* be started.
+            can_interact_with_avm_setup = is_connected and not is_visualizer_active_now and can_toggle_visualizer_start
+            if hasattr(self.audio_visualizer_ui_manager, 'set_interactive_elements_enabled'):
+                self.audio_visualizer_ui_manager.set_interactive_elements_enabled(can_interact_with_avm_setup)
+            
+            # Explicitly set enabled state for individual start/stop buttons if they exist
+            # This logic is a bit redundant if update_visualizer_action_buttons also sets enabled, but adds safety.
+            if self.audio_visualizer_ui_manager.start_visualizer_button:
+                self.audio_visualizer_ui_manager.start_visualizer_button.setEnabled(can_toggle_visualizer_start)
+            if self.audio_visualizer_ui_manager.stop_visualizer_button:
+                self.audio_visualizer_ui_manager.stop_visualizer_button.setEnabled(can_toggle_visualizer_stop)
+
+
         # Pad Grid and Direct Painting Tools
         if hasattr(self, 'pad_grid_frame') and self.pad_grid_frame:
             self.pad_grid_frame.setEnabled(can_paint_direct)
-        if hasattr(self, 'color_picker_manager') and self.color_picker_manager:
+        
+        if self.color_picker_manager: 
             self.color_picker_manager.set_enabled(can_paint_direct)
-        if hasattr(self, 'quick_tools_group_ref') and self.quick_tools_group_ref:
-            self.quick_tools_group_ref.setEnabled(can_paint_direct)
-        if hasattr(self, 'eyedropper_button') and self.eyedropper_button:
-            self.eyedropper_button.setEnabled(can_paint_direct)
-        is_eyedropper_active = hasattr(
-            self, 'is_eyedropper_mode_active') and self.is_eyedropper_mode_active
+            if self.color_picker_manager.eyedropper_button: 
+                self.color_picker_manager.eyedropper_button.setEnabled(can_paint_direct)
+                if self.color_picker_manager.eyedropper_button.isChecked() != self.is_eyedropper_mode_active:
+                    self.color_picker_manager.eyedropper_button.blockSignals(True)
+                    self.color_picker_manager.eyedropper_button.setChecked(self.is_eyedropper_mode_active)
+                    self.color_picker_manager.eyedropper_button.blockSignals(False)
+
         if hasattr(self, 'eyedropper_action') and self.eyedropper_action:
             self.eyedropper_action.setEnabled(can_paint_direct)
-            self.eyedropper_action.setChecked(is_eyedropper_active)
+            if self.eyedropper_action.isChecked() != self.is_eyedropper_mode_active:
+                self.eyedropper_action.setChecked(self.is_eyedropper_mode_active)
+        
         if hasattr(self, 'static_layouts_manager') and self.static_layouts_manager:
             self.static_layouts_manager.set_enabled_state(can_paint_direct)
+        
         if hasattr(self, 'oled_play_pause_icon_label') and self.oled_play_pause_icon_label:
             self.oled_play_pause_icon_label.setEnabled(is_connected)
-            if is_connected and self.oled_display_manager:
-                self._update_oled_play_pause_button_ui(
-                    self.oled_display_manager.is_active_graphic_paused())
-        if self.button_lazy_doom:
-            self.button_lazy_doom.setEnabled(is_connected)
-        if self.app_guide_button:
-            self.app_guide_button.setEnabled(True)  # Or based on connection
+            if is_connected and self.oled_display_manager and hasattr(self.oled_display_manager, 'is_active_graphic_paused'):
+                self._update_oled_play_pause_button_ui(self.oled_display_manager.is_active_graphic_paused())
+        
+        if self.button_lazy_doom: self.button_lazy_doom.setEnabled(is_connected and not is_visualizer_active_now and not is_sampler_active_now and not is_anim_playing_now)
+        if self.app_guide_button: self.app_guide_button.setEnabled(True)
+
+
 # init here
+
     def __init__(self):
         super().__init__()
         # print("MW DEBUG: MainWindow __init__ START")
-        # WINDOW TITLE & ICON
-        self.setWindowTitle("AKAI Fire RGB Customizer")
+        self.setWindowTitle("AKAI Fire PixelForge") # Ensure title is consistent
         self.setGeometry(100, 100, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT)
         if hasattr(self, '_set_window_icon'):
             self._set_window_icon()
         else:
             print("MW CRITICAL ERROR: _set_window_icon method missing!")
+
         # --- PATH INITIALIZATION ---
-        # print("MW DEBUG: Initializing paths...")
         if hasattr(self, '_get_presets_base_dir_path'):
             self.bundled_presets_base_path = self._get_presets_base_dir_path()
         else:
             print("MW CRITICAL ERROR: _get_presets_base_dir_path method missing!")
-            # Fallback to prevent further crashes
             self.bundled_presets_base_path = "error_path_bundle"
-        # Module-level function
         self.user_documents_presets_path = get_user_documents_presets_path()
         self.user_oled_presets_base_path = os.path.join(
             self.user_documents_presets_path, USER_OLED_PRESETS_DIR_NAME)
@@ -1685,17 +2380,14 @@ class MainWindow(QMainWindow):
             self.user_oled_presets_base_path, USER_OLED_ANIM_ITEMS_SUBDIR)
         os.makedirs(self.user_oled_text_items_path, exist_ok=True)
         os.makedirs(self.user_oled_anim_items_path, exist_ok=True)
-        # print("MW DEBUG: Paths initialized.")
-        # --- END PATH INITIALIZATION ---
+
         # --- OLED CONFIGURATION & STATE ---
-        # print("MW DEBUG: Initializing OLED config attributes...")
         self.active_graphic_item_relative_path: str | None = None
         self.oled_global_scroll_delay_ms: int = DEFAULT_OLED_SCROLL_DELAY_MS_FALLBACK
-        self.current_cued_text_item_path: str | None = None
-        self.current_cued_anim_item_path: str | None = None
+        self.current_cued_text_item_path: str | None = None # For old cueing, might be deprecated
+        self.current_cued_anim_item_path: str | None = None # For old cueing, might be deprecated
         if hasattr(self, '_scan_available_app_fonts'):
-            self.available_app_fonts_cache: list[str] = self._scan_available_app_fonts(
-            )
+            self.available_app_fonts_cache: list[str] = self._scan_available_app_fonts()
         else:
             print("MW CRITICAL ERROR: _scan_available_app_fonts method missing!")
             self.available_app_fonts_cache = []
@@ -1708,19 +2400,18 @@ class MainWindow(QMainWindow):
             self._scan_available_oled_items()
         else:
             print("MW CRITICAL ERROR: _scan_available_oled_items method missing!")
-        # print("MW DEBUG: OLED config attributes initialized and config loaded.")
-        # --- END OLED CONFIGURATION & STATE ---
+
         # --- CORE APPLICATION COMPONENTS ---
-        # print("MW DEBUG: Initializing core application components...")
         self.akai_controller = AkaiFireController(auto_connect=False)
+        self._selected_midi_input_port_name: str | None = None  # ADD THIS NEW ATTRIBUTE
         self.selected_qcolor = QColor("#04FF00")
         self.is_eyedropper_mode_active: bool = False
         self._has_played_initial_builtin_oled_animation: bool = False
-        self.is_animator_playing: bool = False
-        # print("MW DEBUG: Core application components initialized.")
-        # --- END CORE APPLICATION COMPONENTS ---
+        self.is_animator_playing: bool = False # Updated by AnimatorManagerWidget signal
+        self.is_visualizer_active: bool = False 
+        self._visualizer_is_being_toggled: bool = False
+
         # --- OLED NAVIGATION STATE ---
-        # print("MW DEBUG: Initializing OLED navigation state...")
         self.current_oled_nav_target_name: str = self.OLED_NAVIGATION_FOCUS_OPTIONS[0]
         self.current_oled_nav_target_widget: QWidget | None = None
         self.current_oled_nav_item_logical_index: int = 0
@@ -1730,13 +2421,13 @@ class MainWindow(QMainWindow):
         self._oled_nav_debounce_timer.setSingleShot(True)
         self._oled_nav_debounce_timer.setInterval(300)
         self._is_hardware_nav_action_in_progress: bool = False
-        # print("MW DEBUG: OLED navigation state initialized.")
-        # lazyDoom
+        
+        # --- LazyDOOM ---
         self.is_doom_mode_active: bool = False
-        self.doom_game_controller = None  # Will hold the DoomGameController instance
-        self.button_lazy_doom: QPushButton | None = None  # For the new button
+        self.doom_game_controller = None
+        self.button_lazy_doom: QPushButton | None = None
+
         # --- INSTANTIATE MANAGERS ---
-        # print("MW DEBUG: Instantiating managers...")
         self.color_picker_manager = ColorPickerManager(
             initial_color=self.selected_qcolor, config_save_path_func=get_user_config_file_path)
         self.static_layouts_manager = StaticLayoutsManager(
@@ -1754,162 +2445,121 @@ class MainWindow(QMainWindow):
         self.screen_sampler_manager = ScreenSamplerManager(
             presets_base_path=self.bundled_presets_base_path,
             animator_manager_ref=self.animator_manager, parent=self)
+            
+        # --- ADDED: Audio Visualizer Managers ---
+        self.audio_visualizer_manager: AudioVisualizerManager | None = AudioVisualizerManager(parent=self)
+        self.audio_visualizer_ui_manager: AudioVisualizerUIManager | None = AudioVisualizerUIManager(parent=self)
+        # --- END ADDED ---
+
         self.oled_display_manager: OLEDDisplayManager | None = None
         self.hardware_input_manager: HardwareInputManager | None = None
-        # print(f"MW DEBUG: AkaiController instance: {self.akai_controller}")
+        
         if self.akai_controller:
-            # print("MW DEBUG: AkaiController exists, attempting to create OLEDDisplayManager & HardwareInputManager.")
             self.oled_display_manager = OLEDDisplayManager(
                 akai_fire_controller_ref=self.akai_controller,
                 available_app_fonts=self.available_app_fonts_cache,
                 parent=self
             )
-            # print(
-            #     f"MW DEBUG: OLEDDisplayManager created: {self.oled_display_manager}")
             self.hardware_input_manager = HardwareInputManager(
                 akai_fire_controller_ref=self.akai_controller, parent=self
             )
-            # print(
-                # f"MW DEBUG: HardwareInputManager created: {self.hardware_input_manager}")
         else:
-            print(
-                "MW CRITICAL ERROR: AkaiController is None, cannot create dependent managers.")
-            QMessageBox.critical(
-                self, "Fatal Error", "AkaiFireController instance could not be created. App will exit.")
+            print("MW CRITICAL ERROR: AkaiController is None, cannot create dependent managers.")
+            QMessageBox.critical(self, "Fatal Error", "AkaiFireController instance could not be created. App will exit.")
             sys.exit("Fatal Error: AkaiFireController could not be initialized.")
-        # print("MW DEBUG: Managers instantiated.")
-        # --- Initialize OLED Display Manager settings and Active Graphic ---
-        # print("MW DEBUG: Initializing OLEDDisplayManager settings.")
+
         if self.oled_display_manager:
             if hasattr(self.oled_display_manager, 'update_global_text_item_scroll_delay'):
                 self.oled_display_manager.update_global_text_item_scroll_delay(
                     self.oled_global_scroll_delay_ms)
-            else:
-                print(
-                    "MW CRITICAL ERROR: OLEDDisplayManager missing update_global_text_item_scroll_delay!")
             if hasattr(self, '_load_and_apply_active_graphic'):
                 self._load_and_apply_active_graphic()
-            else:
-                print(
-                    "MW CRITICAL ERROR: _load_and_apply_active_graphic method missing!")
             if hasattr(self, '_on_builtin_oled_startup_animation_finished') and callable(self._on_builtin_oled_startup_animation_finished):
                 self.oled_display_manager.builtin_startup_animation_finished.connect(
                     self._on_builtin_oled_startup_animation_finished)
-                # print("MW DEBUG: Connected builtin_startup_animation_finished signal.")
-            else:
-                print(
-                    "MW CRITICAL ERROR: _on_builtin_oled_startup_animation_finished slot is MISSING or not callable!")
-        else:
-            print("MainWindow CRITICAL: OLEDDisplayManager is None before setting scroll/graphic, cannot proceed with OLED init.")
-        # --- UI ELEMENT REFERENCES (Initialize to None, will be populated by UI setup methods) ---
-        # print("MW DEBUG: Initializing UI element references to None.")
-        self.central_widget_main: QWidget | None = None
-        self.main_app_layout: QHBoxLayout | None = None
-        self.left_panel_widget: QWidget | None = None
-        self.left_panel_layout: QVBoxLayout | None = None
-        self.right_panel_widget: QWidget | None = None
-        self.right_panel_layout_v: QVBoxLayout | None = None
+        
+        # --- UI ELEMENT REFERENCES (Initialize to None) ---
+        self.central_widget_main: QWidget | None = None; self.main_app_layout: QHBoxLayout | None = None
+        self.left_panel_widget: QWidget | None = None; self.left_panel_layout: QVBoxLayout | None = None
+        self.right_panel_widget: QWidget | None = None; self.right_panel_layout_v: QVBoxLayout | None = None
         self.pad_grid_frame: InteractivePadGridFrame | None = None
-        self.knob_volume_top_right: QDial | None = None
-        self.knob_pan_top_right: QDial | None = None
-        self.knob_filter_top_right: QDial | None = None
-        self.knob_resonance_top_right: QDial | None = None
-        self.oled_display_mirror_widget: QLabel | None = None
-        self.knob_select_top_right: QDial | None = None
+        self.knob_volume_top_right: QDial | None = None; self.knob_pan_top_right: QDial | None = None
+        self.knob_filter_top_right: QDial | None = None; self.knob_resonance_top_right: QDial | None = None
+        self.oled_display_mirror_widget: QLabel | None = None; self.knob_select_top_right: QDial | None = None
         self.button_browser_top_right: QPushButton | None = None
         self.button_pattern_up_top_right: QPushButton | None = None
         self.button_pattern_down_top_right: QPushButton | None = None
         self.button_grid_nav_focus_prev_top_right: QPushButton | None = None
         self.button_grid_nav_focus_next_top_right: QPushButton | None = None
         self.port_combo_direct_ref: QComboBox | None = None
-        self.input_port_combo_direct_ref: QComboBox | None = None
+        # self.input_port_combo_direct_ref: QComboBox | None = None # REMOVE THIS if still present
         self.connect_button_direct_ref: QPushButton | None = None
-        self.quick_tools_group_ref: QGroupBox | None = None
-        self.eyedropper_button: QPushButton | None = None
-        # <<< NEW: For OLED Play/Pause Button >>>
-        self.oled_play_pause_button: QPushButton | None = None
-        # <<< NEW: For OLED Play/Pause Icon Label and container >>>
+        # self.quick_tools_group_ref: QGroupBox | None = None # Obsolete
+        # self.eyedropper_button: QPushButton | None = None # Obsolete (UI button moved to ColorPickerManager)
         self.oled_play_pause_icon_label: QLabel | None = None
         self.oled_container_widget_ref: QWidget | None = None
         self.app_guide_button: QPushButton | None = None
-        # --- END UI ELEMENT REFERENCES ---
+        self.audio_visualizer_group_box: QGroupBox | None = None # For the new section
+
         if hasattr(self, 'ensure_user_dirs_exist'):
             self.ensure_user_dirs_exist()
         else:
             print("MW CRITICAL ERROR: ensure_user_dirs_exist method missing!")
+
         # --- MAIN UI SETUP ---
-        # print("MW DEBUG: Calling _init_ui_layout...")
-        if hasattr(self, '_init_ui_layout'):
-            self._init_ui_layout()
-        else:
-            print("MW CRITICAL ERROR: _init_ui_layout method missing!")
-        # print("MW DEBUG: Calling _populate_left_panel...")
-        if hasattr(self, '_populate_left_panel'):
-            self._populate_left_panel()
-        else:
-            print("MW CRITICAL ERROR: _populate_left_panel method missing!")
-        # print("MW DEBUG: Calling _populate_right_panel...")
-        if hasattr(self, '_populate_right_panel'):
-            self._populate_right_panel()
-        else:
-            print("MW CRITICAL ERROR: _populate_right_panel method missing!")
+        if hasattr(self, '_init_ui_layout'): self._init_ui_layout()
+        else: print("MW CRITICAL ERROR: _init_ui_layout method missing!")
+        
+        if hasattr(self, '_populate_left_panel'): self._populate_left_panel()
+        else: print("MW CRITICAL ERROR: _populate_left_panel method missing!")
+        
+        if hasattr(self, '_populate_right_panel'): self._populate_right_panel()
+        else: print("MW CRITICAL ERROR: _populate_right_panel method missing!")
+
         # --- GLOBAL BRIGHTNESS & KNOB SETUP ---
-        # print("MW DEBUG: Setting up global brightness and knobs...")
         self.global_pad_brightness: float = 1.0
-        # Assumes knobs are created in populate methods
-        self.gui_knob1 = self.knob_volume_top_right
-        self.gui_knob2 = self.knob_pan_top_right
-        self.gui_knob3 = self.knob_filter_top_right
-        self.gui_knob4 = self.knob_resonance_top_right
-        if hasattr(self, '_setup_global_brightness_knob'):
-            self._setup_global_brightness_knob()
-        else:
-            print("MW CRITICAL ERROR: _setup_global_brightness_knob method missing!")
+        self.gui_knob1 = self.knob_volume_top_right; self.gui_knob2 = self.knob_pan_top_right
+        self.gui_knob3 = self.knob_filter_top_right; self.gui_knob4 = self.knob_resonance_top_right
+        if hasattr(self, '_setup_global_brightness_knob'): self._setup_global_brightness_knob()
+        else: print("MW CRITICAL ERROR: _setup_global_brightness_knob method missing!")
+
         # --- TIMERS & FINAL SETUP ---
-        # print("MW DEBUG: Setting up timers and final configurations...")
         self._stop_action_issued_for_oled: bool = False
-        # Keep this if _show_knob_feedback_on_oled uses it
         self._KNOB_FEEDBACK_OLED_DURATION_MS = 1500
-        if hasattr(self, '_update_current_oled_nav_target_widget'):
-            self._update_current_oled_nav_target_widget()
-        else:
-            print(
-                "MW CRITICAL ERROR: _update_current_oled_nav_target_widget method missing!")
-        if hasattr(self, '_connect_signals'):
-            self._connect_signals()
-        else:
-            print("MW CRITICAL ERROR: _connect_signals method missing!")
-        # print("MW DEBUG: _connect_signals expected to be CALLED from __init__.")
-        if hasattr(self, '_create_edit_actions'):
-            self._create_edit_actions()
-        else:
-            print("MW CRITICAL ERROR: _create_edit_actions method missing!")
-        if hasattr(self, 'populate_midi_ports'):
-            self.populate_midi_ports()
-        else:
-            print("MW CRITICAL ERROR: populate_midi_ports method missing!")
+        if hasattr(self, '_update_current_oled_nav_target_widget'): self._update_current_oled_nav_target_widget()
+        else: print("MW CRITICAL ERROR: _update_current_oled_nav_target_widget method missing!")
+        
+        if hasattr(self, '_connect_signals'): self._connect_signals() # Connections for visualizer will be added here
+        else: print("MW CRITICAL ERROR: _connect_signals method missing!")
+        
+        if hasattr(self, '_create_edit_actions'): self._create_edit_actions()
+        else: print("MW CRITICAL ERROR: _create_edit_actions method missing!")
+        
+        if hasattr(self, 'populate_midi_ports'): self.populate_midi_ports()
+        else: print("MW CRITICAL ERROR: populate_midi_ports method missing!")
+        
         if hasattr(self, 'populate_midi_input_ports'):
-            self.populate_midi_input_ports()
+            self.populate_midi_input_ports() # This call is fine, method will be repurposed
         else:
             print("MW CRITICAL ERROR: populate_midi_input_ports method missing!")
-        if hasattr(self, 'update_connection_status'):
-            self.update_connection_status()
-        else:
-            print("MW CRITICAL ERROR: update_connection_status method missing!")
-        # QTimer.singleShot calls ensure these run after __init__ is mostly complete
-        if hasattr(self, '_update_contextual_knob_configs'):
-            QTimer.singleShot(0, self._update_contextual_knob_configs)
-        else:
-            print("MW CRITICAL ERROR: _update_contextual_knob_configs method missing!")
-        if hasattr(self, '_position_oled_toggle_icon'):
-            QTimer.singleShot(100, self._position_oled_toggle_icon) # Small delay to ensure layout is settled
-        if hasattr(self, '_update_global_ui_interaction_states'):
-            QTimer.singleShot(0, self._update_global_ui_interaction_states)
-        else:
-            print(
-                "MW CRITICAL ERROR: _update_global_ui_interaction_states method missing!")
+        
+        if hasattr(self, 'update_connection_status'): self.update_connection_status()
+        else: print("MW CRITICAL ERROR: update_connection_status method missing!")
+        
+        # --- ADDED: Populate audio devices for visualizer UI ---
+        if hasattr(self, '_populate_visualizer_audio_devices'):
+             QTimer.singleShot(100, self._populate_visualizer_audio_devices) # Slight delay
+        # --- END ADDED ---
+
+        if hasattr(self, '_update_contextual_knob_configs'): QTimer.singleShot(0, self._update_contextual_knob_configs)
+        else: print("MW CRITICAL ERROR: _update_contextual_knob_configs method missing!")
+        
+        if hasattr(self, '_position_oled_toggle_icon'): QTimer.singleShot(100, self._position_oled_toggle_icon)
+        
+        if hasattr(self, '_update_global_ui_interaction_states'): QTimer.singleShot(0, self._update_global_ui_interaction_states)
+        else: print("MW CRITICAL ERROR: _update_global_ui_interaction_states method missing!")
+        
         # print("MW DEBUG: MainWindow __init__ COMPLETE.")
-        # --- END TIMERS & FINAL SETUP ---
 
     def eventFilter(self, obj, event: QEvent):
         # General debug (remove general print for less noise once specific object filtering works)
@@ -2350,20 +3000,6 @@ class MainWindow(QMainWindow):
         # print("MW TRACE: _handle_cycle_active_oled_prev_request called") # Optional
         self._cycle_and_apply_active_oled(-1)
 
-
-    def _handle_paint_black_button(self):
-        """
-        Handles the 'Set Black' button click from Quick Tools.
-        Sets the current painting color to black.
-        """
-        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
-            pass 
-        black_color = QColor("black")
-        self.selected_qcolor = black_color 
-        if self.color_picker_manager:
-            self.color_picker_manager.set_current_selected_color(black_color, source="paint_black_button")        
-        self.status_bar.showMessage("Active painting color set to: Black (Off)", 2500)
-
     def _init_animator_and_sampler_ui_left_panel(self):
         """Initializes and adds Animator and Screen Sampler UIs to the left panel."""
         self.animator_manager = AnimatorManagerWidget(
@@ -2420,7 +3056,6 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage("Static layout applied to pads and current animator frame.", 2500)
         else:
             self.status_bar.showMessage("Static layout applied to pads.", 2500)    
-
 
     def _on_physical_encoder_rotated(self, encoder_id: int, delta: int):
         # print(f"MW TRACE: _on_physical_encoder_rotated - Encoder ID: {encoder_id}, Delta: {delta}, AnimatorPlaying: {self.is_animator_playing}, SamplerActive: {self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False}") # Optional
@@ -2501,8 +3136,6 @@ class MainWindow(QMainWindow):
         # else: # Optional
             # print(f"MW TRACE: No action for physical encoder {encoder_id} (delta {delta}) in current context (Sampler: {sampler_is_currently_active}, Animator: {animator_is_currently_playing}).")
 
-
-
     def _on_global_brightness_knob_changed(self, gui_knob_value: int):
         """
         Handles changes to the global brightness knob (Knob 1) in GLOBAL mode.
@@ -2527,7 +3160,7 @@ class MainWindow(QMainWindow):
         if not sampler_is_active and not animator_is_playing and self.pad_grid_frame:
             current_colors_hex = self.pad_grid_frame.get_current_grid_colors_hex()
             self.apply_colors_to_main_pad_grid(current_colors_hex, update_hw=True, is_sampler_output=False)    
-    
+
     def _on_sampler_activity_changed_for_knobs(self, sampler_is_active: bool):
         """
         Reconfigures the top 4 GUI knobs based on sampler active state.
@@ -2579,9 +3212,8 @@ class MainWindow(QMainWindow):
                 self.gui_knob3.setRange(0,127); self.gui_knob3.setValue(64)
             if self.gui_knob4: 
                 self.gui_knob4.setToolTip("Resonance (Global - Unassigned)")
-                self.gui_knob4.setRange(0,127); self.gui_knob4.setValue(64)            # print("MW TRACE: Knobs configured for GLOBAL mode.")
+                self.gui_knob4.setRange(0,127); self.gui_knob4.setValue(64)  
                 self.gui_knob4.setRange(0,127); self.gui_knob4.setValue(64)
-            # print("MW TRACE: Knobs configured for GLOBAL mode.")
 
     def _on_sampler_adjustments_updated_for_knobs(self, adjustments: dict):
         """
@@ -2613,7 +3245,6 @@ class MainWindow(QMainWindow):
             self.gui_knob4.setToolTip(f"Sampler: Hue Shift ({hue_val_int_for_knob_and_tooltip:+d})")
             self.gui_knob4.blockSignals(False)
 
-
     def _on_animator_speed_knob_changed(self, knob_raw_slider_value: int): # Value is now 0-90 (raw slider/dial value)
         if self.is_animator_playing and self.animator_manager:
             # Convert the raw slider value from the QDial (knob_raw_slider_value) to FPS
@@ -2628,7 +3259,6 @@ class MainWindow(QMainWindow):
             oled_feedback_text = f"Spd: {new_fps:.1f}" # Display FPS with one decimal
             self._show_knob_feedback_on_oled(oled_feedback_text)
             # print(f"MW TRACE: Animator speed knob changed. RawVal: {knob_raw_slider_value}, FPS: {new_fps:.1f}")
-
 
     def _on_animator_playback_status_for_oled(self, is_playing: bool):
         """Updates OLED with temporary Play/Pause/Stop message based on animator status."""
@@ -2984,25 +3614,36 @@ class MainWindow(QMainWindow):
             self.animator_manager._handle_load_sequence_request(filepath_to_load)
             self.status_bar.showMessage(f"Sequence '{os.path.basename(filepath_to_load)}' loaded.", 2500)
 
-    def _on_eyedropper_button_toggled(self, checked: bool):
-        self.set_eyedropper_mode(checked) # source is implicitly "button_toggle"
-
     def toggle_eyedropper_mode(self, checked: bool | None = None): # From QAction
         new_state = not self.is_eyedropper_mode_active if checked is None else checked
         self.set_eyedropper_mode(new_state)
 
     def set_eyedropper_mode(self, active: bool):
-        if self.is_eyedropper_mode_active == active: return
+        if self.is_eyedropper_mode_active == active:
+            # If the ColorPickerManager button exists, ensure its state is correct even if mode didn't change overall
+            if self.color_picker_manager and self.color_picker_manager.eyedropper_button:
+                if self.color_picker_manager.eyedropper_button.isChecked() != active:
+                    self.color_picker_manager.eyedropper_button.setChecked(active)
+            return
         self.is_eyedropper_mode_active = active
         cursor_shape = Qt.CursorShape.CrossCursor if active else Qt.CursorShape.ArrowCursor
-        if self.pad_grid_frame: self.pad_grid_frame.setCursor(cursor_shape)
-        status_msg = "Eyedropper active: Click a pad." if active else "Eyedropper deactivated."
-        self.status_bar.showMessage(status_msg, 0 if active else 2000)
-        if self.eyedropper_button and self.eyedropper_button.isChecked() != active:
-            self.eyedropper_button.setChecked(active)
-        if self.eyedropper_action and self.eyedropper_action.isChecked() != active:
-            self.eyedropper_action.setChecked(active)        
-        self._update_global_ui_interaction_states()
+        if self.pad_grid_frame:
+            self.pad_grid_frame.setCursor(cursor_shape)
+        
+        status_msg = "Eyedropper active: Click a pad to pick its color." if active else "Eyedropper deactivated."
+        self.status_bar.showMessage(status_msg, 0 if active else 2000) # Keep message visible while active
+        # Sync the ColorPickerManager's eyedropper button
+        if self.color_picker_manager and self.color_picker_manager.eyedropper_button:
+            # Block its signals temporarily while setting state to avoid re-emitting toggled
+            self.color_picker_manager.eyedropper_button.blockSignals(True)
+            if self.color_picker_manager.eyedropper_button.isChecked() != active:
+                self.color_picker_manager.eyedropper_button.setChecked(active)
+            self.color_picker_manager.eyedropper_button.blockSignals(False)
+        # Sync the global QAction for eyedropper
+        if hasattr(self, 'eyedropper_action') and self.eyedropper_action:
+            if self.eyedropper_action.isChecked() != active:
+                self.eyedropper_action.setChecked(active)
+        self._update_global_ui_interaction_states() # Update global UI states
 
     def _pick_color_from_pad(self, row: int, col: int):
         if not self.color_picker_manager or not self.pad_grid_frame: return
@@ -3366,13 +4007,31 @@ class MainWindow(QMainWindow):
         else:
             self.oled_display_manager.show_system_message("Invalid Cue", 1500, scroll_if_needed=False)
 
+    def action_play(self):  # Assuming this is animator play from MainWindow context
+        if self.audio_visualizer_manager and self.audio_visualizer_manager.is_capturing:
+            print("MW INFO: Animator play requested, stopping visualizer.")
+            # Call _on_visualizer_enable_toggled(False) to correctly stop and update UI
+            self._on_visualizer_enable_toggled(False)
+
+        # Existing animator play logic
+        if self.animator_manager:
+            self.animator_manager.action_play()
+
     def _on_request_toggle_screen_sampler(self):
-        """Handles hardware button press to toggle screen sampler ON/OFF."""
-        if not self.screen_sampler_manager or not self.akai_controller.is_connected():
-            self.status_bar.showMessage("Sampler unavailable or controller disconnected.", 2000)
-            return
-        # print("MW TRACE: _on_request_toggle_screen_sampler calling toggle_sampling_state.") # Optional
-        self.screen_sampler_manager.toggle_sampling_state()
+        # This method handles toggling the sampler.
+        # If we are *starting* the sampler and visualizer is on, stop visualizer.
+        if self.screen_sampler_manager:
+            if not self.screen_sampler_manager.is_sampling_active():  # Sampler is about to be turned ON
+                if self.audio_visualizer_manager and self.audio_visualizer_manager.is_capturing:
+                    print(
+                        "MW INFO: Sampler toggle (to ON) requested, stopping visualizer.")
+                    self._on_visualizer_enable_toggled(False)
+
+            # Now, toggle the sampler state
+            self.screen_sampler_manager.toggle_sampling_state()
+        else:
+            self.status_bar.showMessage(
+                "Sampler unavailable or controller disconnected.", 2000)
 
     def _on_request_cycle_sampler_monitor(self):
         """Handles hardware button press to cycle to the next sampler monitor."""
@@ -3457,70 +4116,76 @@ class MainWindow(QMainWindow):
     def toggle_connection(self):
         """Toggles MIDI connection state and handles initial OLED animation."""
         if self.akai_controller.is_connected() or self.akai_controller.is_input_connected():
-            # Currently connected, so disconnect
+            # --- DISCONNECT LOGIC ---
             if self.oled_display_manager and self.akai_controller.is_connected():
-                self.oled_display_manager.clear_display_content()  # Clear OLED on disconnect
-            self.akai_controller.disconnect()
+                self.oled_display_manager.clear_display_content()
+            self.akai_controller.disconnect() # This handles both output and input
         else:
-            # Not connected, so attempt to connect
-            out_port = self.port_combo_direct_ref.currentText(
-            ) if self.port_combo_direct_ref else None
-            in_port = self.input_port_combo_direct_ref.currentText(
-            ) if self.input_port_combo_direct_ref else None
-            can_connect_out = bool(
-                out_port and out_port != "No MIDI output ports found")
-            can_connect_in = bool(
-                in_port and in_port != "No MIDI input ports found") if self.input_port_combo_direct_ref else False
+            # --- CONNECT LOGIC ---
+            out_port = None
+            if self.port_combo_direct_ref: # For MIDI Output port selection
+                out_port = self.port_combo_direct_ref.currentText()
+            
+            # Use the internally stored and auto-selected MIDI input port name
+            in_port_to_use = self._selected_midi_input_port_name 
+            
+            # Determine if we can attempt to connect input based on the selected name
+            can_connect_in = bool(in_port_to_use and \
+                                  in_port_to_use not in ["No MIDI input ports found", "Select MIDI Input", "", None]) # Added None check
+
+            print(f"MW DEBUG toggle_connection: Attempting connect. Out: '{out_port}', Determined In: '{in_port_to_use}', CanConnectIn: {can_connect_in}")
+
+            can_connect_out = bool(out_port and out_port != "No MIDI output ports found")
+            
             if not can_connect_out:
-                self.status_bar.showMessage(
-                    "Please select a valid MIDI output port.", 3000)
-                self.update_connection_status()  # Update button states
+                self.status_bar.showMessage("Please select a valid MIDI output port.", 3000)
+                self.update_connection_status() # Update button states
                 return
-            if self.akai_controller.connect(out_port, in_port if can_connect_in else None):
-                self.status_bar.showMessage(
-                    f"Successfully connected to {out_port}.", 2500)
+
+            # Pass the determined input port to the controller's connect method
+            # AkaiFireController.connect() will call its own connect_input() if in_port_to_use is valid
+            if self.akai_controller.connect(out_port, in_port_to_use if can_connect_in else None):
+                # Success message
+                status_msg = f"Successfully connected to Output: {self.akai_controller.port_name_used}"
+                if self.akai_controller.is_input_connected() and self.akai_controller.in_port_name_used:
+                    status_msg += f" | Input: {self.akai_controller.in_port_name_used}"
+                self.status_bar.showMessage(status_msg, 2500)
+                
+                # OLED Startup Animation Logic (remains the same)
                 if self.oled_display_manager:
-                    if not self._has_played_initial_builtin_oled_animation:  # Check correct flag name
+                    if not self._has_played_initial_builtin_oled_animation:
                         try:
-                            # Generate and play the BUILT-IN visual startup animation
-                            if MAIN_WINDOW_OLED_RENDERER_AVAILABLE:  # Check if renderer is available
+                            if MAIN_WINDOW_OLED_RENDERER_AVAILABLE:
                                 startup_frames = oled_renderer.generate_fire_startup_animation()
                                 if startup_frames:
-                                    # Use the RENAMED method in OLEDDisplayManager
                                     self.oled_display_manager.play_builtin_startup_animation(
-                                        startup_frames, frame_duration_ms=60
-                                    )
-                                    self._has_played_initial_builtin_oled_animation = True  # Set flag
-                                else:  # No frames generated, proceed as if animation finished
-                                    print(
-                                        "MW WARNING: Built-in startup animation generated no frames.")
-                                    # Manually trigger the logic that happens after animation finishes
+                                        startup_frames, frame_duration_ms=60)
+                                    self._has_played_initial_builtin_oled_animation = True
+                                else:
+                                    print("MW WARNING: Built-in startup animation generated no frames.")
                                     if hasattr(self, '_on_builtin_oled_startup_animation_finished'):
                                         self._on_builtin_oled_startup_animation_finished()
-                                    else:  # Fallback if slot somehow missing after fixes
+                                    elif hasattr(self.oled_display_manager, '_apply_current_oled_state'):
                                         self.oled_display_manager._apply_current_oled_state()
-                            else:  # OLED Renderer not available for MainWindow
-                                print(
-                                    "MW WARNING: OLED Renderer not available in MainWindow, skipping built-in startup visual.")
-                                self._has_played_initial_builtin_oled_animation = True  # Mark as "played"
-                                # Directly apply active graphic or default state
-                                self.oled_display_manager._apply_current_oled_state()
+                            else:
+                                print("MW WARNING: OLED Renderer not available, skipping built-in startup visual.")
+                                self._has_played_initial_builtin_oled_animation = True
+                                if hasattr(self.oled_display_manager, '_apply_current_oled_state'):
+                                     self.oled_display_manager._apply_current_oled_state()
                         except Exception as e_anim:
-                            print(
-                                f"MW ERROR: Could not generate/start OLED built-in startup animation: {e_anim}")
-                            import traceback
-                            traceback.print_exc()
-                            self._has_played_initial_builtin_oled_animation = True  # Avoid retrying
-                            # Fallback: ensure OLED manager shows its current intended state
-                            self.oled_display_manager._apply_current_oled_state()
-                    else:
-                        print(
-                            "MW INFO: MIDI Reconnected. Triggering OLED state refresh.")
+                            print(f"MW ERROR: Could not generate/start OLED built-in startup animation: {e_anim}")
+                            self._has_played_initial_builtin_oled_animation = True
+                            if hasattr(self.oled_display_manager, '_apply_current_oled_state'):
+                                self.oled_display_manager._apply_current_oled_state()
+                    elif hasattr(self.oled_display_manager, '_apply_current_oled_state'): 
+                        print("MW INFO: MIDI Reconnected. Triggering OLED state refresh.")
                         self.oled_display_manager._apply_current_oled_state()
             else:
                 QMessageBox.warning(
-                    self, "Connection Failed", f"Could not connect MIDI output to {out_port}.")
-        self.update_connection_status()  # Update UI based on new connection state
+                    self, "Connection Failed", f"Could not connect MIDI output to '{out_port}'" + 
+                    (f" or input to '{in_port_to_use}'" if can_connect_in and in_port_to_use else "."))
+        
+        self.update_connection_status() # Update UI based on new connection state
 
     def _handle_fire_pad_event_INTERNAL(self, note: int, is_pressed: bool):
         # print(
@@ -3532,6 +4197,45 @@ class MainWindow(QMainWindow):
             pass
 
     def closeEvent(self, event: QCloseEvent): 
+        # print("MW TRACE: closeEvent triggered.")
+        if self.is_doom_mode_active:
+            # If DOOM is active, exit it cleanly first before handling main app save prompts
+            # print("MW TRACE: DOOM mode active during closeEvent, exiting DOOM mode first.")
+            self._exit_doom_mode() 
+            # Let event processing continue to allow animator save prompt if needed
+        # Prompt to save unsaved animator changes (original logic)
+        if self.animator_manager and self.animator_manager.active_sequence_model and \
+            self.animator_manager.active_sequence_model.is_modified:
+            reply = QMessageBox.question(self, "Unsaved Animator Changes",
+                                        f"Animation '{self.animator_manager.active_sequence_model.name}' has unsaved changes. Save before exiting?",
+                                        QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                        QMessageBox.StandardButton.Cancel)
+            if reply == QMessageBox.StandardButton.Save:
+                save_success = self.animator_manager.action_save_sequence_as() # AMW shows dialog
+                if not save_success: 
+                    event.ignore() 
+                    return 
+            elif reply == QMessageBox.StandardButton.Cancel: 
+                event.ignore() 
+                return
+        # Stop other managers and disconnect controller (original logic)
+        if self.screen_sampler_manager: self.screen_sampler_manager.on_application_exit()
+        if self.animator_manager: self.animator_manager.stop_current_animation_playback()
+        if self.color_picker_manager: self.color_picker_manager.save_color_picker_swatches_to_config()        
+        
+        # --- ADDED: Stop Audio Visualizer ---
+        if self.audio_visualizer_manager:
+            self.audio_visualizer_manager.on_application_exit() # Call its cleanup
+        # --- END ADDED ---
+
+        if self.oled_display_manager:
+            self.oled_display_manager.stop_all_activity() 
+            if self.akai_controller and self.akai_controller.is_connected():
+                self.oled_display_manager.clear_display_content() 
+        if self.akai_controller and (self.akai_controller.is_connected() or self.akai_controller.is_input_connected()):
+            self.akai_controller.disconnect()        
+        print("MW INFO: Application closeEvent accepted.")
+        super().closeEvent(event)
         # print("MW TRACE: closeEvent triggered.")
         if self.is_doom_mode_active:
             # If DOOM is active, exit it cleanly first before handling main app save prompts
