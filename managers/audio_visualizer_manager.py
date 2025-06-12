@@ -157,29 +157,37 @@ class AudioVisualizerManager(QObject):
         self.audio_thread: AudioProcessingThread | None = None
         self.all_mode_settings_cache = self._load_all_mode_settings_from_persistence()
         self.current_visualization_mode = "classic_spectrum_bars"
-        # Operational parameters for Classic Spectrum Bars
+        # --- Operational parameters for Classic Spectrum Bars ---
         self.band_colors: list[QColor] = []
         self.global_sensitivity: float = DEFAULT_MANAGER_SENSITIVITY
         self.smoothing_factor: float = DEFAULT_MANAGER_SMOOTHING
         self.classic_bars_grow_downwards: bool = False
         self._smoothed_band_powers = np.zeros(NUMBER_OF_BANDS)
-        # Operational parameters for Pulse Wave
+        # --- Operational parameters for Pulse Wave ---
         self.pulse_wave_color: QColor = QColor("cyan")
-        self.pulse_wave_speed_factor: float = 0.5 
+        self.pulse_wave_speed_factor: float = 0.5
         self.pulse_wave_brightness_sensitivity: float = 1.0
         self.pulse_current_column_index: int = 0
         self.pulse_last_update_time: float = time.monotonic()
         self.pulse_time_accumulator: float = 0.0
-        # --- ADDED: Operational parameters for Dual VU ---
+        # --- Operational parameters for Dual VU & Spectrum ---
+        # VU Part
         self.dvu_low_color: QColor = QColor(Qt.GlobalColor.green)
         self.dvu_mid_color: QColor = QColor(Qt.GlobalColor.yellow)
         self.dvu_high_color: QColor = QColor(Qt.GlobalColor.red)
-        self.dvu_threshold_mid_factor: float = 0.60 # Manager scale 0.0-1.0
-        self.dvu_threshold_high_factor: float = 0.85 # Manager scale 0.0-1.0
-        self.dvu_falloff_speed_factor: float = 0.5 # Manager scale 0.0-1.0 (higher = faster falloff)
-        # State for VU meters (mono-driven for now, so one value)
-        self.dvu_current_level: float = 0.0 # Smoothed VU level (0.0-1.0)
-        # (Spectrum part operational parameters for this mode will be added later)
+        self.dvu_threshold_mid_factor: float = 0.60
+        self.dvu_threshold_high_factor: float = 0.85
+        self.dvu_falloff_speed_factor: float = 0.5
+        self.dvu_current_level: float = 0.0
+        # Central Spectrum Part
+        self.dvu_spec_band_colors: list[QColor] = [
+            QColor(Qt.GlobalColor.cyan)] * 5
+        self.dvu_spec_sensitivity_factor: float = 1.0
+        self.dvu_spec_smoothing_factor: float = 0.2
+        self.dvu_spec_grow_downwards: bool = False
+        self._dvu_smoothed_spec_band_powers: np.ndarray = np.zeros(
+            5)  # For 5 bands
+        # --- END ADD ---
         self._apply_settings_for_current_mode()
         self.refresh_audio_devices()
 
@@ -206,29 +214,36 @@ class AudioVisualizerManager(QObject):
             },
             "pulse_wave_matrix": {
                 "color": QColor("cyan").name(),
-                "speed": 0.5,  # Manager scale
-                "brightness_sensitivity": 1.0  # Manager scale
+                "speed": 0.5,
+                "brightness_sensitivity": 1.0
             },
-            "dual_vu_spectrum": {  # ADDED Default structure for Dual VU
+            "dual_vu_spectrum": {
                 "vu_low_color": QColor(Qt.GlobalColor.green).name(),
                 "vu_mid_color": QColor(Qt.GlobalColor.yellow).name(),
                 "vu_high_color": QColor(Qt.GlobalColor.red).name(),
-                "vu_threshold_mid": 0.60,       # Manager scale (0.0-1.0)
-                "vu_threshold_high": 0.85,      # Manager scale (0.0-1.0)
-                "vu_falloff_speed": 0.5         # Manager scale (0.0-1.0)
-                # Spectrum part settings for this mode will be added later
+                "vu_threshold_mid": 0.60,
+                "vu_threshold_high": 0.85,
+                "vu_falloff_speed": 0.5,
+                # --- ADDED: Defaults for Central Spectrum (Manager Scale) ---
+                "spectrum_band_colors": [QColor(Qt.GlobalColor.cyan).name()] * 5,
+                "spectrum_sensitivity": 1.0,  # Manager scale (e.g., 0.0-2.0)
+                "spectrum_smoothing": 0.2,   # Manager scale (e.g., 0.0-0.99)
+                "spectrum_grow_downwards": False
             }
         }
+
         if os.path.exists(filepath):
             try:
                 with open(filepath, 'r') as f:
                     loaded_settings = json.load(f)
                 if isinstance(loaded_settings, dict):
+                    # Ensure all modes and sub-keys from the default structure exist
                     for mode_key, default_mode_settings in default_settings_structure.items():
                         if mode_key not in loaded_settings:
                             loaded_settings[mode_key] = default_mode_settings.copy(
                             )
                         else:
+                            # Also check for newly added sub-keys within an existing mode
                             for sub_key, default_sub_value in default_mode_settings.items():
                                 if sub_key not in loaded_settings[mode_key]:
                                     loaded_settings[mode_key][sub_key] = default_sub_value
@@ -239,6 +254,8 @@ class AudioVisualizerManager(QObject):
             except Exception as e:
                 print(
                     f"AVM WARN: Error loading visualizer_main_settings.json: {e}. Using full defaults.")
+
+        # Return a deep copy of the defaults if file doesn't exist or is invalid
         return {k: v.copy() for k, v in default_settings_structure.items()}
 
     def _save_all_mode_settings_to_persistence(self):
@@ -264,46 +281,39 @@ class AudioVisualizerManager(QObject):
             if not isinstance(dialog_mode_settings, dict): continue
             if mode_key not in self.all_mode_settings_cache:
                 self.all_mode_settings_cache[mode_key] = {}
+
             cache_for_mode = self.all_mode_settings_cache[mode_key]
+            
             if mode_key == "classic_spectrum_bars":
-                if "band_colors" in dialog_mode_settings:
-                    cache_for_mode["band_colors"] = list(dialog_mode_settings["band_colors"])
-                if "sensitivity" in dialog_mode_settings: # UI 0-100 to manager 0.0-2.0
-                    cache_for_mode["sensitivity"] = dialog_mode_settings["sensitivity"] / 50.0
-                if "smoothing" in dialog_mode_settings: # UI 0-99 to manager 0.0-0.99
-                    cache_for_mode["smoothing"] = dialog_mode_settings["smoothing"] / 100.0
-                if "grow_downwards" in dialog_mode_settings:
-                    cache_for_mode["grow_downwards"] = dialog_mode_settings["grow_downwards"]
-                else:
-                    cache_for_mode.setdefault("grow_downwards", False)
+                if "band_colors" in dialog_mode_settings: cache_for_mode["band_colors"] = list(dialog_mode_settings["band_colors"])
+                if "sensitivity" in dialog_mode_settings: cache_for_mode["sensitivity"] = dialog_mode_settings["sensitivity"] / 50.0
+                if "smoothing" in dialog_mode_settings: cache_for_mode["smoothing"] = dialog_mode_settings["smoothing"] / 100.0
+                cache_for_mode["grow_downwards"] = dialog_mode_settings.get("grow_downwards", False)
+            
             elif mode_key == "pulse_wave_matrix":
-                if "color" in dialog_mode_settings:
-                    cache_for_mode["color"] = dialog_mode_settings["color"]
-                if "speed" in dialog_mode_settings: # UI 0-100 to manager 0.0-1.0
-                    cache_for_mode["speed"] = dialog_mode_settings["speed"] / 100.0
-                if "brightness_sensitivity" in dialog_mode_settings: # UI 0-100 to manager 0.0-2.0
-                    cache_for_mode["brightness_sensitivity"] = dialog_mode_settings["brightness_sensitivity"] / 50.0
-            # --- Handle Dual VU Settings ---
+                if "color" in dialog_mode_settings: cache_for_mode["color"] = dialog_mode_settings["color"]
+                if "speed" in dialog_mode_settings: cache_for_mode["speed"] = dialog_mode_settings["speed"] / 100.0
+                if "brightness_sensitivity" in dialog_mode_settings: cache_for_mode["brightness_sensitivity"] = dialog_mode_settings["brightness_sensitivity"] / 50.0
+            
             elif mode_key == "dual_vu_spectrum":
-                if "vu_low_color" in dialog_mode_settings:
-                    cache_for_mode["vu_low_color"] = dialog_mode_settings["vu_low_color"]
-                if "vu_mid_color" in dialog_mode_settings:
-                    cache_for_mode["vu_mid_color"] = dialog_mode_settings["vu_mid_color"]
-                if "vu_high_color" in dialog_mode_settings:
-                    cache_for_mode["vu_high_color"] = dialog_mode_settings["vu_high_color"]
-                if "vu_threshold_mid" in dialog_mode_settings: # UI 0-100 (%) to manager 0.0-1.0
-                    cache_for_mode["vu_threshold_mid"] = dialog_mode_settings["vu_threshold_mid"] / 100.0
-                if "vu_threshold_high" in dialog_mode_settings: # UI 0-100 (%) to manager 0.0-1.0
-                    cache_for_mode["vu_threshold_high"] = dialog_mode_settings["vu_threshold_high"] / 100.0
-                if "vu_falloff_speed" in dialog_mode_settings: # UI 0-100 to manager 0.0-1.0
-                    # Higher UI value means faster falloff.
-                    # We can map this to a factor that determines how much the level drops per update.
-                    # For now, let's store it as 0.0 (slow falloff) to 1.0 (fast falloff).
-                    cache_for_mode["vu_falloff_speed"] = dialog_mode_settings["vu_falloff_speed"] / 100.0
-                # Spectrum part settings for this mode will be added later
-            else: # Fallback for unhandled modes
+                # VU Part
+                if "vu_low_color" in dialog_mode_settings: cache_for_mode["vu_low_color"] = dialog_mode_settings["vu_low_color"]
+                if "vu_mid_color" in dialog_mode_settings: cache_for_mode["vu_mid_color"] = dialog_mode_settings["vu_mid_color"]
+                if "vu_high_color" in dialog_mode_settings: cache_for_mode["vu_high_color"] = dialog_mode_settings["vu_high_color"]
+                if "vu_threshold_mid" in dialog_mode_settings: cache_for_mode["vu_threshold_mid"] = dialog_mode_settings["vu_threshold_mid"] / 100.0
+                if "vu_threshold_high" in dialog_mode_settings: cache_for_mode["vu_threshold_high"] = dialog_mode_settings["vu_threshold_high"] / 100.0
+                if "vu_falloff_speed" in dialog_mode_settings: cache_for_mode["vu_falloff_speed"] = dialog_mode_settings["vu_falloff_speed"] / 100.0
+                
+                # --- ADDED: Central Spectrum Part Conversion ---
+                if "spectrum_band_colors" in dialog_mode_settings: cache_for_mode["spectrum_band_colors"] = list(dialog_mode_settings["spectrum_band_colors"])
+                if "spectrum_sensitivity" in dialog_mode_settings: cache_for_mode["spectrum_sensitivity"] = dialog_mode_settings["spectrum_sensitivity"] / 50.0 # UI 0-100 to manager 0.0-2.0
+                if "spectrum_smoothing" in dialog_mode_settings: cache_for_mode["spectrum_smoothing"] = dialog_mode_settings["spectrum_smoothing"] / 100.0 # UI 0-99 to manager 0.0-0.99
+                cache_for_mode["spectrum_grow_downwards"] = dialog_mode_settings.get("spectrum_grow_downwards", False)
+            
+            else: # Fallback for any other unhandled modes
                 for key, value in dialog_mode_settings.items():
-                    cache_for_mode[key] = value 
+                    cache_for_mode[key] = value
+
         self._apply_settings_for_current_mode()
         self._save_all_mode_settings_to_persistence()
 
@@ -312,25 +322,6 @@ class AudioVisualizerManager(QObject):
         mode_settings = self.all_mode_settings_cache.get(
             current_mode_key_to_check)
         if not mode_settings:
-            print(
-                f"AVM WARN: No settings in cache for '{current_mode_key_to_check}'. Using fallbacks.")
-            # Fallbacks for Classic Spectrum Bars
-            self.band_colors = list(DEFAULT_MANAGER_BAND_COLORS_QCOLOR)
-            self.global_sensitivity = DEFAULT_MANAGER_SENSITIVITY
-            self.smoothing_factor = DEFAULT_MANAGER_SMOOTHING
-            self.classic_bars_grow_downwards = False
-            # Fallbacks for Pulse Wave
-            self.pulse_wave_color = QColor("cyan")
-            self.pulse_wave_speed_factor = 0.5
-            self.pulse_wave_brightness_sensitivity = 1.0
-            # --- ADDED: Fallbacks for Dual VU ---
-            self.dvu_low_color = QColor(Qt.GlobalColor.green)
-            self.dvu_mid_color = QColor(Qt.GlobalColor.yellow)
-            self.dvu_high_color = QColor(Qt.GlobalColor.red)
-            self.dvu_threshold_mid_factor = 0.60
-            self.dvu_threshold_high_factor = 0.85
-            self.dvu_falloff_speed_factor = 0.5
-            self.dvu_current_level = 0.0  # Reset state
             return
         if self.current_visualization_mode == "classic_spectrum_bars":
             hex_colors = mode_settings.get(
@@ -356,6 +347,7 @@ class AudioVisualizerManager(QObject):
             self.pulse_last_update_time = time.monotonic()
             self.pulse_time_accumulator = 0.0
         elif self.current_visualization_mode == "dual_vu_spectrum":
+            # VU Part
             self.dvu_low_color = QColor(mode_settings.get(
                 "vu_low_color", QColor(Qt.GlobalColor.green).name()))
             self.dvu_mid_color = QColor(mode_settings.get(
@@ -368,9 +360,20 @@ class AudioVisualizerManager(QObject):
                 "vu_threshold_high", 0.85)
             self.dvu_falloff_speed_factor = mode_settings.get(
                 "vu_falloff_speed", 0.5)
-            self.dvu_current_level = 0.0  # Reset VU level state when settings change
-            print(
-                f"AVM DEBUG (_apply_settings_for_current_mode): Dual VU operational settings applied.")
+            self.dvu_current_level = 0.0  # Reset VU level state
+            # --- ADDED: Apply Central Spectrum Settings ---
+            spec_hex_colors = mode_settings.get(
+                "spectrum_band_colors", [QColor(Qt.GlobalColor.cyan).name()] * 5)
+            self.dvu_spec_band_colors = [QColor(hc) for hc in spec_hex_colors]
+            self.dvu_spec_sensitivity_factor = mode_settings.get(
+                "spectrum_sensitivity", 1.0)
+            self.dvu_spec_smoothing_factor = mode_settings.get(
+                "spectrum_smoothing", 0.2)
+            self.dvu_spec_grow_downwards = mode_settings.get(
+                "spectrum_grow_downwards", False)
+            self._dvu_smoothed_spec_band_powers = np.zeros(
+                len(self.dvu_spec_band_colors))  # Reset smoothed powers
+            print(f"AVM DEBUG (_apply_settings_for_current_mode): Dual VU operational settings (incl. spectrum) applied.")
 
     def refresh_audio_devices(self):
         if self.is_capturing:
@@ -678,69 +681,75 @@ class AudioVisualizerManager(QObject):
         if not self.is_capturing:
             return
         if self.current_visualization_mode == "classic_spectrum_bars":
-            band_powers_raw = self._calculate_n_band_powers( 
+            band_powers_raw = self._calculate_n_band_powers(
+                # No override, uses global_sensitivity
                 fft_magnitudes, rate, mono_chunk_size, NUMBER_OF_BANDS)
             self._smoothed_band_powers = (self.smoothing_factor * band_powers_raw) + \
-                                         ((1.0 - self.smoothing_factor) * self._smoothed_band_powers)
-            pad_colors = self._map_spectrum_bars_to_pads(self._smoothed_band_powers)
+                                        ((1.0 - self.smoothing_factor)
+                                          * self._smoothed_band_powers)
+            pad_colors = self._map_spectrum_bars_to_pads(
+                self._smoothed_band_powers)
             self.pad_data_ready.emit(pad_colors)
         elif self.current_visualization_mode == "pulse_wave_matrix":
             if mono_chunk_size > 0 and len(fft_magnitudes) > 0:
-                loudness_scaling_factor = 20000.0 
-                overall_loudness = np.mean(fft_magnitudes) / loudness_scaling_factor
+                loudness_scaling_factor = 20000.0
+                overall_loudness = np.mean(
+                    fft_magnitudes) / loudness_scaling_factor
             else:
                 overall_loudness = 0.0
-            overall_loudness_norm = min(1.0, max(0.0, overall_loudness / 1.0)) 
-            pad_colors = self._map_pulse_wave_to_pads(overall_loudness_norm) 
+            overall_loudness_norm = min(1.0, max(0.0, overall_loudness / 1.0))
+            pad_colors = self._map_pulse_wave_to_pads(overall_loudness_norm)
             self.pad_data_ready.emit(pad_colors)
         elif self.current_visualization_mode == "dual_vu_spectrum":
-            # Calculate overall loudness (simple average for now)
+            # --- VU Meter Level Calculation ---
             if mono_chunk_size > 0 and len(fft_magnitudes) > 0:
-                # This scaling factor might need to be different from pulse wave's
-                # or spectrum bar's internal scaling. Let's use a common approach for now.
-                loudness_scaling_factor_vu = 20000.0 # Tunable
-                overall_loudness_raw = np.mean(fft_magnitudes) / loudness_scaling_factor_vu
+                loudness_scaling_factor_vu = 20000.0
+                overall_loudness_raw = np.mean(
+                    fft_magnitudes) / loudness_scaling_factor_vu
             else:
                 overall_loudness_raw = 0.0
-            # Normalize loudness for VU meter (0.0 to 1.0)
-            # The '1.0' divisor here means overall_loudness_raw is expected to be around 0-1.
-            # Adjust if raw values are much larger.
-            vu_level_input = min(1.0, max(0.0, overall_loudness_raw / 1.0)) 
-            # For Phase 1, we don't have the central spectrum yet, so pass None or empty array
-            # Later, we'll calculate spectrum_band_powers here for the central part.
-            # For now, let's pass a dummy array for spectrum_band_powers if the map function expects it.
-            # If _map_dual_vu_to_pads will only handle VU for now, this can be simpler.
-            # Let's assume _map_dual_vu_to_pads will primarily use vu_level_input for now.
-            # For the eventual spectrum part (5 bands):
-            # num_spectrum_bands_for_dvu = 5
-            # spectrum_band_powers = self._calculate_n_band_powers(
-            #     fft_magnitudes, rate, mono_chunk_size, num_spectrum_bands_for_dvu
-            # )
-            # For now, as spectrum part is not drawn:
-            spectrum_band_powers = np.array([]) # Empty for now
-            pad_colors = self._map_dual_vu_to_pads(vu_level_input, spectrum_band_powers)
+            vu_level_input = min(1.0, max(0.0, overall_loudness_raw / 1.0))
+            # --- Central Spectrum Power Calculation ---
+            num_central_spec_bands = len(self.dvu_spec_band_colors)  # e.g., 5
+            # Call with sensitivity_override
+            spec_band_powers_raw = self._calculate_n_band_powers(
+                fft_magnitudes, rate, mono_chunk_size, num_central_spec_bands,
+                sensitivity_override=self.dvu_spec_sensitivity_factor
+            )
+            # Apply smoothing for the central spectrum
+            self._dvu_smoothed_spec_band_powers = (self.dvu_spec_smoothing_factor * spec_band_powers_raw) + \
+                                                    ((1.0 - self.dvu_spec_smoothing_factor)
+                                                   * self._dvu_smoothed_spec_band_powers)
+            pad_colors = self._map_dual_vu_to_pads(
+                vu_level_input, self._dvu_smoothed_spec_band_powers)
             self.pad_data_ready.emit(pad_colors)
 
-    def _calculate_n_band_powers(self, fft_mags: np.ndarray, sr: int, fft_size: int, num_bands: int) -> np.ndarray:
-        if len(fft_mags) == 0 or fft_size == 0 or sr == 0: return np.zeros(num_bands)
+    def _calculate_n_band_powers(self, fft_mags: np.ndarray, sr: int, fft_size: int, num_bands: int, sensitivity_override: float | None = None) -> np.ndarray:
+        if len(fft_mags) == 0 or fft_size == 0 or sr == 0:
+            return np.zeros(num_bands)
         freqs = np.fft.fftfreq(fft_size, 1.0/sr)[:fft_size // 2]
-        if len(freqs) == 0: return np.zeros(num_bands)
+        if len(freqs) == 0:
+            return np.zeros(num_bands)
         min_f, max_f = 20.0, min(sr / 2.0, 20000.0)
-        if min_f >= max_f: return np.zeros(num_bands)
+        if min_f >= max_f:
+            return np.zeros(num_bands)
         edges = np.logspace(np.log10(min_f), np.log10(max_f), num_bands + 1)
-        raw_band_powers_fft_avg = np.zeros(num_bands) 
+        raw_band_powers_fft_avg = np.zeros(num_bands)
         for i in range(num_bands):
-            low_idx, high_idx = np.searchsorted(freqs, edges[i]), np.searchsorted(freqs, edges[i+1])
-            if low_idx < high_idx and high_idx <= len(fft_mags): 
+            low_idx, high_idx = np.searchsorted(
+                freqs, edges[i]), np.searchsorted(freqs, edges[i+1])
+            if low_idx < high_idx and high_idx <= len(fft_mags):
                 avg_p = np.mean(fft_mags[low_idx:high_idx])
-                raw_band_powers_fft_avg[i] = avg_p if not np.isnan(avg_p) else 0.0
-            else: raw_band_powers_fft_avg[i] = 0.0
-        # print(f"AVM DIAGNOSTIC (_calculate_n_band_powers): Raw Avg FFT Band Powers (before scaling/sensitivity): {raw_band_powers_fft_avg}")
-        scaling_factor = 200000.0
-        normalized_powers = raw_band_powers_fft_avg / scaling_factor 
-        # print(f"AVM DIAGNOSTIC (_calculate_n_band_powers): Powers after scaling_factor: {normalized_powers}")
-        normalized_powers *= (self.global_sensitivity * 2.0)
-        # print(f"AVM DIAGNOSTIC (_calculate_n_band_powers): Powers after sensitivity ({self.global_sensitivity:.2f}): {normalized_powers}")
+                raw_band_powers_fft_avg[i] = avg_p if not np.isnan(
+                    avg_p) else 0.0
+            else:
+                raw_band_powers_fft_avg[i] = 0.0
+        # --- MODIFIED: Use override-able sensitivity ---
+        active_sensitivity_factor = sensitivity_override if sensitivity_override is not None else self.global_sensitivity
+        scaling_factor = 200000.0  # This can be tuned
+        normalized_powers = raw_band_powers_fft_avg / scaling_factor
+        # Multiply by 2.0 so a factor of 1.0 is a good baseline
+        normalized_powers *= (active_sensitivity_factor * 2.0)
         return np.clip(normalized_powers, 0.0, 1.0)
 
     def _map_spectrum_bars_to_pads(self, band_powers: np.ndarray) -> list[str]:
@@ -872,82 +881,71 @@ class AudioVisualizerManager(QObject):
         return pad_colors_hex
 
     def _map_dual_vu_to_pads(self, vu_level_input: float, spectrum_band_powers: np.ndarray) -> list[str]:
-        pad_colors_hex = ["#000000"] * 64  # Initialize all pads to black
-        # --- VU Meter Logic (Mono-driven for now) ---
-        # vu_level_input is normalized 0.0 to 1.0
-        # Apply falloff/smoothing to the VU level
-        # self.dvu_falloff_speed_factor: 0.0 (slow) to 1.0 (fast)
-        # A simple linear interpolation for smoothing/falloff:
-        falloff_rate = (self.dvu_falloff_speed_factor * 0.2) + 0.01 # Map 0-1 to e.g. 0.01-0.21
-                                                                # Higher falloff_rate means faster drop
+        pad_colors_hex = ["#000000"] * 64
+        # --- VU Meter Logic ---
+        falloff_rate = (self.dvu_falloff_speed_factor * 0.2) + 0.01
         if vu_level_input > self.dvu_current_level:
-            # Rise quickly, or with some attack smoothing if desired later
             self.dvu_current_level = vu_level_input 
         else:
-            # Falloff
             self.dvu_current_level -= falloff_rate
-            if self.dvu_current_level < 0:
-                self.dvu_current_level = 0.0
-        # Ensure it doesn't exceed the input if input suddenly drops low after being high
-        if self.dvu_current_level < vu_level_input and vu_level_input - self.dvu_current_level > 0.1: # If input is significantly higher
-            pass # Allow it to catch up if input is much higher
-        elif self.dvu_current_level > vu_level_input : # Only apply falloff if current is higher than input
-            pass
-        else: # If current is lower than input, but not by much, let it rise to input
-            self.dvu_current_level = vu_level_input
-        # Define VU meter layout (Example: 2 VUs, each 3 cols wide, 4 rows high)
-        # Left VU: cols 0, 1, 2. Right VU: cols 13, 14, 15
+            if self.dvu_current_level < 0: self.dvu_current_level = 0.0
         vu_cols_left = [0, 1, 2]
         vu_cols_right = [13, 14, 15]
-        vu_height_rows = 4 # Each VU uses 4 rows
-        # Calculate number of segments to light for each VU (0 to 12 for a 3x4 VU)
-        num_segments_total = len(vu_cols_left) * vu_height_rows # e.g., 3*4 = 12 segments
+        vu_height_rows = 4
+        num_segments_total = len(vu_cols_left) * vu_height_rows
         segments_to_light = int(round(self.dvu_current_level * num_segments_total))
-        vu_pad_tuples = [] # Store (col, row_gui) tuples for lit VU segments
-        # Determine lit segments for Left VU (growing upwards)
-        # Segments are numbered 0 (bottom-left of VU) to 11 (top-left of VU, then next col, etc.)
+        vu_pad_tuples = []
         segment_counter = 0
-        for r_vu_internal in range(vu_height_rows): # 0,1,2,3 (bottom to top for VU logic)
-            for c_vu_internal in range(len(vu_cols_left)): # 0,1,2 (left to right within VU block)
+        for r_vu_internal in range(vu_height_rows):
+            for c_vu_internal in range(len(vu_cols_left)):
                 if segment_counter < segments_to_light:
-                    gui_row = (vu_height_rows - 1) - r_vu_internal # Map to GUI row (3 down to 0)
+                    gui_row = (vu_height_rows - 1) - r_vu_internal
                     gui_col_left = vu_cols_left[c_vu_internal]
                     gui_col_right = vu_cols_right[c_vu_internal]
                     vu_pad_tuples.append({'col': gui_col_left, 'row_gui': gui_row, 'segment_prop': (segment_counter + 1) / num_segments_total})
                     vu_pad_tuples.append({'col': gui_col_right, 'row_gui': gui_row, 'segment_prop': (segment_counter + 1) / num_segments_total})
                 segment_counter += 1
-        # Color the VU segments
         for pad_info in vu_pad_tuples:
-            col = pad_info['col']
-            row_gui = pad_info['row_gui']
-            segment_proportion = pad_info['segment_prop'] # How far up the VU this segment is (0.0 to 1.0)
+            col, row_gui, segment_proportion = pad_info['col'], pad_info['row_gui'], pad_info['segment_prop']
             pad_1d_index = row_gui * 16 + col
-            
             chosen_color = self.dvu_low_color
-            if segment_proportion > self.dvu_threshold_mid_factor:
-                chosen_color = self.dvu_mid_color
-            if segment_proportion > self.dvu_threshold_high_factor:
-                chosen_color = self.dvu_high_color
-            # For now, full brightness for lit segments. Brightness modulation can be added later.
-            # Or, use self.dvu_current_level to modulate brightness of all lit segments.
+            if segment_proportion > self.dvu_threshold_high_factor: chosen_color = self.dvu_high_color
+            elif segment_proportion > self.dvu_threshold_mid_factor: chosen_color = self.dvu_mid_color
             h_vu, s_vu, _, a_vu = chosen_color.getHsvF()
-            # Simple brightness: use the current VU level for brightness of all lit segments
-            v_vu_mod = self.dvu_current_level 
-            # Ensure minimum brightness if lit
+            v_vu_mod = min(1.0, max(0.0, self.dvu_current_level * chosen_color.valueF()))
             if v_vu_mod > 0.01 and v_vu_mod < 0.2: v_vu_mod = 0.2
-            v_vu_mod = min(1.0, max(0.0, v_vu_mod * chosen_color.valueF())) # Scale original value
             pad_colors_hex[pad_1d_index] = QColor.fromHsvF(h_vu, s_vu, v_vu_mod, a_vu).name() if v_vu_mod > 0.001 else "#000000"
-        # --- Central Spectrum Logic (Placeholder for Phase 2) ---
-        # if spectrum_band_powers.any(): # Check if we have spectrum data
-        #     num_spec_bands_to_draw = 5
-        #     spec_cols_start = 3
-        #     spec_cols_width_total = 10 # Cols 3-12
-        #     cols_per_spec_band = spec_cols_width_total // num_spec_bands_to_draw # Should be 2
-        #     for i in range(min(len(spectrum_band_powers), num_spec_bands_to_draw)):
-        #         power = spectrum_band_powers[i]
-        #         # ... similar logic to _map_spectrum_bars_to_pads ...
-        #         # ... adapting for different number of rows, column start, and colors ...
-        #         pass
+        # --- Central Spectrum Logic (Implemented) ---
+        if spectrum_band_powers.any():
+            num_spec_bands_to_draw = len(spectrum_band_powers) # Should be 5
+            spec_cols_start = 3
+            spec_cols_width_total = 10 # Cols 3 to 12 inclusive
+            cols_per_spec_band = spec_cols_width_total // num_spec_bands_to_draw # 10 // 5 = 2
+            for i in range(num_spec_bands_to_draw):
+                power = spectrum_band_powers[i]
+                base_color = self.dvu_spec_band_colors[i % len(self.dvu_spec_band_colors)]
+                # Determine how many rows to light for this band (0 to 4)
+                if power >= 0.999: rows_to_light_count = 4
+                else: rows_to_light_count = min(4, int(power * 4.0 + 0.0001))
+                start_col_for_this_band = spec_cols_start + (i * cols_per_spec_band)
+                for col_offset in range(cols_per_spec_band):
+                    actual_col = start_col_for_this_band + col_offset
+                    if actual_col >= 16: continue
+                    for r_gui in range(4): # GUI row 0 (top) to 3 (bottom)
+                        is_lit_this_segment = False
+                        if self.dvu_spec_grow_downwards:
+                            if r_gui < rows_to_light_count:
+                                is_lit_this_segment = True
+                        else: # Grow upwards
+                            if r_gui >= (4 - rows_to_light_count):
+                                is_lit_this_segment = True
+                        if is_lit_this_segment:
+                            pad_1d_index = r_gui * 16 + actual_col
+                            h, s, _, a = base_color.getHsvF()
+                            val_comp = 0.25 + (power * 0.75) if power > 0.01 else 0.0
+                            final_val = min(1.0, max(0.0, val_comp))
+                            if final_val < 0.25 and power > 0.01: final_val = 0.25
+                            pad_colors_hex[pad_1d_index] = QColor.fromHsvF(h, s, final_val, a).name() if final_val > 0 else "#000000"
         return pad_colors_hex
 
     def update_visualization_mode(self, mode_name: str):

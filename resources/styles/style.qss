@@ -1,61 +1,49 @@
 /* AKAI_Fire_RGB_Controller/resources/styles/style.qss */
-
 QWidget {
     background-color: #181818;
     color: #B3B3B3;
     font-family: "Segoe UI", Arial, sans-serif;
     font-size: 10pt;
 }
-
 QMainWindow {
     background-color: #131313;
 }
-
 /* General QPushButton Styling */
 QPushButton {
     background-color: #393939;
     border: 1px solid #4D4D4D;
-    padding: 5px 10px; /* Default padding */
+    padding: 5px 10px;
     border-radius: 3px;
-    min-height: 20px; /* Default min-height */
-    color: #B3B3B3;   /* Default text color for buttons */
+    min-height: 20px;
+    color: #B3B3B3;
 }
-
 QPushButton:hover {
     background-color: #474747;
     border: 1px solid #595959;
 }
-
 QPushButton:pressed {
     background-color: #2E2E2E;
 }
-
 QPushButton:disabled {
     background-color: #2C2C2C;
     color: #595959;
     border-color: #393939;
 }
-
-/* Remove default focus outline from ALL QPushButtons */
 QPushButton:focus {
     outline: none;
-    /* If you want a subtle custom focus border for general buttons: */
-    /* border: 1px solid #606060; */
 }
-
 /* Specific styling for top bar flat buttons */
 QPushButton#PatternUpButton,
 QPushButton#PatternDownButton,
 QPushButton#GridLeftButton,
 QPushButton#GridRightButton {
-    min-height: 10px; /* Override default min-height */
-    padding: 1px 3px; /* Override default padding */
+    min-height: 10px;
+    padding: 1px 3px;
     border: 1px solid #5E5E5E; 
     border-radius: 1px;
     background-color: #868686;
-    color: #1E1E1E; /* Text color for these specific buttons */
+    color: #1E1E1E;
 }
-
 QPushButton#PatternUpButton:hover,
 QPushButton#PatternDownButton:hover,
 QPushButton#GridLeftButton:hover,
@@ -63,33 +51,27 @@ QPushButton#GridRightButton:hover {
     background-color: #9C9C9C;
     border-color: #6F6F6F;
 }
-
 QPushButton#PatternUpButton:pressed,
 QPushButton#PatternDownButton:pressed,
 QPushButton#GridLeftButton:pressed,
 QPushButton#GridRightButton:pressed {
     background-color: #6F6F6F;
 }
-
-/* Specific focus for these flat buttons to match normal border */
 QPushButton#PatternUpButton:focus,
 QPushButton#PatternDownButton:focus,
 QPushButton#GridLeftButton:focus,
 QPushButton#GridRightButton:focus {
-    outline: none;
-    border: 1px solid #5E5E5E; /* Match normal state border */
+    border: 1px solid #5E5E5E;
 }
-
-
 /* Specific styling for Browser Button */
 QPushButton#BrowserButton {
-    min-height: 28px; /* Ensure it matches icon_button_size if text "" */
-    min-width: 28px;  /* Ensure it matches icon_button_size if text "" */
+    min-height: 28px;
+    min-width: 28px;
     padding: 4px;    
     border: 1px solid #5E5E5E;
     border-radius: 2px;
     background-color: #868686;
-    color: #1E1E1E; /* Text color if any, or for icon tint if applicable */
+    color: #1E1E1E;
 }
 QPushButton#BrowserButton:hover {
     background-color: #9C9C9C;
@@ -98,77 +80,40 @@ QPushButton#BrowserButton:hover {
 QPushButton#BrowserButton:pressed {
     background-color: #6F6F6F;
 }
-/* Specific focus for BrowserButton to match normal border */
 QPushButton#BrowserButton:focus {
-    outline: none;
-    border: 1px solid #5E5E5E; /* Match normal state border */
+    border: 1px solid #5E5E5E;
 }
-
-
-/* In style.qss */
 QLabel#OLEDPlayPauseIconLabel {
     background-color: transparent;
     border: none;
-    /* Adjust padding if the icon needs more/less space around it */
     padding: 1px; 
 }
-
-/* Optional: If you want a slight visual feedback on hover for the QLabel icon */
 QLabel#OLEDPlayPauseIconLabel:hover { 
-    /* Example: Make it slightly more opaque or add a temporary effect if desired */
-    qproperty-opacity: 0.8;  /* This needs WA_TranslucentBackground on QLabel */
+    /* This needs WA_TranslucentBackground set on the QLabel in Python to work */
+    /* qproperty-opacity: 0.8; */
 } 
-
-
-
-
 /* Styling for specific flat Reset Buttons in OLED Customizer */
 QPushButton#ResetButton {
     background-color: transparent;
     border: none;
-    padding: 1px 2px;       /* TRY THIS: Add 1px top/bottom padding */
-                            /* This can help center a slightly taller symbol */
-                            /* If it makes button too tall, try 0px top/bottom and rely on min-height */
-    min-height: 24px;       /* TRY THIS: Slightly increase min-height to give more vertical space */
-                            /* Experiment with 21px, 22px, 23px */
-                            /* You want the smallest value that prevents cutoff */
+    padding: 1px 2px;
+    min-height: 24px;
     color: #B3B3B3;
-    font-size: 13pt;        /* Your chosen size */
-    font-weight: bold;      /* Your chosen weight */
+    font-size: 13pt;
+    font-weight: bold;
     border-radius: 2px;
-    /* For vertical alignment of the text/symbol within the button: */
-    /* Qt usually centers text vertically by default in a QPushButton. */
-    /* If it's still not perfectly centered after height/padding adjustments, */
-    /* direct QSS for vertical-align isn't standard for QPushButton text. */
-    /* It's more about providing enough space with height and padding. */
 }
-
 QPushButton#ResetButton:hover {
     background-color: #4A4A4A;
     color: #FFFFFF;
 }
-
 QPushButton#ResetButton:pressed {
     background-color: #333333;
     color: #CCCCCC;
 }
-
 QPushButton#ResetButton:focus {
-    outline: none;
     border: none;
-    /* background-color: #404040; */
 }
-
-
-
-QPushButton:focus {
-    outline: none;
-}
-QPushButton#BrowserButton:focus { /* If BrowserButton still shows blue */
-    outline: none;
-    border: 1px solid #5E5E5E; /* Match its normal border */
-}
-
 
 /* ComboBoxes */
 QComboBox {
@@ -177,31 +122,21 @@ QComboBox {
     border-radius: 3px;
     padding: 3px 5px;
     min-height: 20px;
-    color: #B3B3B3; /* Ensure text color is set */
+    color: #B3B3B3;
 }
-
 QComboBox:focus {
-    outline: none;
-    border: 1px solid #606060; /* Subtle focus border for combo boxes */
+    border: 1px solid #606060;
 }
-
 QComboBox::drop-down {
     border: none;
     background-color: #434343;
     width: 20px;
-    border-top-right-radius: 3px; /* Match main border radius */
+    border-top-right-radius: 3px;
     border-bottom-right-radius: 3px;
 }
-
 QComboBox::down-arrow {
-    image: url(none); /* You might want a custom arrow here if you remove this */
-    /* For a simple Unicode arrow:
-    qproperty-text: "▼";
-    font-size: 8pt;
-    padding-right: 2px; 
-    */
+    image: url(none);
 }
-
 QComboBox QAbstractItemView { 
     background-color: #313131;
     border: 1px solid #4D4D4D;
@@ -209,14 +144,12 @@ QComboBox QAbstractItemView {
     color: #B3B3B3;
     padding: 2px;
 }
-
 /* StatusBar */
 QStatusBar {
     background-color: #101010; 
     color: #999999;
     font-size: 9pt;
 }
-
 /* Pad Buttons */
 QPushButton#PadButton { 
     background-color: #161616; 
@@ -228,17 +161,14 @@ QPushButton#PadButton {
 QPushButton#PadButton:hover {
     border: 1px solid #525252;
 }
-QPushButton#PadButton:focus { /* Ensure pad buttons also don't get unwanted focus rect */
-    outline: none;
-    border: 1px solid #404040; /* Subtle focus for pads */
+QPushButton#PadButton:focus {
+    border: 1px solid #404040;
 }
-
 /* General QLabel (if not overridden by objectName) */
 QLabel {
     padding: 2px;
-    background-color: transparent; /* Make sure QLabels are transparent by default */
+    background-color: transparent;
 }
-
 /* GroupBoxes */
 QGroupBox {
     font-weight: bold;
@@ -257,14 +187,6 @@ QGroupBox::title {
     left: 10px; 
     color: #999999;
 }
-/* For the top strip group box if title is removed and border set to none in Python */
-QGroupBox#TopStripDeviceControls { /* Assuming you might set this objectName in Python */
-    border: none;
-    margin-top: 0px;
-    padding-top: 0px;
-}
-
-
 /* Sliders */
 QSlider::groove:horizontal {
     border: 1px solid #474747;
@@ -283,8 +205,7 @@ QSlider::handle:horizontal {
 QSlider::handle:horizontal:hover {
     background: #757575;
 }
-
-QSlider::groove:vertical { /* For Hue Slider if its default styling is used */
+QSlider::groove:vertical {
     border: 1px solid #474747;
     width: 8px;
     background: #313131;
@@ -301,57 +222,45 @@ QSlider::handle:vertical {
 QSlider::handle:vertical:hover {
     background: #757575;
 }
-
-/* ScrollBar Styling - Dark, Thin, No Arrows */
+/* ScrollBar Styling */
 QScrollBar:vertical {
-    border: none; /* No border around the scrollbar track */
-    background: #222222; /* Dark background for the scrollbar track area */
-    width: 8px;          /* Width of the vertical scrollbar - thin */
+    border: none;
+    background: #222222;
+    width: 8px;
     margin: 0px 0px 0px 0px;
 }
 QScrollBar::handle:vertical {
-    background: #4A4A4A;    /* Darker grey for the draggable handle */
-    min-height: 25px;       /* Minimum height of the handle */
-    border-radius: 4px;     /* Rounded corners for the handle */
-    /* border: 1px solid #333333; */ /* Optional: very dark border for handle, or none */
+    background: #4A4A4A;
+    min-height: 25px;
+    border-radius: 4px;
 }
 QScrollBar::handle:vertical:hover {
-    background: #5A5A5A;    /* Slightly lighter handle on hover */
+    background: #5A5A5A;
 }
 QScrollBar::handle:vertical:pressed {
-    background: #383838;    /* Darker handle when pressed */
+    background: #383838;
 }
-
-/* Hide the up and down arrow buttons completely */
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     border: none;
     background: none;
     height: 0px;
-    width: 0px; /* Ensure width is also zeroed for consistency */
-    subcontrol-position: top; /* Still needed for proper layout even if hidden */
+    width: 0px;
+    subcontrol-position: top;
     subcontrol-origin: margin;
 }
-/* QScrollBar::sub-line:vertical {
-    subcontrol-position: bottom;
-} */ /* Not strictly needed if height is 0 */
-
-/* The page (track) area above and below the handle */
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-    background: none; /* Makes the track seamless */
+    background: none;
 }
-
-/* Horizontal Scrollbar Styling - Dark, Thin, No Arrows */
 QScrollBar:horizontal {
     border: none;
     background: #222222;
-    height: 8px;         /* Height of the horizontal scrollbar - thin */
+    height: 8px;
     margin: 0px 0px 0px 0px;
 }
 QScrollBar::handle:horizontal {
     background: #4A4A4A;
     min-width: 25px;
     border-radius: 4px;
-    /* border: 1px solid #333333; */
 }
 QScrollBar::handle:horizontal:hover {
     background: #5A5A5A;
@@ -359,47 +268,47 @@ QScrollBar::handle:horizontal:hover {
 QScrollBar::handle:horizontal:pressed {
     background: #383838;
 }
-
-/* Hide the left and right arrow buttons completely */
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     border: none;
     background: none;
     width: 0px;
-    height: 0px; /* Ensure height is also zeroed */
-    subcontrol-position: left; /* Still needed for proper layout even if hidden */
+    height: 0px;
+    subcontrol-position: left;
     subcontrol-origin: margin;
 }
-/* QScrollBar::sub-line:horizontal {
-    subcontrol-position: right;
-} */ /* Not strictly needed if width is 0 */
-
-/* The page (track) area left and right of the handle */
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
     background: none;
 }   
-
-
 /* LineEdits */
 QLineEdit {
     background-color: #232323;
     border: 1px solid #474747;
     border-radius: 3px;
-    padding: 3px 5px;
+    padding: 1px 3px;
     color: #B3B3B3;
-    min-height: 20px;
+    min-height: 18px;
 }
 QLineEdit:focus {
-    outline: none;
-    border: 1px solid #606060; /* Subtle focus border for line edits */
+    border: 1px solid #606060;
 }
-
+/* Specific style for the Hex input */
+QLineEdit#HexColorInputLineEdit {
+    font-weight: bold;
+    text-align: center;
+    border: 1px solid #4D4D4D; 
+    border-radius: 3px;
+    padding: 1px 3px;
+    min-height: 18px;
+}
+QLineEdit#HexColorInputLineEdit:focus {
+    border: 1px solid #60a0ff;
+}
 /* Main Color Preview Swatch */
 QLabel#MainColorPreview {
     border: 1px solid #595959;
     border-radius: 3px;
     font-weight: bold;
 }
-
 /* Custom Swatch Buttons */
 QPushButton#CustomSwatchButton {
     background-color: #282828; 
@@ -410,310 +319,116 @@ QPushButton#CustomSwatchButton {
 QPushButton#CustomSwatchButton:hover {
     border: 1px solid #7A7A7A;
 }
-QPushButton#CustomSwatchButton:focus { /* Ensure these also don't get unwanted focus rect */
-    outline: none;
-    border: 1px dashed #606060; /* Subtle focus for swatches */
+QPushButton#CustomSwatchButton:focus {
+    border: 1px dashed #606060;
 }
-
-
-/* In style.qss */
-QGroupBox#ColorPickerManagerGroup {
-    font-weight: bold; 
-    border: 1px solid #404040;
-    border-radius: 4px;
-    margin-top: 5px;     /* REDUCED from 6px or 10px */
-    padding-top: 5px;    /* REDUCED from 8px or 15px - enough space for title */
-    padding-left: 5px;
-    padding-right: 5px;  /* This provides padding INSIDE the group box on the right */
-    padding-bottom: 5px; 
+/* My Colors Buttons */
+QPushButton#SwatchAddButton, QPushButton#SwatchClearAllButton {
+    padding: 2px 8px;
+    min-height: 20px;
 }
-
-QGroupBox#ColorPickerManagerGroup::title {
-    subcontrol-origin: margin;
-    subcontrol-position: top left; 
-    padding: 0 5px; 
-    left: 10px; 
-    color: #999999;
+/* QTabWidget */
+QTabWidget::pane {
+    border: 1px solid #383838;
+    background-color: #1E1E1E;
+    border-top-color: transparent;
+    margin-top: -1px;
 }
-
-/* Adjust general QLineEdit or specific ones for RGB height if needed */
-QLineEdit { /* General style */
-    background-color: #232323;
-    border: 1px solid #474747;
-    border-radius: 3px;
-    padding: 1px 3px; /* Try 1px top/bottom, 3px left/right */
-    color: #B3B3B3;
-    min-height: 18px; /* Try a slightly smaller min-height */
+QTabBar::tab {
+    background-color: #2D2D2D;
+    color: #A0A0A0;
+    border: 1px solid #383838;
+    border-bottom-color: #383838;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    min-width: 100px;
+    padding: 5px 10px;
+    margin-right: 2px;
 }
-QLineEdit:focus {
-    outline: none;
-    border: 1px solid #606060; 
+QTabBar::tab:hover {
+    background-color: #3A3A3A;
+    color: #E0E0E0;
 }
-
-/* Specific style for the Hex input to be targeted for dynamic background */
-QLineEdit#HexColorInputLineEdit { /* Ensure you set this objectName in Python */
-    font-weight: bold;
-    text-align: center;
-    /* Base border, radius, padding will be inherited or set dynamically */
-    /* For example, if you want a different default border for it before color is applied */
-    border: 1px solid #4D4D4D; 
-    border-radius: 3px;
-    padding: 1px 3px; /* Match general QLineEdit or specific need */
-    min-height: 18px; /* Match general QLineEdit or specific need */
+QTabBar::tab:selected {
+    background-color: #1E1E1E;
+    color: #E0E0E0;
+    border-color: #383838;
+    border-bottom-color: #1E1E1E;
+    margin-bottom: -1px;
 }
-QLineEdit#HexColorInputLineEdit:focus {
-    border: 1px solid #60a0ff; /* Custom focus for hex input */
+QTabBar::tab:!selected {
+    margin-top: 2px;
 }
-
-
-/* QDial Styling - Dark Metallic to match physical black knobs */
-QDial {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #1F1F1F, stop: 1 #151515);
-    border: 2px solid #333333;
-    border-radius: 21px;
-    color: #FFFFFF;
-}
-
-QDial::handle {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #666666, stop: 1 #444444);
-    border: 1px solid #555555;
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
-    margin: -4px;
-}
-
-QDial::handle:hover {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #777777, stop: 1 #555555);
-    border-color: #666666;
-}
-
-QDial::handle:pressed {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #444444, stop: 1 #222222);
-    border-color: #333333;
-}
-
-/* Specific styling for named dial controls */
-QDial#knob_volume_top_right,
-QDial#knob_pan_top_right,
-QDial#knob_filter_top_right,
-QDial#knob_resonance_top_right,
-QDial#SelectKnobTopRight {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #0A0A0A, stop: 1 #050505);
-    border: 2px solid #1A1A1A;
-    border-radius: 21px;
-    color: #FFFFFF;
-}
-
-QDial#knob_volume_top_right::handle,
-QDial#knob_pan_top_right::handle,
-QDial#knob_filter_top_right::handle,
-QDial#knob_resonance_top_right::handle,
-QDial#SelectKnobTopRight::handle {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                    stop: 0 #5c5b5b, stop: 0.5 #414141, stop: 1 #2c2c2c);
-    border: 1px solid #808080;
-    border-radius: 5px;
-    width: 10px;
-    height: 10px;
-}
-
-QDial#knob_volume_top_right::handle:hover,
-QDial#knob_pan_top_right::handle:hover,
-QDial#knob_filter_top_right::handle:hover,
-QDial#knob_resonance_top_right::handle:hover,
-QDial#SelectKnobTopRight::handle:hover {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                    stop: 0 #5c5b5b, stop: 0.5 #414141, stop: 1 #2c2c2c);
-    border-color: #909090;
-}
-
-QDial#knob_volume_top_right::handle:pressed,
-QDial#knob_pan_top_right::handle:pressed,
-QDial#knob_filter_top_right::handle:pressed,
-QDial#knob_resonance_top_right::handle:pressed,
-QDial#SelectKnobTopRight::handle:pressed {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                    stop: 0 #5c5b5b, stop: 0.5 #414141, stop: 1 #2c2c2c);
-    border-color: #606060;
-}
-
-/* Specific styling for triangle navigation labels */
-QLabel#TriangleGridLeft, QLabel#TriangleGridRight {
-    font-size: 20pt !important;
-    font-weight: bold !important;
-    color: #B3B3B3 !important;
-    background-color: transparent !important;
-    border: none !important;
-    padding: 2px !important;
-    text-align: center;
-}
-
-QLabel#TriangleGridLeft:hover, QLabel#TriangleGridRight:hover {
-    color: #FFFFFF !important;
-}
-
-/* Additional dial styling for main controller knobs */
-QDial#MainControllerDial {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                    stop: 0 #0A0A0A, stop: 0.5 #070707, stop: 1 #050505);
-    border: 3px solid #1A1A1A;
-    border-radius: 20px;
-    min-width: 40px;
-    min-height: 40px;
-}
-
-QDial#MainControllerDial::handle {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                    stop: 0 #757575, stop: 0.5 #656565, stop: 1 #555555);
-    border: 2px solid #858585;
-    border-radius: 6px;
-    width: 12px;
-    height: 12px;
-}
-
-QDial#MainControllerDial::handle:hover {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                    stop: 0 #858585, stop: 0.5 #757575, stop: 1 #656565);
-    border-color: #505050;
-}
-
-QDial#MainControllerDial::handle:pressed {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                    stop: 0 #555555, stop: 0.5 #454545, stop: 1 #353535);
-    border-color: #3d3d3d;
-}
-
-/* Eyedropper Button in Color Picker */
+/* Eyedropper Button */
 QPushButton#EyedropperToolButton {
-    background-color: #3F3F3F; /* Normal, slightly distinct background */
+    background-color: #3F3F3F;
     border: 1px solid #555555;
-    color: #D0D0D0;            /* Color for the emoji or icon */
-    padding: 2px;              /* Adjust for icon visual balance */
+    color: #D0D0D0;
+    padding: 2px;
     border-radius: 3px;
-    min-width: 26px;           /* Adjust based on your icon/emoji size */
+    min-width: 26px;
     max-width: 26px;
-    min-height: 20px;          /* Try to match height of QLineEdits */
-    max-height: 20px;          /* Or slightly less if padding makes it too tall */
-    font-size: 12pt;           /* Adjust if using emoji and it's too small/big */
+    min-height: 20px;
+    max-height: 20px;
+    font-size: 12pt;
 }
-
 QPushButton#EyedropperToolButton:hover {
     background-color: #4A4A4A;
     border-color: #6A6A6A;
 }
-
 QPushButton#EyedropperToolButton:pressed {
     background-color: #353535;
 }
-
-QPushButton#EyedropperToolButton:checked { /* Style when active/checked */
-    background-color: #0078D7; /* A distinct "active" blue */
+QPushButton#EyedropperToolButton:checked {
+    background-color: #0078D7;
     color: white;
     border: 1px solid #005BA1;
 }
-
 QPushButton#EyedropperToolButton:checked:hover {
-    background-color: #0088F7; /* Lighter blue on hover when checked */
+    background-color: #0088F7;
 }
-
 QPushButton#EyedropperToolButton:checked:pressed {
-    background-color: #006AC7; /* Darker blue on press when checked */
+    background-color: #006AC7;
+}
+QPushButton#EyedropperToolButton:focus, QPushButton#EyedropperToolButton:checked:focus {
+    border: 1px solid #2A9FFF;
+}
+/* Stateful button for visualizer */
+#RightPanelWidget QPushButton[active="true"] {
+    background-color: #285238;
+    border: 1px solid #389055;
+}
+#RightPanelWidget QPushButton[active="true"]:hover {
+    background-color: #316644;
 }
 
-QPushButton#EyedropperToolButton:focus {
-    outline: none;
-    /* If you want a specific focus for the eyedropper button when NOT checked: */
-    /* border: 1px solid #707070; */
-}
-QPushButton#EyedropperToolButton:checked:focus {
-    outline: none;
-    border: 1px solid #2A9FFF; /* Distinct focus when checked */
+/* --- MODIFIED QDIAL STYLING (FINAL VERSION) --- */
+/* This is a more specific selector to prevent styles from being overridden on connect/update */
+QGroupBox#TopStripDeviceControls QDial {
+    background-color: #101010;  /* Dark solid background */
+    border: 2px solid #2A2A2A;  /* Slightly lighter border for definition */
+    border-radius: 21px; /* The values here should match your knob's size/2 + border */
 }
 
-/* Styling for Add and Clear All buttons in My Colors */
-QPushButton#SwatchAddButton, QPushButton#SwatchClearAllButton {
-    padding: 2px 8px;    /* Reduced padding: 2px top/bottom, 8px left/right */
-    min-height: 20px;     /* Adjust if needed, e.g., 18px or 20px */
-    border-radius: 3px;   /* Keep consistent radius */
-    /* background-color and border will be inherited from general QPushButton, or you can override */
-    /* Example of slightly different base if needed: */
-    /* background-color: #3C3C3C; */
-    /* border: 1px solid #505050; */
+/* Styles the indicator handle/tick for the specific hardware knobs */
+QGroupBox#TopStripDeviceControls QDial::handle {
+    background-color: #404040; /* Solid dark grey handle */
+    border: 1px solid #555555;
+    border-radius: 5px; /* Adjust for desired handle shape */
+    width: 10px;        /* Adjust for handle size */
+    height: 10px;       /* Adjust for handle size */
 }
 
-/* NOTE: QSS does NOT affect HTML content inside QTextBrowser.
-   To style links in the app guide, use <style> blocks in the HTML string itself. */
-
-
-/* In style.qss */
-
-/* ... (your existing QSS rules) ... */
-
-/* QTabWidget - Main container for the tabs and panes */
-QTabWidget::pane {
-    border: 1px solid #383838; /* Border around the content area of the tabs */
-    background-color: #1E1E1E; /* Background of the content area */
-    border-top-color: transparent; /* Often looks better if top border is part of tab bar */
-    margin-top: -1px; /* Pull pane up slightly to meet tab bar bottom */
+/* Handle hover state for a little interactivity */
+QGroupBox#TopStripDeviceControls QDial::handle:hover {
+    background-color: #505050; /* Slightly lighter on hover */
+    border-color: #666666;
 }
 
-/* QTabBar - The bar that holds all the tabs */
-QTabBar {
-    /* This allows more control over individual tab styling rather than styling QTabBar directly */
-    /* qproperty-drawBase: 0; /* Optional: Try this if you have issues with default base drawing */
+/* Styling for any other generic QDial widgets in the application (like animator speed) */
+/* This will not affect the top strip knobs because their selector is more specific */
+QDial {
+    background-color: #313131;
+    border: 1px solid #474747;
+    color: #FFFFFF;
 }
-
-/* QTabBar::tab - Individual tabs */
-QTabBar::tab {
-    background-color: #2D2D2D; /* Default background for non-selected tabs */
-    color: #A0A0A0;           /* Default text color for non-selected tabs */
-    border: 1px solid #383838;
-    border-bottom-color: #383838; /* Match pane border or make different if selected */
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-    min-width: 100px;         /* Minimum width for each tab */
-    padding: 5px 10px;        /* Padding inside each tab */
-    margin-right: 2px;        /* Space between tabs */
-}
-
-QTabBar::tab:hover {
-    background-color: #3A3A3A; /* Background on hover for non-selected tabs */
-    color: #E0E0E0;
-}
-
-QTabBar::tab:selected {
-    background-color: #1E1E1E; /* Background of the selected tab (matches pane) */
-    color: #E0E0E0;           /* Text color for selected tab */
-    border-color: #383838;
-    border-bottom-color: #1E1E1E; /* Make bottom border blend with pane */
-    /* To make the selected tab appear "connected" to the pane: */
-    margin-bottom: -1px; /* Pull selected tab down slightly */
-}
-
-/* Style for tabs that are not selected but are "behind" the selected one, if applicable
-   (usually not needed if ::pane margin-top and selected tab margin-bottom are handled) */
-QTabBar::tab:!selected {
-    margin-top: 2px; /* Push non-selected tabs up slightly */
-}
-
-/* Optional: Styling for the tear indicator if tabs are scrollable/tearable */
-/* QTabBar::tear {
-    image: url(path/to/your/tear_indicator.png);
-    width: 10px;
-} */
-
-/* Optional: Styling for scroll arrows if tabs overflow */
-/* QTabBar QToolButton { 
-    background-color: #3D3D3D;
-    border: 1px solid #505050;
-    border-radius: 2px;
-}
-QTabBar QToolButton:hover {
-    background-color: #4A4A4A;
-} */

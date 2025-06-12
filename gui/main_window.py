@@ -461,9 +461,9 @@ class MainWindow(QMainWindow):
 
     def _create_hardware_top_strip(self) -> QGroupBox:
         top_strip_group = QGroupBox("Device Controls")
-        top_strip_group.setTitle("")
+        top_strip_group.setObjectName("TopStripDeviceControls")
         top_strip_group.setStyleSheet(
-            "QGroupBox { border: none; margin: 0px; padding: 0px; background-color: transparent; }"
+            "QGroupBox#TopStripDeviceControls { border: none; margin: 0px; padding: 0px; background-color: transparent; }"
         )
         top_strip_group.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -473,7 +473,6 @@ class MainWindow(QMainWindow):
         knob_size = 42
         flat_button_size = QSize(36, 10)
         icon_button_size = QSize(28, 28)
-        play_pause_icon_label_size = QSize(20, 20)
         triangle_label_style = "font-size: 9pt; color: #B0B0B0; font-weight: bold;"
         top_strip_main_layout.addStretch(1)
         section1_knobs_widget = QWidget()
@@ -487,7 +486,7 @@ class MainWindow(QMainWindow):
             knob_v_container.setAlignment(Qt.AlignmentFlag.AlignCenter)              
             knob = QDial()
             knob.setFixedSize(QSize(knob_size, knob_size))
-            knob.setNotchesVisible(True)
+            knob.setNotchesVisible(False)
             knob.setObjectName(attr_name)
             knob.setRange(0, 127)
             knob.setValue(64)
@@ -495,50 +494,36 @@ class MainWindow(QMainWindow):
             setattr(self, attr_name, knob)
             knob_v_container.addWidget(knob)
             section1_knobs_layout_INTERNAL.addLayout(knob_v_container)
+            
         top_strip_main_layout.addWidget(
             section1_knobs_widget, 0, Qt.AlignmentFlag.AlignVCenter)
-        
         pattern_buttons_widget = QWidget()
         pattern_buttons_layout_INTERNAL = QVBoxLayout(pattern_buttons_widget)
         pattern_buttons_layout_INTERNAL.setContentsMargins(0, 0, 0, 0)
         pattern_buttons_layout_INTERNAL.setSpacing(2)
-        pattern_buttons_layout_INTERNAL.setAlignment(
-            Qt.AlignmentFlag.AlignCenter)
+        pattern_buttons_layout_INTERNAL.setAlignment(Qt.AlignmentFlag.AlignCenter)
         triangle_up_label = QLabel("▲")
         triangle_up_label.setStyleSheet(triangle_label_style)
         triangle_up_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pattern_buttons_layout_INTERNAL.addWidget(triangle_up_label)
-        
         self.button_pattern_up_top_right = QPushButton("")
         self.button_pattern_up_top_right.setObjectName("PatternUpButton")
         self.button_pattern_up_top_right.setFixedSize(flat_button_size)
-        # --- MODIFIED FOR PATTERN UP BUTTON ---
-        self.button_pattern_up_top_right.setToolTip(
-            "Cycle & Apply Next Active OLED Graphic") 
+        self.button_pattern_up_top_right.setToolTip("Cycle & Apply Next Active OLED Graphic") 
         self.button_pattern_up_top_right.clicked.connect(self._handle_cycle_active_oled_next_request)
-        # --- END MODIFICATION ---
-        pattern_buttons_layout_INTERNAL.addWidget(
-            self.button_pattern_up_top_right)
-        
+        pattern_buttons_layout_INTERNAL.addWidget(self.button_pattern_up_top_right)
         self.button_pattern_down_top_right = QPushButton("")
         self.button_pattern_down_top_right.setObjectName("PatternDownButton")
         self.button_pattern_down_top_right.setFixedSize(flat_button_size)
-        # --- MODIFIED FOR PATTERN DOWN BUTTON ---
-        self.button_pattern_down_top_right.setToolTip(
-            "Cycle & Apply Previous Active OLED Graphic")
+        self.button_pattern_down_top_right.setToolTip("Cycle & Apply Previous Active OLED Graphic")
         self.button_pattern_down_top_right.clicked.connect(self._handle_cycle_active_oled_prev_request)
-        # --- END MODIFICATION ---
-        pattern_buttons_layout_INTERNAL.addWidget(
-            self.button_pattern_down_top_right)
-        
+        pattern_buttons_layout_INTERNAL.addWidget(self.button_pattern_down_top_right)
         triangle_down_label = QLabel("▼")
         triangle_down_label.setStyleSheet(triangle_label_style)
         triangle_down_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pattern_buttons_layout_INTERNAL.addWidget(triangle_down_label)
-        top_strip_main_layout.addWidget(
-            pattern_buttons_widget, 0, Qt.AlignmentFlag.AlignVCenter)
+        top_strip_main_layout.addWidget(pattern_buttons_widget, 0, Qt.AlignmentFlag.AlignVCenter)
         top_strip_main_layout.addSpacing(4)
-        
         self.oled_container_widget_ref = QWidget()
         oled_container_layout = QVBoxLayout(self.oled_container_widget_ref)
         oled_container_layout.setContentsMargins(0, 0, 0, 0)
@@ -546,130 +531,91 @@ class MainWindow(QMainWindow):
         oled_container_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         customize_label = QLabel("Click To Customize")
         customize_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        customize_label.setStyleSheet(
-            "font-size: 7pt; color: #999999; padding-bottom: 1px;")
+        customize_label.setStyleSheet("font-size: 7pt; color: #999999; padding-bottom: 1px;")
         oled_container_layout.addWidget(customize_label)
         self.oled_display_mirror_widget = QLabel()
         oled_w, oled_h = OLED_MIRROR_WIDTH, OLED_MIRROR_HEIGHT
         display_scale = OLED_MIRROR_SCALE
-        self.oled_display_mirror_widget.setFixedSize(
-            QSize(int(oled_w * display_scale), int(oled_h * display_scale)))
+        self.oled_display_mirror_widget.setFixedSize(QSize(int(oled_w * display_scale), int(oled_h * display_scale)))
         self.oled_display_mirror_widget.setObjectName("OLEDMirror")
-        self.oled_display_mirror_widget.setStyleSheet(
-            "QLabel#OLEDMirror { background-color: black; border: 1px solid #383838; }")
-        self.oled_display_mirror_widget.setAlignment(
-            Qt.AlignmentFlag.AlignCenter)
-        self.oled_display_mirror_widget.setToolTip(
-            "Click to open OLED Customizer")
+        self.oled_display_mirror_widget.setStyleSheet("QLabel#OLEDMirror { background-color: black; border: 1px solid #383838; }")
+        self.oled_display_mirror_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.oled_display_mirror_widget.setToolTip("Click to open OLED Customizer")
         self._setup_oled_mirror_clickable()
         blank_pixmap = QPixmap(self.oled_display_mirror_widget.size())
         blank_pixmap.fill(Qt.GlobalColor.black)
         self.oled_display_mirror_widget.setPixmap(blank_pixmap)
         oled_container_layout.addWidget(self.oled_display_mirror_widget)
-        top_strip_main_layout.addWidget(
-            self.oled_container_widget_ref, 0, Qt.AlignmentFlag.AlignVCenter)
-        
+        top_strip_main_layout.addWidget(self.oled_container_widget_ref, 0, Qt.AlignmentFlag.AlignVCenter)
         self.oled_play_pause_icon_label = QLabel()
         self.oled_play_pause_icon_label.setObjectName("OLEDPlayPauseIconLabel")
-        self.oled_play_pause_icon_label.setToolTip(
-            "Toggle OLED Active Graphic Pause/Play")
+        self.oled_play_pause_icon_label.setToolTip("Toggle OLED Active Graphic Pause/Play")
         try:
             icon_path = get_resource_path("resources/icons/play-pause.png")
             if os.path.exists(icon_path):
                 base_pixmap = QPixmap(icon_path)
                 if not base_pixmap.isNull():
-                    scaled_width = int(base_pixmap.width() * 0.5)
-                    scaled_height = int(base_pixmap.height() * 0.5)
+                    scaled_width = int(base_pixmap.width() * 0.5); scaled_height = int(base_pixmap.height() * 0.5)
                     min_icon_dim = 16
-                    scaled_width = max(min_icon_dim, scaled_width)
-                    scaled_height = max(min_icon_dim, scaled_height)
-                    scaled_pixmap = base_pixmap.scaled(
-                        scaled_width, scaled_height, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    scaled_width = max(min_icon_dim, scaled_width); scaled_height = max(min_icon_dim, scaled_height)
+                    scaled_pixmap = base_pixmap.scaled(scaled_width, scaled_height, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                     self.oled_play_pause_icon_label.setPixmap(scaled_pixmap)
-                    self.oled_play_pause_icon_label.setFixedSize(
-                        scaled_pixmap.size())
+                    self.oled_play_pause_icon_label.setFixedSize(scaled_pixmap.size())
                 else:
-                    self.oled_play_pause_icon_label.setText("P/P")
-                    self.oled_play_pause_icon_label.setFixedSize(20, 20)
+                    self.oled_play_pause_icon_label.setText("P/P"); self.oled_play_pause_icon_label.setFixedSize(20, 20)
             else:
-                self.oled_play_pause_icon_label.setText("P/P")
-                self.oled_play_pause_icon_label.setFixedSize(20, 20)
-        except Exception as e_icon:
-            self.oled_play_pause_icon_label.setText("P/P")
-            self.oled_play_pause_icon_label.setFixedSize(20, 20)
-        self.oled_play_pause_icon_label.setCursor(
-            Qt.CursorShape.PointingHandCursor)
+                self.oled_play_pause_icon_label.setText("P/P"); self.oled_play_pause_icon_label.setFixedSize(20, 20)
+        except Exception:
+            self.oled_play_pause_icon_label.setText("P/P"); self.oled_play_pause_icon_label.setFixedSize(20, 20)
+        self.oled_play_pause_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self.oled_play_pause_icon_label.setEnabled(False)
         self.oled_play_pause_icon_label.installEventFilter(self)
-        top_strip_main_layout.addWidget(
-            self.oled_play_pause_icon_label, 0, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
+        top_strip_main_layout.addWidget(self.oled_play_pause_icon_label, 0, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
         top_strip_main_layout.addSpacing(5)
-        
         self.button_browser_top_right = QPushButton("")
         self.button_browser_top_right.setObjectName("BrowserButton")
         self.button_browser_top_right.setFixedSize(icon_button_size)
-        self.button_browser_top_right.setToolTip(
-            "Browser / Toggle Sampler / Activate Cued OLED Item") # Tooltip might need update if cueing role is removed
-        top_strip_main_layout.addWidget(
-            self.button_browser_top_right, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.button_browser_top_right.setToolTip("Browser / Toggle Sampler / Activate Cued OLED Item")
+        top_strip_main_layout.addWidget(self.button_browser_top_right, 0, Qt.AlignmentFlag.AlignVCenter)
         top_strip_main_layout.addSpacing(5)
-        
         select_knob_container_widget = QWidget()
-        select_knob_container_vbox_INTERNAL = QVBoxLayout(
-            select_knob_container_widget)
+        select_knob_container_vbox_INTERNAL = QVBoxLayout(select_knob_container_widget)
         select_knob_container_vbox_INTERNAL.setContentsMargins(0, 0, 0, 0)
-        select_knob_container_vbox_INTERNAL.setAlignment(
-            Qt.AlignmentFlag.AlignCenter)
+        select_knob_container_vbox_INTERNAL.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.knob_select_top_right = QDial()          
         self.knob_select_top_right.setFixedSize(QSize(knob_size, knob_size))
-        self.knob_select_top_right.setNotchesVisible(True)
+        self.knob_select_top_right.setNotchesVisible(False)
         self.knob_select_top_right.setObjectName("SelectKnobTopRight")
         self.knob_select_top_right.setToolTip("Select Item / Press to Apply")
-        select_knob_container_vbox_INTERNAL.addWidget(
-            self.knob_select_top_right)
-        top_strip_main_layout.addWidget(
-            select_knob_container_widget, 0, Qt.AlignmentFlag.AlignVCenter)
+        select_knob_container_vbox_INTERNAL.addWidget(self.knob_select_top_right)
+        top_strip_main_layout.addWidget(select_knob_container_widget, 0, Qt.AlignmentFlag.AlignVCenter)
         top_strip_main_layout.addSpacing(5)
-        
         grid_buttons_widget = QWidget()
-        grid_buttons_widget.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred)
+        grid_buttons_widget.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred)
         grid_buttons_layout_INTERNAL = QHBoxLayout(grid_buttons_widget)
         grid_buttons_layout_INTERNAL.setContentsMargins(0, 0, 0, 0)
         grid_buttons_layout_INTERNAL.setSpacing(1)        
         grid_buttons_layout_INTERNAL.setAlignment(Qt.AlignmentFlag.AlignCenter)
         triangle_left_label = QLabel("◀")
         triangle_left_label.setObjectName("TriangleGridLeft")
-        triangle_left_label.setAlignment(
-            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-        grid_buttons_layout_INTERNAL.addWidget(
-            triangle_left_label, 0, Qt.AlignmentFlag.AlignVCenter)
+        triangle_left_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+        grid_buttons_layout_INTERNAL.addWidget(triangle_left_label, 0, Qt.AlignmentFlag.AlignVCenter)
         self.button_grid_nav_focus_prev_top_right = QPushButton("")
-        self.button_grid_nav_focus_prev_top_right.setObjectName(
-            "GridLeftButton")
-        self.button_grid_nav_focus_prev_top_right.setFixedSize(
-            flat_button_size)
-        self.button_grid_nav_focus_prev_top_right.setToolTip(
-            "Cycle Navigation Focus (Prev)")
-        grid_buttons_layout_INTERNAL.addWidget(
-            self.button_grid_nav_focus_prev_top_right, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.button_grid_nav_focus_prev_top_right.setObjectName("GridLeftButton")
+        self.button_grid_nav_focus_prev_top_right.setFixedSize(flat_button_size)
+        self.button_grid_nav_focus_prev_top_right.setToolTip("Cycle Navigation Focus (Prev)")
+        grid_buttons_layout_INTERNAL.addWidget(self.button_grid_nav_focus_prev_top_right, 0, Qt.AlignmentFlag.AlignVCenter)
         grid_buttons_layout_INTERNAL.addSpacing(6)
         self.button_grid_nav_focus_next_top_right = QPushButton("")
-        self.button_grid_nav_focus_next_top_right.setObjectName(
-            "GridRightButton")
-        self.button_grid_nav_focus_next_top_right.setFixedSize(
-            flat_button_size)
-        self.button_grid_nav_focus_next_top_right.setToolTip(
-            "Cycle Navigation Focus (Next)")
+        self.button_grid_nav_focus_next_top_right.setObjectName("GridRightButton")
+        self.button_grid_nav_focus_next_top_right.setFixedSize(flat_button_size)
+        self.button_grid_nav_focus_next_top_right.setToolTip("Cycle Navigation Focus (Next)")
         grid_buttons_layout_INTERNAL.addWidget(self.button_grid_nav_focus_next_top_right, 0, Qt.AlignmentFlag.AlignVCenter)
         triangle_right_label = QLabel("▶")
         triangle_right_label.setObjectName("TriangleGridRight")
-        triangle_right_label.setAlignment(
-            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-        grid_buttons_layout_INTERNAL.addWidget(
-            triangle_right_label, 0, Qt.AlignmentFlag.AlignVCenter)
-        top_strip_main_layout.addWidget(
-            grid_buttons_widget, 0, Qt.AlignmentFlag.AlignVCenter)
+        triangle_right_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        grid_buttons_layout_INTERNAL.addWidget(triangle_right_label, 0, Qt.AlignmentFlag.AlignVCenter)
+        top_strip_main_layout.addWidget(grid_buttons_widget, 0, Qt.AlignmentFlag.AlignVCenter)
         top_strip_main_layout.addStretch(1)
         return top_strip_group
 
@@ -740,7 +686,6 @@ class MainWindow(QMainWindow):
         if self.right_panel_layout_v is None:
             print("MW CRITICAL ERROR: _populate_right_panel - self.right_panel_layout_v is None!")
             return
-        
         # --- MIDI Connection Group (Output) ---
         connection_group = QGroupBox("🔌 MIDI Output")
         connection_layout = QHBoxLayout(connection_group)
@@ -756,37 +701,30 @@ class MainWindow(QMainWindow):
         connection_layout.addWidget(self.port_combo_direct_ref, 1)
         connection_layout.addWidget(self.connect_button_direct_ref)
         self.right_panel_layout_v.addWidget(connection_group)
-
-        # --- Color Picker Manager UI (Now contains integrated tools) ---
+        # --- Color Picker Manager UI ---
         if self.color_picker_manager:
             self.right_panel_layout_v.addWidget(self.color_picker_manager)
-        
         # --- Static Layouts Manager UI ---
         if self.static_layouts_manager:
             self.right_panel_layout_v.addWidget(self.static_layouts_manager)
-
-        # --- Audio Visualizer UI Section ---
-        if self.audio_visualizer_ui_manager: 
-            self.audio_visualizer_group_box = QGroupBox("🎵 Audio Visualizer (WIP)")
-            # self.audio_visualizer_group_box.setObjectName("AudioVisualizerGroup") # Optional for QSS
-            visualizer_main_layout = QVBoxLayout(self.audio_visualizer_group_box)
-            visualizer_main_layout.addWidget(self.audio_visualizer_ui_manager)
-            self.right_panel_layout_v.addWidget(self.audio_visualizer_group_box)
+        # --- Audio Visualizer UI Section (MODIFIED) ---
+        if self.audio_visualizer_ui_manager:
+            # We also set its title here to remove the "(WIP)" tag.
+            self.audio_visualizer_ui_manager.setTitle("🎵 Audio Visualizer")
+            self.right_panel_layout_v.addWidget(self.audio_visualizer_ui_manager)
         else:
             print("MW WARNING: _populate_right_panel - self.audio_visualizer_ui_manager is None. Visualizer UI not added.")
-        
         # --- Container for Bottom Buttons (App Guide & DOOM) ---
         bottom_buttons_container_widget = QWidget()
-        # ... (rest of bottom buttons layout as before) ...
         bottom_buttons_outer_layout = QVBoxLayout(bottom_buttons_container_widget)
         bottom_buttons_outer_layout.setContentsMargins(0, 10, 0, 0)
         actual_buttons_hbox = QHBoxLayout()
         actual_buttons_hbox.addStretch(1)
-        self.app_guide_button = QPushButton("🚀 App Guide && Hotkey List")
+        self.app_guide_button = QPushButton("🚀 App Guide & Hotkey List")
         self.app_guide_button.setToolTip("Open the App Guide and Hotkey List")
         self.app_guide_button.setObjectName("AppGuideButton")
         self.app_guide_button.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
-        if hasattr(self, '_open_app_guide_dialog'): # Check method exists
+        if hasattr(self, '_open_app_guide_dialog'):
             self.app_guide_button.clicked.connect(self._open_app_guide_dialog)
         actual_buttons_hbox.addWidget(self.app_guide_button)
         actual_buttons_hbox.addSpacing(10)
@@ -794,13 +732,12 @@ class MainWindow(QMainWindow):
         self.button_lazy_doom.setToolTip("Launch the LazyDOOM on OLED experience!")
         self.button_lazy_doom.setObjectName("LazyDoomButton")
         self.button_lazy_doom.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
-        if hasattr(self, '_toggle_doom_mode'): # Check method exists
+        if hasattr(self, '_toggle_doom_mode'):
             self.button_lazy_doom.clicked.connect(self._toggle_doom_mode)
         actual_buttons_hbox.addWidget(self.button_lazy_doom)
         actual_buttons_hbox.addStretch(1)
         bottom_buttons_outer_layout.addLayout(actual_buttons_hbox)
         self.right_panel_layout_v.addWidget(bottom_buttons_container_widget)
-        
         self.right_panel_layout_v.addStretch(1)
 
     def _populate_left_panel(self):
@@ -892,8 +829,6 @@ class MainWindow(QMainWindow):
         self._oled_nav_item_count = 0
         if self.current_oled_nav_target_widget and hasattr(self.current_oled_nav_target_widget, 'get_navigation_item_count'):
             self._oled_nav_item_count = self.current_oled_nav_target_widget.get_navigation_item_count()
-
-# In class MainWindow(QMainWindow):
 
     def _connect_signals(self):
         # AkaiFireController raw pad/button events
@@ -1377,7 +1312,6 @@ class MainWindow(QMainWindow):
             self.audio_visualizer_ui_manager.configure_button_clicked.connect(
                 self._open_visualizer_settings_dialog)
 
-
     def _populate_visualizer_audio_devices(self):
         """
         Called on startup to populate the audio device dropdown in the visualizer UI.
@@ -1506,9 +1440,6 @@ class MainWindow(QMainWindow):
         self._update_global_ui_interaction_states()
     # self._visualizer_toggle_in_progress = False
 
-# In class MainWindow(QMainWindow):
-
-    # Name and parameter updated
     def _handle_visualizer_toggle_request(self, requested_to_enable: bool):
         # print(
         #     f"MW TRACE: === _handle_visualizer_toggle_request START === (Request is to enable: {requested_to_enable})")
@@ -1556,8 +1487,6 @@ class MainWindow(QMainWindow):
 
         # print(
         #     f"MW TRACE: === _handle_visualizer_toggle_request END === (Guard is: {self._visualizer_is_being_toggled})")
-
-
 
     def _on_avm_capture_started(self):
         # print("MW TRACE: _on_avm_capture_started slot called (AVM signaled capture has started).")
@@ -1609,24 +1538,13 @@ class MainWindow(QMainWindow):
             self._visualizer_is_being_toggled = False # Release guard here too
         #     print("MW TRACE: _handle_visualizer_capture_error - AVM not capturing, guard released directly.")
 
-
-
     def _sync_visualizer_button_to_avm_state(self):
-        # print("MW TRACE: _sync_visualizer_button_to_avm_state called.") # Optional for debugging
         if self.audio_visualizer_ui_manager and self.audio_visualizer_manager:
             current_avm_capturing_state = self.audio_visualizer_manager.is_capturing
-            # print(f"MW TRACE: AVM is_capturing: {current_avm_capturing_state} - Will update AVM_UI_Manager buttons.") # Optional
-            
-            # Simply call the UI manager's method to update button visibility/state
-            self.audio_visualizer_ui_manager.update_visualizer_action_buttons(current_avm_capturing_state)
-            
-            # Also ensure MainWindow's logical flag is in sync with AVM's state
+            self.audio_visualizer_ui_manager.update_start_stop_button_appearance(
+                current_avm_capturing_state)
             if self.is_visualizer_active != current_avm_capturing_state:
-            #     print(f"MW TRACE: Syncing self.is_visualizer_active from {self.is_visualizer_active} to {current_avm_capturing_state}") # Optional
                 self.is_visualizer_active = current_avm_capturing_state
-        # else:
-        #     print("MW WARN: _sync_visualizer_button_to_avm_state - AVM or AVM UI Manager not available.")
-
 
     def _try_start_visualizer_capture(self):
         """Attempts to start visualizer capture and updates UI based on success."""
@@ -2248,19 +2166,20 @@ class MainWindow(QMainWindow):
             self.gui_knob4.setRange(0, 127); self.gui_knob4.setValue(64)
             # print("MW TRACE: Knob 4 Config: GLOBAL RESONANCE/UNASSIGNED.")
 
-
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
-        
-        # Determine primary active mode
-        # Use AVM's is_capturing as the source of truth for visualizer_active_now
         is_visualizer_active_now = self.audio_visualizer_manager.is_capturing if self.audio_visualizer_manager else False
         is_sampler_active_now = self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False
         is_anim_playing_now = False
         if self.animator_manager and self.animator_manager.active_sequence_model:
             is_anim_playing_now = self.animator_manager.active_sequence_model.get_is_playing()
         is_doom_active_now = self.is_doom_mode_active
-
+        # --- Top Strip Hardware Knobs ---
+        # Disable all hardware GUI knobs if visualizer or DOOM is active
+        knobs_should_be_enabled = is_connected and not is_visualizer_active_now and not is_doom_active_now
+        for knob in [self.gui_knob1, self.gui_knob2, self.gui_knob3, self.gui_knob4, self.knob_select_top_right]:
+            if knob:
+                knob.setEnabled(knobs_should_be_enabled)
         # --- DOOM Mode takes precedence ---
         if is_doom_active_now:
             if self.animator_manager: self.animator_manager.set_overall_enabled_state(False)
@@ -2271,7 +2190,6 @@ class MainWindow(QMainWindow):
             if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(False)
             if self.button_lazy_doom: self.button_lazy_doom.setEnabled(True)
             if self.app_guide_button: self.app_guide_button.setEnabled(False)
-            # Disable menu actions
             actions_to_disable = ['new_sequence_action', 'save_sequence_as_action', 'undo_action', 
                                     'redo_action', 'copy_action', 'cut_action', 'paste_action',
                                     'duplicate_action', 'delete_action', 'add_blank_global_action',
@@ -2280,15 +2198,10 @@ class MainWindow(QMainWindow):
                 if hasattr(self, action_name) and getattr(self, action_name):
                     getattr(self, action_name).setEnabled(False)
             return
-
-        # --- Non-DOOM states ---
+        # --- Normal Mode States ---
         can_use_animator = is_connected and not is_sampler_active_now and not is_visualizer_active_now
         can_paint_direct = is_connected and not is_sampler_active_now and not is_visualizer_active_now and not is_anim_playing_now
         can_toggle_sampler = is_connected and not is_anim_playing_now and not is_visualizer_active_now
-        can_toggle_visualizer_start = is_connected and not is_sampler_active_now and not is_anim_playing_now # Can we *start* it?
-        can_toggle_visualizer_stop = is_connected and is_visualizer_active_now # Can we *stop* it?
-
-
         # Animator Manager and related QActions
         if self.animator_manager:
             self.animator_manager.set_overall_enabled_state(can_use_animator)
@@ -2299,7 +2212,6 @@ class MainWindow(QMainWindow):
                 can_redo_anim = bool(self.animator_manager.active_sequence_model._redo_stack)
             if self.animator_manager.sequence_timeline_widget:
                 has_sel_anim = len(self.animator_manager.sequence_timeline_widget.get_selected_item_indices()) > 0
-
             if hasattr(self, 'new_sequence_action'): self.new_sequence_action.setEnabled(can_use_animator)
             if hasattr(self, 'save_sequence_as_action'): self.save_sequence_as_action.setEnabled(can_use_animator and has_frames_anim)
             if hasattr(self, 'undo_action'): self.undo_action.setEnabled(can_use_animator and can_undo_anim)
@@ -2311,63 +2223,27 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'delete_action'): self.delete_action.setEnabled(can_use_animator and has_sel_anim)
             if hasattr(self, 'play_pause_action'): self.play_pause_action.setEnabled(can_use_animator and has_frames_anim)
             if hasattr(self, 'add_blank_global_action'): self.add_blank_global_action.setEnabled(can_use_animator)
-
         # Screen Sampler Manager
         if self.screen_sampler_manager:
             self.screen_sampler_manager.update_ui_for_global_state(is_connected, can_toggle_sampler)
-
         # Audio Visualizer UI Manager
         if self.audio_visualizer_ui_manager:
-            self.audio_visualizer_ui_manager.setEnabled(is_connected) # Overall panel enable
-            
-            # Update visibility/enable state of start/stop buttons based on actual AVM capture state
-            # This is now the primary way to control these buttons' appearance from MainWindow.
-            self.audio_visualizer_ui_manager.update_visualizer_action_buttons(is_visualizer_active_now)
-
-            # Enable/disable other interactive elements within the AVM UI Panel
-            # (device combo, mode combo, setup button)
-            # These should be disabled if visualizer is running, or if it *cannot* be started.
-            can_interact_with_avm_setup = is_connected and not is_visualizer_active_now and can_toggle_visualizer_start
+            self.audio_visualizer_ui_manager.setEnabled(is_connected)
+            if self.audio_visualizer_ui_manager.start_stop_button:
+                self.audio_visualizer_ui_manager.start_stop_button.setEnabled(is_connected)
+            if self.audio_visualizer_ui_manager.setup_button:
+                self.audio_visualizer_ui_manager.setup_button.setEnabled(is_connected)
+            can_change_disruptive_settings = not is_visualizer_active_now
             if hasattr(self.audio_visualizer_ui_manager, 'set_interactive_elements_enabled'):
-                self.audio_visualizer_ui_manager.set_interactive_elements_enabled(can_interact_with_avm_setup)
-            
-            # Explicitly set enabled state for individual start/stop buttons if they exist
-            # This logic is a bit redundant if update_visualizer_action_buttons also sets enabled, but adds safety.
-            if self.audio_visualizer_ui_manager.start_visualizer_button:
-                self.audio_visualizer_ui_manager.start_visualizer_button.setEnabled(can_toggle_visualizer_start)
-            if self.audio_visualizer_ui_manager.stop_visualizer_button:
-                self.audio_visualizer_ui_manager.stop_visualizer_button.setEnabled(can_toggle_visualizer_stop)
-
-
+                self.audio_visualizer_ui_manager.set_interactive_elements_enabled(can_change_disruptive_settings)
         # Pad Grid and Direct Painting Tools
-        if hasattr(self, 'pad_grid_frame') and self.pad_grid_frame:
-            self.pad_grid_frame.setEnabled(can_paint_direct)
-        
-        if self.color_picker_manager: 
-            self.color_picker_manager.set_enabled(can_paint_direct)
-            if self.color_picker_manager.eyedropper_button: 
-                self.color_picker_manager.eyedropper_button.setEnabled(can_paint_direct)
-                if self.color_picker_manager.eyedropper_button.isChecked() != self.is_eyedropper_mode_active:
-                    self.color_picker_manager.eyedropper_button.blockSignals(True)
-                    self.color_picker_manager.eyedropper_button.setChecked(self.is_eyedropper_mode_active)
-                    self.color_picker_manager.eyedropper_button.blockSignals(False)
-
-        if hasattr(self, 'eyedropper_action') and self.eyedropper_action:
-            self.eyedropper_action.setEnabled(can_paint_direct)
-            if self.eyedropper_action.isChecked() != self.is_eyedropper_mode_active:
-                self.eyedropper_action.setChecked(self.is_eyedropper_mode_active)
-        
-        if hasattr(self, 'static_layouts_manager') and self.static_layouts_manager:
-            self.static_layouts_manager.set_enabled_state(can_paint_direct)
-        
-        if hasattr(self, 'oled_play_pause_icon_label') and self.oled_play_pause_icon_label:
-            self.oled_play_pause_icon_label.setEnabled(is_connected)
-            if is_connected and self.oled_display_manager and hasattr(self.oled_display_manager, 'is_active_graphic_paused'):
-                self._update_oled_play_pause_button_ui(self.oled_display_manager.is_active_graphic_paused())
-        
+        if self.pad_grid_frame: self.pad_grid_frame.setEnabled(can_paint_direct)
+        if self.color_picker_manager: self.color_picker_manager.set_enabled(can_paint_direct)
+        if hasattr(self, 'eyedropper_action') and self.eyedropper_action: self.eyedropper_action.setEnabled(can_paint_direct)
+        if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(can_paint_direct)
+        if self.oled_play_pause_icon_label: self.oled_play_pause_icon_label.setEnabled(is_connected)
         if self.button_lazy_doom: self.button_lazy_doom.setEnabled(is_connected and not is_visualizer_active_now and not is_sampler_active_now and not is_anim_playing_now)
         if self.app_guide_button: self.app_guide_button.setEnabled(True)
-
 
 # init here
 
@@ -3074,84 +2950,62 @@ class MainWindow(QMainWindow):
         else:
             self.status_bar.showMessage("Static layout applied to pads.", 2500)    
 
+# In class MainWindow(QMainWindow):
+
     def _on_physical_encoder_rotated(self, encoder_id: int, delta: int):
-        # print(f"MW TRACE: _on_physical_encoder_rotated - Encoder ID: {encoder_id}, Delta: {delta}, AnimatorPlaying: {self.is_animator_playing}, SamplerActive: {self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False}") # Optional
+        # --- ADDED: Gatekeeper for Visualizer Mode ---
+        if self.is_visualizer_active:
+            return  # Do nothing if the visualizer is running
+        # --- END ADDED ---
+
         target_knob: QDial | None = None
         step: int = 0
-        handler_to_call = None # Stores the method to call after updating GUI knob
+        handler_to_call = None
 
         sampler_is_currently_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        # self.is_animator_playing is updated by a signal from AnimatorManagerWidget
         animator_is_currently_playing = self.is_animator_playing
 
         if encoder_id == 1:
-            target_knob = self.gui_knob1 # Physical knob 1 always affects the GUI representation of self.gui_knob1
+            target_knob = self.gui_knob1
             if sampler_is_currently_active:
-                # Sampler is ACTIVE: Physical Encoder 1 controls Sampler Brightness
-                # The GUI knob self.gui_knob1 should be configured for sampler brightness (range 0-400)
-                # by _update_contextual_knob_configs.
-                step = self.SAMPLER_FACTOR_KNOB_STEP # e.g., 4 for a 0-400 range (SAMPLER_BRIGHTNESS_KNOB_MIN/MAX)
+                step = self.SAMPLER_FACTOR_KNOB_STEP
                 handler_to_call = self._on_sampler_brightness_knob_changed
-                # print(f"MW TRACE: Physical Encoder 1 -> Sampler Brightness (step {step})") # Debug
             else:
-                # Sampler is INACTIVE (or animator playing, or global mode):
-                # Physical Encoder 1 controls Global Pad Brightness.
-                # The GUI knob self.gui_knob1 should be configured for global brightness (range 0-100)
-                # by _update_contextual_knob_configs.
-                step = self.GLOBAL_BRIGHTNESS_KNOB_STEP # e.g., 1 for a 0-100 range
+                step = self.GLOBAL_BRIGHTNESS_KNOB_STEP
                 handler_to_call = self._on_global_brightness_knob_changed
-                # print(f"MW TRACE: Physical Encoder 1 -> Global Brightness (step {step})") # Debug
 
-        elif encoder_id == 2: # Physical Encoder 2
-            target_knob = self.gui_knob2 # Affects GUI representation of self.gui_knob2
+        elif encoder_id == 2:
+            target_knob = self.gui_knob2
             if sampler_is_currently_active:
-                # Sampler ACTIVE: Physical Encoder 2 controls Sampler Saturation
                 step = self.SAMPLER_FACTOR_KNOB_STEP
                 handler_to_call = self._on_sampler_saturation_knob_changed
-            # else: Knob 2 is unassigned for physical control in animator playing or global mode
 
-        elif encoder_id == 3: # Physical Encoder 3
-            target_knob = self.gui_knob3 # Affects GUI representation of self.gui_knob3
+        elif encoder_id == 3:
+            target_knob = self.gui_knob3
             if sampler_is_currently_active:
-                # Sampler ACTIVE: Physical Encoder 3 controls Sampler Contrast
                 step = self.SAMPLER_FACTOR_KNOB_STEP
                 handler_to_call = self._on_sampler_contrast_knob_changed
-            # else: Knob 3 is unassigned for physical control in animator playing or global mode
 
-        elif encoder_id == 4: # Physical Encoder 4
-            target_knob = self.gui_knob4 # Affects GUI representation of self.gui_knob4
+        elif encoder_id == 4:
+            target_knob = self.gui_knob4
             if animator_is_currently_playing:
-                # Animator PLAYING: Physical Encoder 4 controls Animator Speed
                 step = self.ANIMATOR_SPEED_KNOB_STEP
                 handler_to_call = self._on_animator_speed_knob_changed
             elif sampler_is_currently_active:
-                # Sampler ACTIVE (and animator not playing): Physical Encoder 4 controls Sampler Hue Shift
                 step = self.SAMPLER_HUE_KNOB_STEP
                 handler_to_call = self._on_sampler_hue_knob_changed
-            # else: Knob 4 is unassigned for physical control in global mode (neither sampler nor animator playing)
 
-        # If a target knob and action were determined
         if target_knob and handler_to_call and step != 0:
             current_gui_value = target_knob.value()
             new_gui_value = current_gui_value + (delta * step)
-
-            # Clamp to the target knob's current min/max range.
-            # These ranges are (and must be) set by _update_contextual_knob_configs to match the context.
-            new_gui_value = max(target_knob.minimum(), min(new_gui_value, target_knob.maximum()))
+            new_gui_value = max(target_knob.minimum(), min(
+                new_gui_value, target_knob.maximum()))
 
             if new_gui_value != current_gui_value:
-                # Block signals on the GUI knob, set its value, then unblock
                 target_knob.blockSignals(True)
                 target_knob.setValue(new_gui_value)
                 target_knob.blockSignals(False)
-
-                # Manually call the appropriate handler with the new GUI knob value.
-                # This handler will then update the model (SamplerManager, AnimatorManager, or global_brightness)
-                # and also handle its own OLED feedback.
                 handler_to_call(new_gui_value)
-                # print(f"MW TRACE: Physical Enc {encoder_id} (delta {delta}) -> GUI Knob '{target_knob.objectName()}' new value {new_gui_value} for handler {handler_to_call.__name__}") # Optional
-        # else: # Optional
-            # print(f"MW TRACE: No action for physical encoder {encoder_id} (delta {delta}) in current context (Sampler: {sampler_is_currently_active}, Animator: {animator_is_currently_playing}).")
 
     def _on_global_brightness_knob_changed(self, gui_knob_value: int):
         """

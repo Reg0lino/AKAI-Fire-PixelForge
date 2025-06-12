@@ -1,8 +1,5 @@
 # AKAI_Fire_RGB_Controller/gui/visualizer_settings_dialog.py
 
-# TODO get the third tab working
-# TODO add a way to save the current settings as a new profile
-# TODO make sure the settings can be changed DURING playback
 # TODO hardware inputs like knobs for brightness and speed as well as a dedicated start button
 # TODO make sure the signals dont fuck up and override eachother, (knob 1 glb brightness)
 
@@ -281,8 +278,7 @@ class VisualizerSettingsDialog(QDialog):
         dv_page = self._create_dual_vu_settings_tab()
         self.tab_widget.addTab(dv_page, "🎶 Dual VU")
         dv_page.setProperty("mode_key", "dual_vu_spectrum")
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText("OK")
         buttons.accepted.connect(self._apply_all_and_accept)
         buttons.rejected.connect(self.reject)
@@ -1149,17 +1145,15 @@ class VisualizerSettingsDialog(QDialog):
 
     def _update_dvu_scheme_combobox(self):
         print(f"VSD TRACE: _update_dvu_scheme_combobox ENTERED. Current self ID: {id(self)}")
-        # --- Check attribute directly ---
         dvu_combo_attr = getattr(self, 'dvu_scheme_combobox', 'ATTRIBUTE_DOES_NOT_EXIST')
         if dvu_combo_attr == 'ATTRIBUTE_DOES_NOT_EXIST':
             print(f"  VSD TRACE (_update_dvu_scheme_combobox): self.dvu_scheme_combobox attribute DOES NOT EXIST on self (ID: {id(self)}). Returning.")
             return
-        elif self.dvu_scheme_combobox is None:
+        elif self.dvu_scheme_combobox is None: # This refers to the attribute value after getattr confirmed existence
             print(f"  VSD TRACE (_update_dvu_scheme_combobox): self.dvu_scheme_combobox IS None on self (ID: {id(self)}). Returning.")
             return
         else:
             print(f"  VSD TRACE (_update_dvu_scheme_combobox): self.dvu_scheme_combobox EXISTS and is NOT None. Object: {self.dvu_scheme_combobox} (ID: {id(self.dvu_scheme_combobox)})")
-        # --- Proceed with original logic if combobox is valid ---
         self.dvu_scheme_combobox.blockSignals(True)
         name_to_select_after_rebuild = getattr(self, '_last_saved_dvu_scheme_name', None)
         type_to_select_after_rebuild = "user_dvu" if name_to_select_after_rebuild else None
@@ -1340,98 +1334,6 @@ class VisualizerSettingsDialog(QDialog):
 
         self.dvu_scheme_name_edit.clear()
         print(f"VSD INFO: Scheme '{name}' for Dual VU & Spectrum saved.")
-
-    def _update_dvu_scheme_combobox(self):
-        print("VSD TRACE: _update_dvu_scheme_combobox called")
-        if not (hasattr(self, 'dvu_scheme_combobox') and self.dvu_scheme_combobox):
-            print("  DVU ComboBox not found, returning.")
-            return
-
-        self.dvu_scheme_combobox.blockSignals(True)
-
-        # --- MODIFICATION: Try to preserve selection based on name and type, or use last saved ---
-        previously_selected_text = self.dvu_scheme_combobox.currentText()
-        previously_selected_data = self.dvu_scheme_combobox.currentData()
-
-        # If a scheme was just saved, try to select that one
-        name_to_select_after_rebuild = getattr(
-            self, '_last_saved_dvu_scheme_name', None)
-        type_to_select_after_rebuild = "user_dvu" if name_to_select_after_rebuild else None
-
-        # If not just saved, try to keep old selection
-        if not name_to_select_after_rebuild and previously_selected_data:
-            if previously_selected_data.get("type") == "user_dvu":
-                name_to_select_after_rebuild = previously_selected_data.get(
-                    "name")
-                type_to_select_after_rebuild = "user_dvu"
-            elif previously_selected_data.get("type") == "prefab_dvu":
-                name_to_select_after_rebuild = previously_selected_data.get(
-                    "key")  # Prefabs store 'key'
-                type_to_select_after_rebuild = "prefab_dvu"
-
-        self.dvu_scheme_combobox.clear()
-
-        user_profile_count = 0
-        user_dvu_profiles = {
-            # We don't need the actual settings here, just the names
-            name: data["dual_vu_spectrum"]
-            for name, data in self.color_profiles.items()
-            if isinstance(data, dict) and "dual_vu_spectrum" in data
-        }
-        sorted_user_profile_names = sorted(user_dvu_profiles.keys())
-
-        if sorted_user_profile_names:
-            self.dvu_scheme_combobox.addItem("--- My Saved Schemes ---")
-            self.dvu_scheme_combobox.model().item(
-                self.dvu_scheme_combobox.count()-1).setEnabled(False)
-            for profile_name in sorted_user_profile_names:
-                self.dvu_scheme_combobox.addItem(f"{profile_name} (User)", userData={
-                                                 "name": profile_name, "type": "user_dvu"})
-                user_profile_count += 1
-
-        prefabs_dvu = self.PREFAB_PALETTES.get("dual_vu_spectrum", {})
-        if prefabs_dvu:  # Assuming you might add DVU prefabs later
-            if user_profile_count > 0:
-                self.dvu_scheme_combobox.insertSeparator(
-                    self.dvu_scheme_combobox.count())
-            else:
-                self.dvu_scheme_combobox.addItem("--- Prefab Schemes ---")
-                self.dvu_scheme_combobox.model().item(
-                    self.dvu_scheme_combobox.count()-1).setEnabled(False)
-            for prefab_key, _ in prefabs_dvu.items():
-                display_name = prefab_key.replace("_", " ").title()
-                self.dvu_scheme_combobox.addItem(f"{display_name} (Prefab)", userData={
-                                                 "key": prefab_key, "type": "prefab_dvu"})
-
-        if self.dvu_scheme_combobox.count() == 0 or \
-           (self.dvu_scheme_combobox.count() == 1 and not self.dvu_scheme_combobox.itemData(0)):  # Only a header
-            self.dvu_scheme_combobox.clear()
-            self.dvu_scheme_combobox.addItem("No schemes available")
-            self.dvu_scheme_combobox.model().item(0).setEnabled(False)
-
-        # Attempt to re-select the item
-        final_idx_to_select = -1
-        if name_to_select_after_rebuild and type_to_select_after_rebuild:
-            for i in range(self.dvu_scheme_combobox.count()):
-                item_data = self.dvu_scheme_combobox.itemData(i)
-                if item_data and item_data.get("type") == type_to_select_after_rebuild:
-                    current_item_name_or_key = item_data.get(
-                        "name") if type_to_select_after_rebuild == "user_dvu" else item_data.get("key")
-                    if current_item_name_or_key == name_to_select_after_rebuild:
-                        final_idx_to_select = i
-                        break
-
-        if final_idx_to_select != -1:
-            self.dvu_scheme_combobox.setCurrentIndex(final_idx_to_select)
-        elif self.dvu_scheme_combobox.count() > 0:  # Fallback to first enabled item
-            for i in range(self.dvu_scheme_combobox.count()):
-                if self.dvu_scheme_combobox.model().item(i).isEnabled():
-                    self.dvu_scheme_combobox.setCurrentIndex(i)
-                    break
-
-        self.dvu_scheme_combobox.blockSignals(False)
-        # Manually call to update button states for the new selection
-        self._on_dvu_scheme_combobox_changed()
 
     def _delete_selected_dvu_scheme_from_combobox(self):
         # Similar to _delete_selected_sb_palette_from_combobox
