@@ -432,3 +432,12 @@ QDial {
     border: 1px solid #474747;
     color: #FFFFFF;
 }
+/* ToolTip Styling */
+QToolTip {
+    background-color: #2D2D2D; /* A slightly lighter dark grey */
+    color: #E0E0E0;            /* A bright, readable text color */
+    border: 1px solid #454545;
+    padding: 4px;              /* Give the text some breathing room */
+    border-radius: 3px;
+    font-size: 9pt;            /* <<< THIS IS THE FIX: Force a specific, normal font size */
+}
