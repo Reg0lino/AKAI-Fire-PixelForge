@@ -17,7 +17,7 @@ USER_PRESETS_APP_FOLDER_NAME = "Akai Fire RGB Controller User Presets"
 from PyQt6.QtCore import Qt, QTimer, QSize, pyqtSignal, QPoint, QEvent, QPointF, QRectF
 from PyQt6.QtGui import (
     QColor, QPalette, QAction, QMouseEvent, QKeySequence, QIcon, QPixmap,
-    QImage, QPainter, QCloseEvent, QKeyEvent, QPen, QBrush, QPolygon
+    QImage, QPainter, QCloseEvent, QKeyEvent, QPen, QBrush, QPolygon, QFont
 )
 
 class StaticKnobWidget(QWidget):
@@ -78,6 +78,55 @@ class StaticKnobWidget(QWidget):
         painter.drawEllipse(indicator_rect)
         painter.restore()
 
+# In main_window.py
+# PLACE this new class after StaticKnobWidget, before MainWindow
+
+
+class KnobLabelOverlay(QWidget):
+    """A transparent overlay widget to draw dynamic labels under the knobs."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.labels = ["", "", "", "", ""]
+        self.knob_x_positions = []
+        self.label_font = QFont("Segoe UI", 7)
+        self.label_color = QColor("#999999")
+
+    def set_knob_x_positions(self, positions: list[int]):
+        """Sets the center X coordinates for each of the 5 knobs."""
+        self.knob_x_positions = positions
+        self.update()
+
+    def set_labels(self, labels: list[str]):
+        """Sets the text for the 5 labels. Use "" for a blank label."""
+        if len(labels) == 5:
+            self.labels = labels
+            self.update()  # Trigger a repaint
+
+
+    def paintEvent(self, event):
+        if not self.knob_x_positions:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setFont(self.label_font)
+        painter.setPen(self.label_color)
+
+        for i, label_text in enumerate(self.labels):
+            if label_text and i < len(self.knob_x_positions):
+                x_center = self.knob_x_positions[i]
+                # CORRECTED: y_pos is now higher up
+                y_pos = self.height() - 30 
+                
+                font_metrics = painter.fontMetrics()
+                text_width = font_metrics.horizontalAdvance(label_text)
+                x = x_center - (text_width / 2)
+                
+                painter.drawText(int(x), y_pos, label_text)
+                
+                
 # --- Project-specific Imports ---
 try:
     from ..utils import get_resource_path
@@ -512,149 +561,124 @@ class MainWindow(QMainWindow):
         # print(f"MW DEBUG: _init_ui_layout - Status bar created and set: {self.status_bar}")
         # print("MW DEBUG: _init_ui_layout COMPLETE")
 
+
     def _create_hardware_top_strip(self) -> QGroupBox:
         from PyQt6.QtWidgets import QStackedWidget
-
-        self.top_strip_group = QGroupBox("Device Controls");
-        self.top_strip_group.setObjectName("TopStripDeviceControls");
+        self.top_strip_group = QGroupBox("Device Controls")
+        self.top_strip_group.setObjectName("TopStripDeviceControls")
         
-        top_strip_main_layout = QHBoxLayout(self.top_strip_group);
-        top_strip_main_layout.setContentsMargins(8, 0, 8, 8);
-        top_strip_main_layout.setSpacing(10);
+        # Main layout for the GroupBox content
+        top_strip_main_layout = QHBoxLayout(self.top_strip_group)
+        top_strip_main_layout.setContentsMargins(8, 2, 8, 18)
+        top_strip_main_layout.setSpacing(10)
         
-        knob_size = 42;
-        flat_button_size = QSize(36, 10);
-        icon_button_size = QSize(28, 28);
-        triangle_label_style = "font-size: 9pt; color: #B0B0B0; font-weight: bold;";
-
-        top_strip_main_layout.addStretch(1);
-
-        # --- Knobs 1-4 ---
-        knob_info_list = [
-            ("knob_volume_top_right", "Global Pad Brightness"), ("knob_pan_top_right", "Pan (Unassigned)"),
-            ("knob_filter_top_right", "Filter (Unassigned)"), ("knob_resonance_top_right", "Resonance (Unassigned)")
-        ];          
-        for attr_name, tooltip_text in knob_info_list:
-            knob_stack = QStackedWidget();
-            knob_stack.setFixedSize(QSize(knob_size, knob_size));
-            knob_stack.setToolTip(tooltip_text); 
-            static_knob_visual = StaticKnobWidget();
-            knob_stack.addWidget(static_knob_visual);
-            functional_dial = QDial();
-            functional_dial.setFixedSize(QSize(knob_size, knob_size));
-            functional_dial.setNotchesVisible(False);
-            functional_dial.setWrapping(False);
-            functional_dial.setObjectName(attr_name);
-            functional_dial.setStyleSheet("background-color: transparent;");
-            knob_stack.addWidget(functional_dial);
-            if attr_name == "knob_volume_top_right": functional_dial.valueChanged.connect(self._handle_knob1_change)
-            elif attr_name == "knob_pan_top_right": functional_dial.valueChanged.connect(self._handle_knob2_change)
-            elif attr_name == "knob_filter_top_right": functional_dial.valueChanged.connect(self._handle_knob3_change)
-            elif attr_name == "knob_resonance_top_right": functional_dial.valueChanged.connect(self._handle_knob4_change)
-            top_strip_main_layout.addWidget(knob_stack, 0, Qt.AlignmentFlag.AlignCenter);
-            setattr(self, attr_name, functional_dial);
-            setattr(self, f"{attr_name}_visual", static_knob_visual);
-            setattr(self, f"{attr_name}_stack", knob_stack);
-
-        # --- Graphics Buttons ---
-        pattern_buttons_layout = QVBoxLayout();
-        pattern_buttons_layout.setSpacing(2);
-        pattern_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignCenter);
-        triangle_up_label = QLabel("▲", styleSheet=triangle_label_style);
-        triangle_up_label.setAlignment(Qt.AlignmentFlag.AlignCenter);
-        self.button_pattern_up_top_right = QPushButton("");
-        self.button_pattern_up_top_right.setObjectName("PatternUpButton");
-        self.button_pattern_up_top_right.setFixedSize(flat_button_size);
-        self.button_pattern_up_top_right.setToolTip("Cycle & Apply Next Active OLED Graphic");
-        self.button_pattern_up_top_right.clicked.connect(self._handle_cycle_active_oled_next_request);
-        graphics_label = QLabel("Graphics", styleSheet="font-size: 7pt; color: #777777; padding-top: 1px; padding-bottom: 1px;");
-        graphics_label.setAlignment(Qt.AlignmentFlag.AlignCenter);
-        self.button_pattern_down_top_right = QPushButton("");
-        self.button_pattern_down_top_right.setObjectName("PatternDownButton");
-        self.button_pattern_down_top_right.setFixedSize(flat_button_size);
-        self.button_pattern_down_top_right.setToolTip("Cycle & Apply Previous Active OLED Graphic");
-        self.button_pattern_down_top_right.clicked.connect(self._handle_cycle_active_oled_prev_request);
-        triangle_down_label = QLabel("▼", styleSheet=triangle_label_style);
-        triangle_down_label.setAlignment(Qt.AlignmentFlag.AlignCenter);
+        knob_size = 42
+        flat_button_size = QSize(36, 10)
+        icon_button_size = QSize(28, 28)
+        # UPDATED: Set font size to 14pt for the grid navigation triangles
+        triangle_label_style = "font-size: 14pt; color: #B0B0B0; font-weight: bold;"
+        top_strip_main_layout.addStretch(1)
+        # Knobs 1-4
+        knob_info = [
+            ("knob_volume_top_right", self._handle_knob1_change),
+            ("knob_pan_top_right", self._handle_knob2_change),
+            ("knob_filter_top_right", self._handle_knob3_change),
+            ("knob_resonance_top_right", self._handle_knob4_change)
+        ]
+        for attr_name, handler_slot in knob_info:
+            knob_stack = QStackedWidget()
+            knob_stack.setFixedSize(QSize(knob_size, knob_size))
+            static_knob_visual = StaticKnobWidget()
+            knob_stack.addWidget(static_knob_visual)
+            functional_dial = QDial()
+            functional_dial.setFixedSize(QSize(knob_size, knob_size))
+            functional_dial.setNotchesVisible(False)
+            functional_dial.setWrapping(False)
+            functional_dial.setObjectName(attr_name)
+            functional_dial.setStyleSheet("background-color: transparent;")
+            functional_dial.valueChanged.connect(handler_slot)
+            knob_stack.addWidget(functional_dial)
+            top_strip_main_layout.addWidget(knob_stack, 0, Qt.AlignmentFlag.AlignCenter)
+            setattr(self, attr_name, functional_dial)
+            setattr(self, f"{attr_name}_visual", static_knob_visual)
+            setattr(self, f"{attr_name}_stack", knob_stack)
+        # Graphics Buttons Layout
+        pattern_buttons_layout = QVBoxLayout()
+        pattern_buttons_layout.setSpacing(2)
+        # Use a smaller font size just for the up/down triangles
+        graphics_triangle_style = "font-size: 9pt; color: #B0B0B0; font-weight: bold;"
+        triangle_up_label = QLabel("▲", styleSheet=graphics_triangle_style)
+        self.button_pattern_up_top_right = QPushButton("")
+        self.button_pattern_up_top_right.setObjectName("PatternUpButton")
+        self.button_pattern_up_top_right.setFixedSize(flat_button_size)
+        graphics_label = QLabel("Graphics", styleSheet="font-size: 7pt; color: #777777; padding-top: 1px; padding-bottom: 1px;")
+        self.button_pattern_down_top_right = QPushButton("")
+        self.button_pattern_down_top_right.setObjectName("PatternDownButton")
+        self.button_pattern_down_top_right.setFixedSize(flat_button_size)
+        triangle_down_label = QLabel("▼", styleSheet=graphics_triangle_style)
         for w in [triangle_up_label, self.button_pattern_up_top_right, graphics_label, self.button_pattern_down_top_right, triangle_down_label]:
-            pattern_buttons_layout.addWidget(w);
-        top_strip_main_layout.addLayout(pattern_buttons_layout);
-
-        # --- OLED Display ---
-        oled_container_layout = QVBoxLayout();
-        oled_container_layout.setSpacing(1);
-        oled_container_layout.setAlignment(Qt.AlignmentFlag.AlignCenter);
-        customize_label = QLabel("Click To Customize", styleSheet="font-size: 7pt; color: #999999; padding-bottom: 1px;");
-        customize_label.setAlignment(Qt.AlignmentFlag.AlignCenter);
-        self.oled_display_mirror_widget = QLabel(objectName="OLEDMirror", toolTip="Click to open OLED Customizer");
-        self.oled_display_mirror_widget.setFixedSize(QSize(int(128 * 1.2), int(64 * 1.2)));
-        self.oled_display_mirror_widget.setStyleSheet("QLabel#OLEDMirror { background-color: black; border: 1px solid #383838; }");
-        blank_pixmap = QPixmap(self.oled_display_mirror_widget.size());
-        blank_pixmap.fill(Qt.GlobalColor.black);
-        self.oled_display_mirror_widget.setPixmap(blank_pixmap);
-        self._setup_oled_mirror_clickable();
-        oled_container_layout.addWidget(customize_label);
-        oled_container_layout.addWidget(self.oled_display_mirror_widget);
-        top_strip_main_layout.addLayout(oled_container_layout);
-
-        # --- Play/Pause Icon (Created with parent, but NOT in a layout) ---
-        self.oled_play_pause_icon_label = QLabel(self.top_strip_group);
-        self.oled_play_pause_icon_label.setObjectName("OLEDPlayPauseIconLabel");
-        self.oled_play_pause_icon_label.setToolTip("Toggle OLED Active Graphic Pause/Play");
-        try:
-            icon_path = get_resource_path(os.path.join("resources", "icons", "play-pause.png"));
-            if os.path.exists(icon_path):
-                base_pixmap = QPixmap(icon_path);
-                if not base_pixmap.isNull():
-                    scaled_pixmap = base_pixmap.scaled(QSize(16, 16), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation);
-                    self.oled_play_pause_icon_label.setPixmap(scaled_pixmap);
-                    self.oled_play_pause_icon_label.setFixedSize(scaled_pixmap.size());
-        except Exception: pass;
-        self.oled_play_pause_icon_label.setCursor(Qt.CursorShape.PointingHandCursor);
-        self.oled_play_pause_icon_label.setEnabled(False);
-        self.oled_play_pause_icon_label.installEventFilter(self);
-        
-        # --- Browser Button ---
-        self.button_browser_top_right = QPushButton("");
-        self.button_browser_top_right.setObjectName("BrowserButton");
-        self.button_browser_top_right.setFixedSize(icon_button_size);
-        self.button_browser_top_right.setToolTip("Sampler");
-        top_strip_main_layout.addWidget(self.button_browser_top_right, 0, Qt.AlignmentFlag.AlignCenter);
-
-        # --- Select Knob ---
-        select_knob_stack = QStackedWidget();
-        select_knob_stack.setFixedSize(QSize(knob_size, knob_size));
-        select_knob_stack.setToolTip("Select Item / Press to Apply");
-        select_knob_visual = StaticKnobWidget();
-        select_knob_stack.addWidget(select_knob_visual);
-        self.knob_select_top_right = QDial();
-        self.knob_select_top_right.setObjectName("SelectKnobTopRight");
-        self.knob_select_top_right.setFixedSize(QSize(knob_size, knob_size));
-        self.knob_select_top_right.setNotchesVisible(False);
-        self.knob_select_top_right.setStyleSheet("background-color: transparent;");
-        select_knob_stack.addWidget(self.knob_select_top_right);
+            if isinstance(w, QLabel):
+                w.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            pattern_buttons_layout.addWidget(w, 0, Qt.AlignmentFlag.AlignCenter)
+        self.button_pattern_up_top_right.clicked.connect(self._handle_cycle_active_oled_next_request)
+        self.button_pattern_down_top_right.clicked.connect(self._handle_cycle_active_oled_prev_request)
+        top_strip_main_layout.addLayout(pattern_buttons_layout)
+        # OLED Display
+        self.oled_display_mirror_widget = QLabel(objectName="OLEDMirror", toolTip="Click to open OLED Customizer")
+        self.oled_display_mirror_widget.setFixedSize(QSize(int(128 * 1.2), int(64 * 1.2)))
+        self.oled_display_mirror_widget.setStyleSheet("QLabel#OLEDMirror { background-color: black; border: 1px solid #383838; }")
+        self._setup_oled_mirror_clickable()
+        top_strip_main_layout.addWidget(self.oled_display_mirror_widget, 0, Qt.AlignmentFlag.AlignCenter)
+        self.oled_play_pause_icon_label = QLabel(self.top_strip_group)
+        self.oled_play_pause_icon_label.setObjectName("OLEDPlayPauseIconLabel")
+        self.oled_play_pause_icon_label.setToolTip("Toggle OLED Active Graphic Pause/Play")
+        self.oled_play_pause_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.oled_play_pause_icon_label.setEnabled(False)
+        self.oled_play_pause_icon_label.installEventFilter(self)
+        self.oled_play_pause_icon_label.hide()
+        # Browser Button
+        self.button_browser_top_right = QPushButton("")
+        self.button_browser_top_right.setObjectName("BrowserButton")
+        self.button_browser_top_right.setFixedSize(icon_button_size)
+        top_strip_main_layout.addWidget(self.button_browser_top_right, 0, Qt.AlignmentFlag.AlignCenter)
+        # Select Knob
+        select_knob_stack = QStackedWidget()
+        select_knob_stack.setFixedSize(QSize(knob_size, knob_size))
+        select_knob_visual = StaticKnobWidget()
+        select_knob_stack.addWidget(select_knob_visual)
+        self.knob_select_top_right = QDial()
+        self.knob_select_top_right.setObjectName("SelectKnobTopRight")
+        self.knob_select_top_right.setFixedSize(QSize(knob_size, knob_size))
+        self.knob_select_top_right.setNotchesVisible(False)
+        self.knob_select_top_right.setStyleSheet("background-color: transparent;")
+        # This connection is for the visual indicator only, not main logic.
         self.knob_select_top_right.valueChanged.connect(
-            lambda value, knob=select_knob_visual, qd=self.knob_select_top_right: knob.set_indicator_angle(-135 + ((value - qd.minimum()) / (qd.maximum() - qd.minimum())) * 270.0) if qd.maximum() > qd.minimum() else 0
-        );
-        setattr(self, "SelectKnobTopRight_visual", select_knob_visual);
-        setattr(self, "SelectKnobTopRight_stack", select_knob_stack);
-        top_strip_main_layout.addWidget(select_knob_stack, 0, Qt.AlignmentFlag.AlignCenter);
-        
-        # --- Grid Nav Buttons ---
-        grid_buttons_layout = QHBoxLayout();
-        grid_buttons_layout.setSpacing(1);
-        triangle_left = QLabel("◀", objectName="TriangleGridLeft");
-        self.button_grid_nav_focus_prev_top_right = QPushButton("", objectName="GridLeftButton", toolTip="Pad Focus (Prev)");
-        self.button_grid_nav_focus_prev_top_right.setFixedSize(flat_button_size);
-        self.button_grid_nav_focus_next_top_right = QPushButton("", objectName="GridRightButton", toolTip="Pad Focus (Next)");
-        self.button_grid_nav_focus_next_top_right.setFixedSize(flat_button_size);
-        triangle_right = QLabel("▶", objectName="TriangleGridRight");
+            lambda value, knob=select_knob_visual, qd=self.knob_select_top_right: 
+                knob.set_indicator_angle(-135 + ((value - qd.minimum()) / (qd.maximum() - qd.minimum())) * 270.0 if qd.maximum() > qd.minimum() else 0)
+        )
+        select_knob_stack.addWidget(self.knob_select_top_right)
+        setattr(self, "SelectKnobTopRight_visual", select_knob_visual)
+        setattr(self, "SelectKnobTopRight_stack", select_knob_stack)
+        top_strip_main_layout.addWidget(select_knob_stack, 0, Qt.AlignmentFlag.AlignCenter)
+        # Grid Nav Buttons Layout
+        grid_buttons_layout = QHBoxLayout()
+        grid_buttons_layout.setSpacing(1)
+        triangle_left = QLabel("◀", styleSheet=triangle_label_style)
+        self.button_grid_nav_focus_prev_top_right = QPushButton("", objectName="GridLeftButton")
+        self.button_grid_nav_focus_prev_top_right.setFixedSize(flat_button_size)
+        self.button_grid_nav_focus_next_top_right = QPushButton("", objectName="GridRightButton")
+        self.button_grid_nav_focus_next_top_right.setFixedSize(flat_button_size)
+        triangle_right = QLabel("▶", styleSheet=triangle_label_style)
         for w in [triangle_left, self.button_grid_nav_focus_prev_top_right, self.button_grid_nav_focus_next_top_right, triangle_right]:
-            grid_buttons_layout.addWidget(w, 0, Qt.AlignmentFlag.AlignCenter);
-        top_strip_main_layout.addLayout(grid_buttons_layout);
-        
-        top_strip_main_layout.addStretch(1);
-        
+            if isinstance(w, QLabel):
+                w.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            grid_buttons_layout.addWidget(w, 0, Qt.AlignmentFlag.AlignCenter)
+        top_strip_main_layout.addLayout(grid_buttons_layout)
+        top_strip_main_layout.addStretch(1)
+        # Create and position the overlay
+        self.knob_label_overlay = KnobLabelOverlay(self.top_strip_group)
+        self.knob_label_overlay.setGeometry(self.top_strip_group.rect())
+        QTimer.singleShot(50, self._calculate_and_set_knob_positions_for_overlay)
         return self.top_strip_group
 
     def _position_oled_toggle_icon(self):
@@ -759,7 +783,7 @@ class MainWindow(QMainWindow):
         bottom_buttons_outer_layout.setContentsMargins(0, 10, 0, 0)
         actual_buttons_hbox = QHBoxLayout()
         actual_buttons_hbox.addStretch(1)
-        self.app_guide_button = QPushButton("🚀 App Guide & Hotkey List")
+        self.app_guide_button = QPushButton("🚀 App Guide && Hotkey List")
         self.app_guide_button.setToolTip("Open the App Guide and Hotkey List")
         self.app_guide_button.setObjectName("AppGuideButton")
         self.app_guide_button.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
@@ -1524,6 +1548,32 @@ class MainWindow(QMainWindow):
         self._visualizer_is_being_toggled = False # Release guard
         # print("MW TRACE: _on_avm_capture_stopped - Guard released.")
 
+    def _calculate_and_set_knob_positions_for_overlay(self):
+        """Calculates the center X of each knob and tells the overlay."""
+        if not self.top_strip_group.isVisible():
+            QTimer.singleShot(50, self._calculate_and_set_knob_positions_for_overlay)
+            return
+        knob_stacks = [
+            getattr(self, "knob_volume_top_right_stack", None),
+            getattr(self, "knob_pan_top_right_stack", None),
+            getattr(self, "knob_filter_top_right_stack", None),
+            getattr(self, "knob_resonance_top_right_stack", None),
+            getattr(self, "SelectKnobTopRight_stack", None),
+        ]
+        
+        positions = []
+        for stack in knob_stacks:
+            if stack:
+                # Get position relative to the GroupBox's content area
+                pos = stack.pos()
+                x_center = pos.x() + stack.width() // 2
+                positions.append(x_center)
+        
+        if self.knob_label_overlay:
+            # Resize overlay to match the parent groupbox and set positions
+            self.knob_label_overlay.setGeometry(self.top_strip_group.rect())
+            self.knob_label_overlay.set_knob_x_positions(positions)
+
     def _handle_visualizer_capture_error(self, error_message: str):
         # print(f"MW TRACE: _handle_visualizer_capture_error received: '{error_message}'")
         QMessageBox.warning(self, "Audio Visualizer Error", error_message)
@@ -1823,101 +1873,6 @@ class MainWindow(QMainWindow):
                 closest_discrete_idx = i
         return closest_discrete_idx
 
-    def _create_edit_actions(self):
-        """Creates global QActions for menu items and keyboard shortcuts."""
-        # Undo/Redo (Connected to AnimatorManagerWidget)
-        self.undo_action = QAction("↶ Undo Sequence Edit", self)  # Icon added
-        self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
-        self.undo_action.setToolTip(
-            f"Undo last sequence edit ({QKeySequence(QKeySequence.StandardKey.Undo).toString(QKeySequence.SequenceFormat.NativeText)})")
-        self.undo_action.triggered.connect(self.action_animator_undo)
-        self.addAction(self.undo_action) # Ensure it's added for global shortcut
-        self.redo_action = QAction("↷ Redo Sequence Edit", self)  # Icon added
-        self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
-        self.redo_action.setToolTip(
-            f"Redo last undone sequence edit ({QKeySequence(QKeySequence.StandardKey.Redo).toString(QKeySequence.SequenceFormat.NativeText)})")
-        self.redo_action.triggered.connect(self.action_animator_redo)
-        self.addAction(self.redo_action) # Ensure it's added for global shortcut
-        # Animator Frame Operations (using icons from animator.controls_widget)
-        self.copy_action = QAction(ICON_COPY + " Copy Frame(s)", self)
-        self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
-        self.copy_action.setToolTip(
-            f"Copy selected frame(s) ({QKeySequence(QKeySequence.StandardKey.Copy).toString(QKeySequence.SequenceFormat.NativeText)})")
-        self.copy_action.triggered.connect(self.action_animator_copy_frames)
-        self.addAction(self.copy_action)
-        self.cut_action = QAction(ICON_CUT + " Cut Frame(s)", self)
-        self.cut_action.setShortcut(QKeySequence.StandardKey.Cut)
-        self.cut_action.setToolTip(
-            f"Cut selected frame(s) ({QKeySequence(QKeySequence.StandardKey.Cut).toString(QKeySequence.SequenceFormat.NativeText)})")
-        self.cut_action.triggered.connect(self.action_animator_cut_frames)
-        self.addAction(self.cut_action)
-        self.paste_action = QAction(ICON_DUPLICATE + " Paste Frame(s)", self)
-        self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
-        self.paste_action.setToolTip(
-            f"Paste frame(s) from clipboard ({QKeySequence(QKeySequence.StandardKey.Paste).toString(QKeySequence.SequenceFormat.NativeText)})")
-        self.paste_action.triggered.connect(self.action_animator_paste_frames)
-        self.addAction(self.paste_action)
-        self.duplicate_action = QAction(
-            ICON_DUPLICATE + " Duplicate Frame(s)", self)
-        self.duplicate_action.setShortcut(QKeySequence(
-            Qt.Modifier.CTRL | Qt.Key.Key_D))
-        self.duplicate_action.setToolTip(
-            f"Duplicate selected frame(s) (Ctrl+D)")
-        self.duplicate_action.triggered.connect(
-            self.action_animator_duplicate_frames)
-        self.addAction(self.duplicate_action)
-        self.delete_action = QAction(ICON_DELETE + " Delete Frame(s)", self)
-        self.delete_action.setShortcut(QKeySequence.StandardKey.Delete)
-        self.delete_action.setToolTip(f"Delete selected frame(s) (Del)")
-        self.delete_action.triggered.connect(
-            self.action_animator_delete_frames)
-        self.addAction(self.delete_action)
-        self.add_blank_global_action = QAction(
-            ICON_ADD_BLANK + " Add Blank Frame", self)
-        self.add_blank_global_action.setShortcut(QKeySequence(
-            Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_B))
-        self.add_blank_global_action.setToolTip(
-            "Add a new blank frame to the current sequence (Ctrl+Shift+B).")
-        self.add_blank_global_action.triggered.connect(
-            self.action_animator_add_blank_frame)
-        self.addAction(self.add_blank_global_action)
-        # Sequence File Operations
-        self.new_sequence_action = QAction("✨ New Sequence", self)
-        self.new_sequence_action.setShortcut(QKeySequence.StandardKey.New)
-        self.new_sequence_action.setToolTip(
-            f"Create a new animation sequence ({QKeySequence(QKeySequence.StandardKey.New).toString(QKeySequence.SequenceFormat.NativeText)})")
-        self.new_sequence_action.triggered.connect(
-            lambda: self.action_animator_new_sequence(prompt_save=True))
-        self.addAction(self.new_sequence_action)
-        self.save_sequence_as_action = QAction("💾 Save Sequence As...", self)
-        self.save_sequence_as_action.setShortcut(
-            QKeySequence.StandardKey.SaveAs)
-        self.save_sequence_as_action.setToolTip(
-            f"Save current sequence to a new file ({QKeySequence(QKeySequence.StandardKey.SaveAs).toString(QKeySequence.SequenceFormat.NativeText)})")
-        self.save_sequence_as_action.triggered.connect(
-            self.action_animator_save_sequence_as)
-        self.addAction(self.save_sequence_as_action)
-        # Eyedropper Toggle
-        self.eyedropper_action = QAction("💧 Eyedropper Mode", self)
-        self.eyedropper_action.setShortcut(
-            QKeySequence(Qt.Key.Key_I))
-        self.eyedropper_action.setToolTip(
-            "Toggle Eyedropper mode to pick color from a pad (I).")
-        self.eyedropper_action.setCheckable(True)
-        self.eyedropper_action.triggered.connect(
-            self.toggle_eyedropper_mode)
-        self.addAction(self.eyedropper_action)
-        # Animator Play/Pause Global Shortcut
-        self.play_pause_action = QAction("Play/Pause Sequence", self)
-        self.play_pause_action.setShortcut(
-            QKeySequence(Qt.Key.Key_Space))
-        self.play_pause_action.setToolTip(
-            "Play or Pause the current animation sequence (Space).")
-        self.play_pause_action.triggered.connect(
-            self.action_animator_play_pause_toggle)
-        self.addAction(self.play_pause_action)
-        # Initial UI state update for actions (many will be disabled initially)
-        self._update_global_ui_interaction_states()
 
     def populate_midi_ports(self):
         """Populates the MIDI output port selection QComboBox."""
@@ -2023,45 +1978,149 @@ class MainWindow(QMainWindow):
             self.screen_sampler_manager.update_ui_for_global_state(is_out_conn, is_out_conn)
         QTimer.singleShot(0, self._update_global_ui_interaction_states)
 
+# In class MainWindow:
+# REPLACE the entire _update_contextual_knob_configs method with this one.
+
     def _update_contextual_knob_configs(self):
+        """Updates knob ranges, labels (via overlay), and tooltips based on context."""
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        
-        dials_to_configure = [self.knob_volume_top_right, self.knob_pan_top_right, self.knob_filter_top_right, self.knob_resonance_top_right]
-        for dial in dials_to_configure:
-            if dial: dial.blockSignals(True)
-        # Knob 1
+        animator_is_playing = self.is_animator_playing
+
+        labels = ["", "", "", "", ""]
+        dials = [self.knob_volume_top_right, self.knob_pan_top_right,
+                 self.knob_filter_top_right, self.knob_resonance_top_right, self.knob_select_top_right]
+
+        for dial in dials:
+            if dial:
+                dial.blockSignals(True)
+
+        # --- Configure each knob based on context ---
+
+        # Knob 1 (Brightness)
         if self.knob_volume_top_right:
-            label = getattr(self, "knob_volume_top_right_label", None)
-            if label: label.setText("Brightness")
-            if sampler_is_active: self.knob_volume_top_right.setRange(self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX)
-            else: self.knob_volume_top_right.setRange(0, 100); self.knob_volume_top_right.setValue(int(self.global_pad_brightness * 100))
-        # Knob 2
-        if self.knob_pan_top_right:
-            label = getattr(self, "knob_pan_top_right_label", None)
-            if sampler_is_active: self.knob_pan_top_right.setRange(self.SAMPLER_SATURATION_KNOB_MIN, self.SAMPLER_SATURATION_KNOB_MAX); label.setText("Saturation") if label else None
-            else: self.knob_pan_top_right.setRange(0, 127); self.knob_pan_top_right.setValue(64); label.setText("") if label else None
-        # Knob 3
-        if self.knob_filter_top_right:
-            label = getattr(self, "knob_filter_top_right_label", None)
-            if sampler_is_active: self.knob_filter_top_right.setRange(self.SAMPLER_CONTRAST_KNOB_MIN, self.SAMPLER_CONTRAST_KNOB_MAX); label.setText("Contrast") if label else None
-            else: self.knob_filter_top_right.setRange(0, 127); self.knob_filter_top_right.setValue(64); label.setText("") if label else None
-        # Knob 4
-        if self.knob_resonance_top_right:
-            label = getattr(self, "knob_resonance_top_right_label", None)
-            if self.is_animator_playing and self.animator_manager:
-                current_fps = self.animator_manager.get_current_sequence_fps()
-                knob_raw_value = self._fps_to_slider_raw_value_for_knob(current_fps)
-                self.knob_resonance_top_right.setRange(MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL, MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL); self.knob_resonance_top_right.setValue(knob_raw_value)
-                if label: label.setText("Speed")
-            elif sampler_is_active and self.screen_sampler_manager:
-                self.knob_resonance_top_right.setRange(self.SAMPLER_HUE_KNOB_MIN, self.SAMPLER_HUE_KNOB_MAX)
-                if label: label.setText("Hue")
+            if sampler_is_active:
+                self.knob_volume_top_right.setRange(
+                    self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX)
+                labels[0] = "Brightness"
             else:
-                self.knob_resonance_top_right.setRange(0, 127); self.knob_resonance_top_right.setValue(64)
-                if label: label.setText("")
-        for dial in dials_to_configure:
-            if dial: dial.blockSignals(False)
+                self.knob_volume_top_right.setRange(0, 100)
+                self.knob_volume_top_right.setValue(
+                    int(self.global_pad_brightness * 100))
+                labels[0] = "Global Brightness"
+
+        # Knob 2 (Saturation / Unassigned)
+        if self.knob_pan_top_right:
+            if sampler_is_active:
+                self.knob_pan_top_right.setRange(
+                    self.SAMPLER_SATURATION_KNOB_MIN, self.SAMPLER_SATURATION_KNOB_MAX)
+                labels[1] = "Saturation"
+            else:
+                self.knob_pan_top_right.setRange(0, 127)
+                self.knob_pan_top_right.setValue(64)
+                labels[1] = ""
+
+        # Knob 3 (Contrast / Unassigned)
+        if self.knob_filter_top_right:
+            if sampler_is_active:
+                self.knob_filter_top_right.setRange(
+                    self.SAMPLER_CONTRAST_KNOB_MIN, self.SAMPLER_CONTRAST_KNOB_MAX)
+                labels[2] = "Contrast"
+            else:
+                self.knob_filter_top_right.setRange(0, 127)
+                self.knob_filter_top_right.setValue(64)
+                labels[2] = ""
+
+        # Knob 4 (Hue / Speed / Unassigned)
+        if self.knob_resonance_top_right:
+            if animator_is_playing and self.animator_manager:
+                current_fps = self.animator_manager.get_current_sequence_fps()
+                knob_raw_value = self._fps_to_slider_raw_value_for_knob(
+                    current_fps)
+                self.knob_resonance_top_right.setRange(
+                    MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL, MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL)
+                self.knob_resonance_top_right.setValue(knob_raw_value)
+                labels[3] = "Speed"
+            elif sampler_is_active:
+                self.knob_resonance_top_right.setRange(
+                    self.SAMPLER_HUE_KNOB_MIN, self.SAMPLER_HUE_KNOB_MAX)
+                labels[3] = "Hue"
+            else:
+                self.knob_resonance_top_right.setRange(0, 127)
+                self.knob_resonance_top_right.setValue(64)
+                labels[3] = ""
+
+        # Knob 5 (Select)
+        labels[4] = "Select"
+
+        # --- Apply the labels and tooltips ---
+        if hasattr(self, 'knob_label_overlay') and self.knob_label_overlay:
+            self.knob_label_overlay.set_labels(labels)
+
+        self._update_all_knob_tooltips()
+
+        for dial in dials:
+            if dial:
+                dial.blockSignals(False)
+
         self._update_all_knob_visuals()
+
+# In class MainWindow:
+# ADD this new method.
+
+    def _update_all_knob_tooltips(self):
+        """Sets the tooltip for all 5 knobs based on the current context."""
+        sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
+        animator_is_playing = self.is_animator_playing
+
+        knob_stacks = [
+            getattr(self, "knob_volume_top_right_stack", None),
+            getattr(self, "knob_pan_top_right_stack", None),
+            getattr(self, "knob_filter_top_right_stack", None),
+            getattr(self, "knob_resonance_top_right_stack", None),
+            getattr(self, "SelectKnobTopRight_stack", None),
+        ]
+
+        # Knob 1
+        if knob_stacks[0]:
+            if sampler_is_active:
+                knob_stacks[0].setToolTip(
+                    f"Sampler: Brightness ({self.knob_volume_top_right.value() / 100.0:.2f}x)")
+            else:
+                knob_stacks[0].setToolTip(
+                    f"Global Pad Brightness ({self.knob_volume_top_right.value()}%)")
+
+        # Knob 2
+        if knob_stacks[1]:
+            if sampler_is_active:
+                knob_stacks[1].setToolTip(
+                    f"Sampler: Saturation ({self.knob_pan_top_right.value() / 100.0:.2f}x)")
+            else:
+                knob_stacks[1].setToolTip("Unassigned")
+
+        # Knob 3
+        if knob_stacks[2]:
+            if sampler_is_active:
+                knob_stacks[2].setToolTip(
+                    f"Sampler: Contrast ({self.knob_filter_top_right.value() / 100.0:.2f}x)")
+            else:
+                knob_stacks[2].setToolTip("Unassigned")
+
+        # Knob 4
+        if knob_stacks[3]:
+            if animator_is_playing:
+                fps = self._slider_raw_value_to_fps_for_knob(
+                    self.knob_resonance_top_right.value())
+                knob_stacks[3].setToolTip(f"Anim Speed: {fps:.1f} FPS")
+            elif sampler_is_active:
+                knob_stacks[3].setToolTip(
+                    f"Sampler: Hue Shift ({self.knob_resonance_top_right.value():+d})")
+            else:
+                knob_stacks[3].setToolTip("Unassigned")
+
+        # Knob 5
+        if knob_stacks[4]:
+            knob_stacks[4].setToolTip("Select Item / Press to Apply (Mind the UI if there are unsaved changes in animator)")
+
 
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
@@ -2111,14 +2170,16 @@ class MainWindow(QMainWindow):
 
 # q main window init here
 
+
     def __init__(self):
         super().__init__();
         self.setWindowTitle("AKAI Fire PixelForge");
         self.setGeometry(100, 100, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
+        
         # --- Assign core attributes and constants FIRST ---
         self.global_pad_brightness: float = 1.0;
-        self.primary_qcolor = QColor("#04FF00"); # REPLACED self.selected_qcolor
-        self.secondary_qcolor = QColor("black"); # ADDED for right-click color
+        self.primary_qcolor = QColor("#04FF00");
+        self.secondary_qcolor = QColor("black");
         self.is_eyedropper_mode_active: bool = False;
         self._has_played_initial_builtin_oled_animation: bool = False;
         self.is_animator_playing: bool = False;
@@ -2136,6 +2197,7 @@ class MainWindow(QMainWindow):
         self._oled_nav_debounce_timer = QTimer(self);
         self._oled_nav_debounce_timer.setSingleShot(True);
         self._oled_nav_debounce_timer.setInterval(300);
+
         # --- Initialize all UI element attributes to None ---
         self.central_widget_main: QWidget | None = None; self.main_app_layout: QHBoxLayout | None = None;
         self.left_panel_widget: QWidget | None = None; self.left_panel_layout: QVBoxLayout | None = None;
@@ -2144,9 +2206,11 @@ class MainWindow(QMainWindow):
         self.knob_volume_top_right: QDial | None = None; self.knob_pan_top_right: QDial | None = None;
         self.knob_filter_top_right: QDial | None = None; self.knob_resonance_top_right: QDial | None = None;
         self.knob_select_top_right: QDial | None = None;
+
         # --- Set up paths BEFORE creating managers that use them ---
         if hasattr(self, '_get_presets_base_dir_path'): self.bundled_presets_base_path = self._get_presets_base_dir_path();
         else: self.bundled_presets_base_path = "error_path_bundle";
+        
         self.user_documents_presets_path = get_user_documents_presets_path();
         self.user_oled_presets_base_path = os.path.join(self.user_documents_presets_path, USER_OLED_PRESETS_DIR_NAME);
         os.makedirs(self.user_oled_presets_base_path, exist_ok=True);
@@ -2154,6 +2218,7 @@ class MainWindow(QMainWindow):
         os.makedirs(self.user_oled_text_items_path, exist_ok=True);
         self.user_oled_anim_items_path = os.path.join(self.user_oled_presets_base_path, USER_OLED_ANIM_ITEMS_SUBDIR);
         os.makedirs(self.user_oled_anim_items_path, exist_ok=True);
+        
         # --- Scan for assets ---
         self.available_app_fonts_cache: list[str] = self._scan_available_app_fonts() if hasattr(self, '_scan_available_app_fonts') else [];
         self.active_graphic_item_relative_path: str | None = None;
@@ -2163,44 +2228,51 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_load_oled_config'): self._load_oled_config();
         self.available_oled_items_cache: list[dict] = [];
         if hasattr(self, '_scan_available_oled_items'): self._scan_available_oled_items();
+
         # --- Instantiate Core Components and Managers ---
         self.akai_controller = AkaiFireController(auto_connect=False);
         self._selected_midi_input_port_name = None;
         self.doom_game_controller = None;
         self.button_lazy_doom: QPushButton | None = None;
-        self.color_picker_manager = ColorPickerManager(initial_color=self.primary_qcolor, config_save_path_func=get_user_config_file_path); # Use primary_qcolor for init
+
+        self.color_picker_manager = ColorPickerManager(initial_color=self.primary_qcolor, config_save_path_func=get_user_config_file_path);
         self.static_layouts_manager = StaticLayoutsManager(user_static_layouts_path=os.path.join(self.user_documents_presets_path, "static", "user"), prefab_static_layouts_path=os.path.join(self.bundled_presets_base_path, "static", "prefab"));
         self.animator_manager = AnimatorManagerWidget(user_sequences_base_path=os.path.join(self.user_documents_presets_path, "sequences", "user"), sampler_recordings_path=os.path.join(self.user_documents_presets_path, "sequences", "sampler_recordings"), prefab_sequences_base_path=os.path.join(self.bundled_presets_base_path, "sequences", "prefab"), parent=self);
         self.screen_sampler_manager = ScreenSamplerManager(presets_base_path=self.bundled_presets_base_path, animator_manager_ref=self.animator_manager, parent=self);
         self.audio_visualizer_manager = AudioVisualizerManager(parent=self);
         self.audio_visualizer_ui_manager = AudioVisualizerUIManager(parent=self);
+        
         self.oled_display_manager: OLEDDisplayManager | None = None;
         self.hardware_input_manager: HardwareInputManager | None = None;
         if self.akai_controller: 
             self.oled_display_manager = OLEDDisplayManager(akai_fire_controller_ref=self.akai_controller, available_app_fonts=self.available_app_fonts_cache, parent=self);
             self.hardware_input_manager = HardwareInputManager(akai_fire_controller_ref=self.akai_controller, parent=self);
         else: QMessageBox.critical(self, "Fatal Error", "AkaiFireController instance could not be created."); sys.exit(1);
+
         if self.oled_display_manager:
             self.oled_display_manager.update_global_text_item_scroll_delay(self.oled_global_scroll_delay_ms);
             self._load_and_apply_active_graphic();
             self.oled_display_manager.builtin_startup_animation_finished.connect(self._on_builtin_oled_startup_animation_finished);
+        
         # --- Build UI ---
         if hasattr(self, '_set_window_icon'): self._set_window_icon();
         self.ensure_user_dirs_exist() if hasattr(self, 'ensure_user_dirs_exist') else None;
         self._init_ui_layout();
+        self._populate_left_panel();
         self._populate_right_panel();
-        self.left_panel_layout.addWidget(self._create_hardware_top_strip());
-        self.left_panel_layout.addWidget(self._create_pad_grid_section(), 0);
-        self.left_panel_layout.addWidget(self.animator_manager, 1);
-        self.left_panel_layout.addWidget(self.screen_sampler_manager.get_ui_widget(), 0);
+        
         # --- Final Setup Calls ---
+        self._connect_signals() if hasattr(self, '_connect_signals') else None;
+        
+        # MOVED to be AFTER UI creation and BEFORE final updates
+        self._create_edit_actions() if hasattr(self, '_create_edit_actions') else None;
+        
         self._setup_global_brightness_knob() if hasattr(self, '_setup_global_brightness_knob') else None;
         self._update_current_oled_nav_target_widget() if hasattr(self, '_update_current_oled_nav_target_widget') else None;
-        self._connect_signals() if hasattr(self, '_connect_signals') else None;
-        self._create_edit_actions() if hasattr(self, '_create_edit_actions') else None;
         self.populate_midi_ports() if hasattr(self, 'populate_midi_ports') else None;
         self.populate_midi_input_ports() if hasattr(self, 'populate_midi_input_ports') else None;
         self.update_connection_status() if hasattr(self, 'update_connection_status') else None;
+        
         # --- Deferred Calls ---
         QTimer.singleShot(100, self._populate_visualizer_audio_devices) if hasattr(self, '_populate_visualizer_audio_devices') else None;
         QTimer.singleShot(50, self._update_contextual_knob_configs) if hasattr(self, '_update_contextual_knob_configs') else None;
@@ -3321,78 +3393,149 @@ class MainWindow(QMainWindow):
 
     def _handle_knob1_change(self, value: int):
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        qdial = self.knob_volume_top_right
         visual_knob = getattr(self, "knob_volume_top_right_visual", None)
-        knob_stack = getattr(self, "knob_volume_top_right_stack", None)
-        if visual_knob and qdial:
-            min_val, max_val = qdial.minimum(), qdial.maximum()
-            if max_val > min_val:
-                angle = -135 + ((value - min_val) /
-                                (max_val - min_val)) * 270.0
-                visual_knob.set_indicator_angle(angle)
+        if visual_knob and self.knob_volume_top_right:
+            angle = -135 + ((value - self.knob_volume_top_right.minimum()) / (self.knob_volume_top_right.maximum() - self.knob_volume_top_right.minimum())) * 270.0
+            visual_knob.set_indicator_angle(angle)
         if sampler_is_active:
             self._on_sampler_brightness_knob_changed(value)
-            if knob_stack:
-                knob_stack.setToolTip(
-                    f"Sampler: Brightness ({value / 100.0:.2f}x)")
             self._show_knob_feedback_on_oled(f"Br: {value / 100.0:.2f}x")
         else:
             self._on_global_brightness_knob_changed(value)
-            if knob_stack:
-                knob_stack.setToolTip(f"Global Pad Brightness ({value}%)")
             self._show_knob_feedback_on_oled(f"GlbBr: {value}%")
+        self._update_all_knob_tooltips()
 
     def _handle_knob2_change(self, value: int):
-        qdial = self.knob_pan_top_right
         visual_knob = getattr(self, "knob_pan_top_right_visual", None)
-        knob_stack = getattr(self, "knob_pan_top_right_stack", None)
-        if visual_knob and qdial:
-            min_val, max_val = qdial.minimum(), qdial.maximum()
-            if max_val > min_val:
-                angle = -135 + ((value - min_val) /
-                                (max_val - min_val)) * 270.0
-                visual_knob.set_indicator_angle(angle)
+        if visual_knob and self.knob_pan_top_right:
+            angle = -135 + ((value - self.knob_pan_top_right.minimum()) / (self.knob_pan_top_right.maximum() - self.knob_pan_top_right.minimum())) * 270.0
+            visual_knob.set_indicator_angle(angle)
         if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
             self._on_sampler_saturation_knob_changed(value)
-            if knob_stack:
-                knob_stack.setToolTip(
-                    f"Sampler: Saturation ({value / 100.0:.2f}x)")
             self._show_knob_feedback_on_oled(f"Sat: {value / 100.0:.2f}x")
+        self._update_all_knob_tooltips()
 
     def _handle_knob3_change(self, value: int):
-        qdial = self.knob_filter_top_right
         visual_knob = getattr(self, "knob_filter_top_right_visual", None)
-        knob_stack = getattr(self, "knob_filter_top_right_stack", None)
-
-        if visual_knob and qdial:
-            min_val, max_val = qdial.minimum(), qdial.maximum()
-            if max_val > min_val:
-                angle = -135 + ((value - min_val) /
-                                (max_val - min_val)) * 270.0
-                visual_knob.set_indicator_angle(angle)
-
+        if visual_knob and self.knob_filter_top_right:
+            angle = -135 + ((value - self.knob_filter_top_right.minimum()) / (self.knob_filter_top_right.maximum() - self.knob_filter_top_right.minimum())) * 270.0
+            visual_knob.set_indicator_angle(angle)
         if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
             self._on_sampler_contrast_knob_changed(value)
-            if knob_stack:
-                knob_stack.setToolTip(
-                    f"Sampler: Contrast ({value / 100.0:.2f}x)")
             self._show_knob_feedback_on_oled(f"Con: {value / 100.0:.2f}x")
+        self._update_all_knob_tooltips()
 
     def _handle_knob4_change(self, value: int):
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        qdial = self.knob_resonance_top_right
         visual_knob = getattr(self, "knob_resonance_top_right_visual", None)
-        knob_stack = getattr(self, "knob_resonance_top_right_stack", None)
-        if visual_knob and qdial:
-            min_val, max_val = qdial.minimum(), qdial.maximum()
-            if max_val > min_val:
-                angle = -135 + ((value - min_val) /
-                                (max_val - min_val)) * 270.0
-                visual_knob.set_indicator_angle(angle)
+        if visual_knob and self.knob_resonance_top_right:
+            angle = -135 + ((value - self.knob_resonance_top_right.minimum()) / (self.knob_resonance_top_right.maximum() - self.knob_resonance_top_right.minimum())) * 270.0
+            visual_knob.set_indicator_angle(angle)
         if self.is_animator_playing:
             self._on_animator_speed_knob_changed(value)
         elif sampler_is_active:
             self._on_sampler_hue_knob_changed(value)
+            self._show_knob_feedback_on_oled(f"Hue: {value:+d}")
+        self._update_all_knob_tooltips()
+
+    def _create_edit_actions(self):
+        """Creates global QActions for menu items and keyboard shortcuts."""
+        # Undo/Redo (Connected to AnimatorManagerWidget)
+        self.undo_action = QAction("↶ Undo Sequence Edit", self)  # Icon added
+        self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        self.undo_action.setToolTip(
+            f"Undo last sequence edit ({QKeySequence(QKeySequence.StandardKey.Undo).toString(QKeySequence.SequenceFormat.NativeText)})")
+        self.undo_action.triggered.connect(self.action_animator_undo)
+        # Ensure it's added for global shortcut
+        self.addAction(self.undo_action)
+        self.redo_action = QAction("↷ Redo Sequence Edit", self)  # Icon added
+        self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
+        self.redo_action.setToolTip(
+            f"Redo last undone sequence edit ({QKeySequence(QKeySequence.StandardKey.Redo).toString(QKeySequence.SequenceFormat.NativeText)})")
+        self.redo_action.triggered.connect(self.action_animator_redo)
+        # Ensure it's added for global shortcut
+        self.addAction(self.redo_action)
+        # Animator Frame Operations (using icons from animator.controls_widget)
+        self.copy_action = QAction(ICON_COPY + " Copy Frame(s)", self)
+        self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
+        self.copy_action.setToolTip(
+            f"Copy selected frame(s) ({QKeySequence(QKeySequence.StandardKey.Copy).toString(QKeySequence.SequenceFormat.NativeText)})")
+        self.copy_action.triggered.connect(self.action_animator_copy_frames)
+        self.addAction(self.copy_action)
+        self.cut_action = QAction(ICON_CUT + " Cut Frame(s)", self)
+        self.cut_action.setShortcut(QKeySequence.StandardKey.Cut)
+        self.cut_action.setToolTip(
+            f"Cut selected frame(s) ({QKeySequence(QKeySequence.StandardKey.Cut).toString(QKeySequence.SequenceFormat.NativeText)})")
+        self.cut_action.triggered.connect(self.action_animator_cut_frames)
+        self.addAction(self.cut_action)
+        self.paste_action = QAction(ICON_DUPLICATE + " Paste Frame(s)", self)
+        self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
+        self.paste_action.setToolTip(
+            f"Paste frame(s) from clipboard ({QKeySequence(QKeySequence.StandardKey.Paste).toString(QKeySequence.SequenceFormat.NativeText)})")
+        self.paste_action.triggered.connect(self.action_animator_paste_frames)
+        self.addAction(self.paste_action)
+        self.duplicate_action = QAction(
+            ICON_DUPLICATE + " Duplicate Frame(s)", self)
+        self.duplicate_action.setShortcut(QKeySequence(
+            Qt.Modifier.CTRL | Qt.Key.Key_D))
+        self.duplicate_action.setToolTip(
+            f"Duplicate selected frame(s) (Ctrl+D)")
+        self.duplicate_action.triggered.connect(
+            self.action_animator_duplicate_frames)
+        self.addAction(self.duplicate_action)
+        self.delete_action = QAction(ICON_DELETE + " Delete Frame(s)", self)
+        self.delete_action.setShortcut(QKeySequence.StandardKey.Delete)
+        self.delete_action.setToolTip(f"Delete selected frame(s) (Del)")
+        self.delete_action.triggered.connect(
+            self.action_animator_delete_frames)
+        self.addAction(self.delete_action)
+        self.add_blank_global_action = QAction(
+            ICON_ADD_BLANK + " Add Blank Frame", self)
+        self.add_blank_global_action.setShortcut(QKeySequence(
+            Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_B))
+        self.add_blank_global_action.setToolTip(
+            "Add a new blank frame to the current sequence (Ctrl+Shift+B).")
+        self.add_blank_global_action.triggered.connect(
+            self.action_animator_add_blank_frame)
+        self.addAction(self.add_blank_global_action)
+        # Sequence File Operations
+        self.new_sequence_action = QAction("✨ New Sequence", self)
+        self.new_sequence_action.setShortcut(QKeySequence.StandardKey.New)
+        self.new_sequence_action.setToolTip(
+            f"Create a new animation sequence ({QKeySequence(QKeySequence.StandardKey.New).toString(QKeySequence.SequenceFormat.NativeText)})")
+        self.new_sequence_action.triggered.connect(
+            lambda: self.action_animator_new_sequence(prompt_save=True))
+        self.addAction(self.new_sequence_action)
+        self.save_sequence_as_action = QAction("💾 Save Sequence As...", self)
+        self.save_sequence_as_action.setShortcut(
+            QKeySequence.StandardKey.SaveAs)
+        self.save_sequence_as_action.setToolTip(
+            f"Save current sequence to a new file ({QKeySequence(QKeySequence.StandardKey.SaveAs).toString(QKeySequence.SequenceFormat.NativeText)})")
+        self.save_sequence_as_action.triggered.connect(
+            self.action_animator_save_sequence_as)
+        self.addAction(self.save_sequence_as_action)
+        # Eyedropper Toggle
+        self.eyedropper_action = QAction("💧 Eyedropper Mode", self)
+        self.eyedropper_action.setShortcut(
+            QKeySequence(Qt.Key.Key_I))
+        self.eyedropper_action.setToolTip(
+            "Toggle Eyedropper mode to pick color from a pad (I).")
+        self.eyedropper_action.setCheckable(True)
+        self.eyedropper_action.triggered.connect(
+            self.toggle_eyedropper_mode)
+        self.addAction(self.eyedropper_action)
+        # Animator Play/Pause Global Shortcut
+        self.play_pause_action = QAction("Play/Pause Sequence", self)
+        self.play_pause_action.setShortcut(
+            QKeySequence(Qt.Key.Key_Space))
+        self.play_pause_action.setToolTip(
+            "Play or Pause the current animation sequence (Space).")
+        self.play_pause_action.triggered.connect(
+            self.action_animator_play_pause_toggle)
+        self.addAction(self.play_pause_action)
+        # Initial UI state update for actions (many will be disabled initially)
+        self._update_global_ui_interaction_states()
+
 
     def _cycle_oled_nav_target(self, direction: int):
         """Cycles the OLED navigation focus and shows a temporary cue."""
