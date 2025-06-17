@@ -4,9 +4,6 @@ from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QPointF, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QMouseEvent, QCursor
 from enum import Enum
 
-# print("--- EXECUTING monitor_view_widget.py (VERSION: MVW_JULY_22_B) ---")
-# print(f"--- MVW __file__: {__file__} ---")
-
 MONITOR_AREA_PADDING = 10
 DEFAULT_MONITOR_BG_COLOR = QColor(55, 55, 60)
 ACTIVE_MONITOR_BORDER_COLOR = QColor(100, 150, 255)

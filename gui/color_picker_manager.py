@@ -115,18 +115,24 @@ class PrimarySecondaryColorWell(QWidget):
             self.update_active_border()
 
     def update_active_border(self):
+        """Applies a highlight border to the active color well."""
         active_style = "border: 2px solid #60a0ff;"
         inactive_style = "border: 1px solid #777;"
+        # Get the current stylesheet but remove any previous border rules
+        # to prevent them from stacking up.
+        primary_base_style = self.primary_well.styleSheet().split('border:')[0]
+        secondary_base_style = self.secondary_well.styleSheet().split('border:')[
+            0]
         if self._active_well == 'primary':
-            self.primary_well.setStyleSheet(
-                self.primary_well.styleSheet() + active_style)
+            self.primary_well.setStyleSheet(primary_base_style + active_style)
             self.secondary_well.setStyleSheet(
-                self.secondary_well.styleSheet() + inactive_style)
+                secondary_base_style + inactive_style)
         else:
             self.primary_well.setStyleSheet(
-                self.primary_well.styleSheet() + inactive_style)
+                primary_base_style + inactive_style)
             self.secondary_well.setStyleSheet(
-                self.secondary_well.styleSheet() + active_style)
+                secondary_base_style + active_style)
+
 # =================================================================================
 #  MAIN CLASS: ColorPickerManager
 # =================================================================================
@@ -145,15 +151,18 @@ class ColorPickerManager(QGroupBox):
     eyedropper_button_toggled = pyqtSignal(bool)
 
     # --- Initialization ---
+
     def __init__(self, initial_color=QColor("#04FF00"), parent_group_title="🎨 Color Picker", config_save_path_func=None):
         super().__init__(parent_group_title)
         self.config_save_path_func = config_save_path_func
         self.setObjectName("ColorPickerManagerGroup")
+
         # State Attributes
         self._primary_color = QColor(initial_color)
         self._secondary_color = QColor("black")
-        self._active_well = 'primary'  # 'primary' or 'secondary'
+        self._active_well = 'primary'
         self.saved_colors_hex: list[str | None] = [None] * MAX_SAVED_COLORS
+
         # UI Widget Attributes
         self.color_well = PrimarySecondaryColorWell()
         self.sv_picker = SVPicker()
@@ -174,8 +183,11 @@ class ColorPickerManager(QGroupBox):
         self._init_ui()
         self._connect_signals()
         self.load_color_picker_swatches_from_config()
-        self._update_all_color_displays()
-        self._update_pickers_from_active_color()
+        # On startup, update all UI components to reflect the initial active color.
+        self._update_text_inputs_from_color(self._primary_color)
+        self._update_color_wells_display()
+        self._update_pickers_from_color(self._primary_color)
+
 
     # --- UI Creation ---
     def _init_ui(self):
@@ -287,49 +299,54 @@ class ColorPickerManager(QGroupBox):
             self._add_current_color_to_swatches)
         self.clear_swatches_button.clicked.connect(self._clear_all_swatches)
 
-    # --- Core Logic & Event Handlers ---
-    def _handle_active_well_changed(self, well_name: str):
-        """Handles user clicking on the primary or secondary color well."""
-        if self._active_well != well_name:
-            self._active_well = well_name
-            self.color_well.set_active_well(well_name)
-            self._update_pickers_from_active_color()
-            self.status_message_requested.emit(
-                f"Active color set to: {well_name.capitalize()}", 2000)
-
-    def _handle_swap_requested(self):
-        """Swaps the primary and secondary colors."""
-        self._primary_color, self._secondary_color = self._secondary_color, self._primary_color
-        self.primary_color_changed.emit(self._primary_color)
-        self.secondary_color_changed.emit(self._secondary_color)
-        self._update_all_color_displays()
-        self._update_pickers_from_active_color()
-        self.status_message_requested.emit(
-            "Swapped primary and secondary colors.", 2000)
+    # --- Core Logic & Event Handlers (Final Architecture) ---
 
     def _on_sv_changed(self, s: float, v: float):
-        """Handles changes from the SV-Picker ONLY."""
-        active_color = self._primary_color if self._active_well == 'primary' else self._secondary_color
-        # Get the existing hue from the active color
-        h, _, _, a = active_color.getHsvF()
-        # Create the new color using the existing hue and new S/V values
-        new_color = QColor.fromHsvF(h, s, v, a)
-        self._set_active_color(new_color, source="sv_picker")
+        """Handles changes from the SV-Picker. Updates text inputs but not other pickers."""
+        # Get hue from the slider to build the complete color
+        h = self.hue_slider.get_hue() / 360.0
+        new_color = QColor.fromHsvF(h, s, v, 1.0)
+
+        # Update the internal color state and emit the signal for MainWindow
+        if self._active_well == 'primary':
+            self._primary_color = new_color
+            self.primary_color_changed.emit(new_color)
+        else:
+            self._secondary_color = new_color
+            self.secondary_color_changed.emit(new_color)
+
+        # Update only the dependent UI elements, NOT the source (sv_picker) or the hue_slider
+        self._update_text_inputs_from_color(new_color)
+        self._update_color_wells_display()
 
     def _on_hue_changed(self, hue_degrees: int):
-        """Handles changes from the Hue Slider ONLY."""
-        active_color = self._primary_color if self._active_well == 'primary' else self._secondary_color
-        # Get the existing saturation and value from the active color
-        _, s, v, a = active_color.getHsvF()
-        # Create the new color using the new hue and existing S/V values
-        new_color = QColor.fromHsvF(hue_degrees / 360.0, s, v, a)
-        self._set_active_color(new_color, source="hue_slider")
+        """Handles changes from the Hue Slider. Updates the SV-Picker's gradient and text inputs."""
+        # Get S and V from the picker to build the complete color
+        s = self.sv_picker.saturation()
+        v = self.sv_picker.value()
+        new_color = QColor.fromHsvF(hue_degrees / 360.0, s, v, 1.0)
+
+        # Update the internal color state and emit the signal
+        if self._active_well == 'primary':
+            self._primary_color = new_color
+            self.primary_color_changed.emit(new_color)
+        else:
+            self._secondary_color = new_color
+            self.secondary_color_changed.emit(new_color)
+
+        # Update the SV-Picker's background gradient to the new hue
+        self.sv_picker.setHue(hue_degrees)
+
+        # Update other dependent UI elements
+        self._update_text_inputs_from_color(new_color)
+        self._update_color_wells_display()
 
     def _on_rgb_hex_input_changed(self):
-        """Unified handler for RGB and HEX line edit changes."""
-        sender = self.sender()
+        """Handles changes from text inputs. This is a master override for the pickers."""
         new_color = QColor()
-        if sender == self.hex_input:
+        current_active_color = self._primary_color if self._active_well == 'primary' else self._secondary_color
+
+        if self.sender() == self.hex_input:
             hex_val = self.hex_input.text()
             if not hex_val.startswith("#"):
                 hex_val = "#" + hex_val
@@ -339,74 +356,100 @@ class ColorPickerManager(QGroupBox):
                 r = int(self.r_input.text() or "0")
                 g = int(self.g_input.text() or "0")
                 b = int(self.b_input.text() or "0")
-                r, g, b = [max(0, min(val, 255)) for val in (r, g, b)]
-                new_color.setRgb(r, g, b)
+                new_color.setRgb(max(0, min(r, 255)), max(
+                    0, min(g, 255)), max(0, min(b, 255)))
             except ValueError:
-                self._update_pickers_from_active_color()
+                self._update_text_inputs_from_color(current_active_color)
                 return
-        if new_color.isValid():
-            # This now correctly calls _set_active_color, which handles all UI updates
-            self._set_active_color(new_color, source="input")
-        else:
-            # Revert UI to the current active color if input was invalid
-            self._update_pickers_from_active_color()
 
-    def _set_active_color(self, color: QColor, source="unknown"):
-        """Central method to update the currently active color and emit signals."""
+        if not new_color.isValid():
+            self._update_text_inputs_from_color(current_active_color)
+            return
+
+        # Set internal color and emit
         if self._active_well == 'primary':
-            if self._primary_color == color:
-                return
-            self._primary_color = color
-            self.primary_color_changed.emit(self._primary_color)
-        else:  # 'secondary'
-            if self._secondary_color == color:
-                return
-            self._secondary_color = color
-            self.secondary_color_changed.emit(self._secondary_color)
-        self._update_all_color_displays()
-        # Pass the source of the change to the picker updater
-        self._update_pickers_from_active_color(source=source)
+            self._primary_color = new_color
+            self.primary_color_changed.emit(new_color)
+        else:
+            self._secondary_color = new_color
+            self.secondary_color_changed.emit(new_color)
 
-    def _update_pickers_from_active_color(self, source="unknown"):
-        """Updates all picker controls (SV, Hue, RGB, Hex) to reflect the active color."""
+        # Update all other UI elements, including the pickers
+        self._update_text_inputs_from_color(new_color)
+        self._update_color_wells_display()
+        self._update_pickers_from_color(new_color)
+
+    def _handle_active_well_changed(self, well_name: str):
+        """Handles user clicking on the primary or secondary color well."""
+        if self._active_well != well_name:
+            self._active_well = well_name
+            self.color_well.set_active_well(well_name)
+            # Update all controls to reflect the newly active color
+            active_color = self._primary_color if self._active_well == 'primary' else self._secondary_color
+            self._update_text_inputs_from_color(active_color)
+            self._update_pickers_from_color(active_color)
+            self.status_message_requested.emit(
+                f"Active color set to: {well_name.capitalize()}", 2000)
+
+    def _handle_swap_requested(self):
+        """Swaps the primary and secondary colors and updates all UI."""
+        self._primary_color, self._secondary_color = self._secondary_color, self._primary_color
+        self.primary_color_changed.emit(self._primary_color)
+        self.secondary_color_changed.emit(self._secondary_color)
+        # Force a full UI refresh based on the now-active color
         active_color = self._primary_color if self._active_well == 'primary' else self._secondary_color
-        # --- Update RGB and Hex inputs (if they weren't the source) ---
-        if source != "input":
-            self.r_input.blockSignals(True)
-            self.g_input.blockSignals(True)
-            self.b_input.blockSignals(True)
-            self.hex_input.blockSignals(True)
-            self.r_input.setText(str(active_color.red()))
-            self.g_input.setText(str(active_color.green()))
-            self.b_input.setText(str(active_color.blue()))
-            self.hex_input.setText(active_color.name().upper())
-            self.r_input.blockSignals(False)
-            self.g_input.blockSignals(False)
-            self.b_input.blockSignals(False)
-            self.hex_input.blockSignals(False)
-        # Always update the visual style of the Hex input
-        self._style_hex_input(active_color)
-        # --- Update SV Picker and Hue Slider (if they weren't the source) ---
-        h, s, v, _ = active_color.getHsvF()
-        if source != "hue_slider":
-            self.hue_slider.blockSignals(True)
-            self.hue_slider.set_hue(int(h * 359.99), emit_signal=False)
-            self.hue_slider.blockSignals(False)
-        # Always update the hue of the SV picker's gradient
-        self.sv_picker.setHue(int(h * 359.99))
-        if source != "sv_picker":
-            self.sv_picker.blockSignals(True)
-            self.sv_picker.setSV(s, v)
-            self.sv_picker.blockSignals(False)
+        self._update_text_inputs_from_color(active_color)
+        self._update_color_wells_display()
+        self._update_pickers_from_color(active_color)
+        self.status_message_requested.emit(
+            "Swapped primary and secondary colors.", 2000)
 
-    def _update_all_color_displays(self):
-        """Updates the visual color of the wells and the hex input field."""
+    def _handle_set_black_request(self):
+        """Sets the currently active color to black and updates all UI."""
+        black_color = QColor("black")
+        if self._active_well == 'primary':
+            self._primary_color = black_color
+            self.primary_color_changed.emit(black_color)
+        else:
+            self._secondary_color = black_color
+            self.secondary_color_changed.emit(black_color)
+
+        self._update_text_inputs_from_color(black_color)
+        self._update_color_wells_display()
+        self._update_pickers_from_color(black_color)
+
+    def _update_color_wells_display(self):
+        """Helper to update the primary/secondary color wells."""
         self.color_well.set_primary_color(self._primary_color)
         self.color_well.set_secondary_color(self._secondary_color)
         self.color_well.update_active_border()
 
-        active_color = self._primary_color if self._active_well == 'primary' else self._secondary_color
-        self._style_hex_input(active_color)
+    def _update_text_inputs_from_color(self, color: QColor):
+        """Helper to update RGB/Hex inputs with signal blocking."""
+        self.r_input.blockSignals(True)
+        self.g_input.blockSignals(True)
+        self.b_input.blockSignals(True)
+        self.hex_input.blockSignals(True)
+        self.r_input.setText(str(color.red()))
+        self.g_input.setText(str(color.green()))
+        self.b_input.setText(str(color.blue()))
+        self.hex_input.setText(color.name().upper())
+        self._style_hex_input(color)
+        self.r_input.blockSignals(False)
+        self.g_input.blockSignals(False)
+        self.b_input.blockSignals(False)
+        self.hex_input.blockSignals(False)
+
+    def _update_pickers_from_color(self, color: QColor):
+        """Helper to update the SV-Picker and Hue Slider with signal blocking."""
+        h, s, v, _ = color.getHsvF()
+        self.hue_slider.blockSignals(True)
+        self.sv_picker.blockSignals(True)
+        self.hue_slider.set_hue(int(h * 359.99), emit_signal=False)
+        self.sv_picker.setHue(int(h * 359.99))
+        self.sv_picker.setSV(s, v)
+        self.hue_slider.blockSignals(False)
+        self.sv_picker.blockSignals(False)
 
     def _style_hex_input(self, color: QColor):
         """Sets the background/foreground color of the Hex input field for readability."""
@@ -417,17 +460,31 @@ class ColorPickerManager(QGroupBox):
         text_color = "#000000" if luminance > 0.5 else "#FFFFFF"
         self.hex_input.setStyleSheet(
             f"background-color: {color.name()}; color: {text_color};")
-
-    def _handle_set_black_request(self):
-        """Sets the currently active color to black."""
-        self._set_active_color(QColor("black"), source="button")
+        
 
     # --- Swatch Management ---
     def _on_swatch_clicked(self, swatch_button: 'ColorSwatchButton'):
         """Sets the active color to the one clicked in the swatch."""
         color_hex = swatch_button.get_color_hex()
-        if QColor(color_hex).isValid() and not swatch_button.is_empty:
-            self._set_active_color(QColor(color_hex), source="swatch")
+        if not QColor(color_hex).isValid() or swatch_button.is_empty:
+            return
+        new_color = QColor(color_hex)
+        # Update the internal color state and emit the signal directly,
+        # just like the other event handlers do.
+        if self._active_well == 'primary':
+            if self._primary_color == new_color:
+                return
+            self._primary_color = new_color
+            self.primary_color_changed.emit(new_color)
+        else:  # 'secondary'
+            if self._secondary_color == new_color:
+                return
+            self._secondary_color = new_color
+            self.secondary_color_changed.emit(new_color)
+        # Manually update all other dependent UI controls to reflect the change.
+        self._update_text_inputs_from_color(new_color)
+        self._update_color_wells_display()
+        self._update_pickers_from_color(new_color)
 
     def _show_swatch_context_menu(self, swatch_button: 'ColorSwatchButton', swatch_index: int, global_pos: QPoint):
         menu = QMenu(self)
@@ -556,8 +613,21 @@ class ColorPickerManager(QGroupBox):
 
     def set_active_color_from_eyedropper(self, color: QColor):
         """Public method for MainWindow's eyedropper to set the active color."""
-        if color.isValid():
-            self._set_active_color(color, source="eyedropper")
+        if not color.isValid():
+            return
+        # Update the internal color state and emit the signal directly.
+        if self._active_well == 'primary':
+            if self._primary_color == color: return
+            self._primary_color = color
+            self.primary_color_changed.emit(color)
+        else: # 'secondary'
+            if self._secondary_color == color: return
+            self._secondary_color = color
+            self.secondary_color_changed.emit(color)
+        # Manually update all other dependent UI controls to reflect the change.
+        self._update_text_inputs_from_color(color)
+        self._update_color_wells_display()
+        self._update_pickers_from_color(color)
 
     def set_enabled(self, enabled: bool):
         super().setEnabled(enabled)

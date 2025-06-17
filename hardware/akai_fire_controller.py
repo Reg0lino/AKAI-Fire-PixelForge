@@ -41,6 +41,7 @@ class MidiInputThread(QThread):
         self.in_port = None
         self._running = False
         self.setObjectName(f"MidiInputThread_{port_name.replace(' ', '_')}")
+
     def run(self):
         self._running = True
         try:
@@ -57,6 +58,7 @@ class MidiInputThread(QThread):
             if self.in_port and not self.in_port.closed: self.in_port.close()
             self._running = False
             print(f"MidiInputThread: Stopped for port '{self.port_name}'")
+
     def stop(self): self._running = False
 
 class AkaiFireController(QObject):
@@ -115,6 +117,7 @@ class AkaiFireController(QObject):
     def get_available_output_ports():
         try: return mido.get_output_names()
         except Exception as e: print(f"AkaiFireController: Error MIDI outputs: {e}"); return []
+
     @staticmethod
     def get_available_input_ports():
         try: return mido.get_input_names()
@@ -242,7 +245,8 @@ class AkaiFireController(QObject):
 
     def clear_all_pads(self):
         if not self.is_connected(): return
-        self.set_multiple_pads_color([(r*16+c,0,0,0) for r in range(4) for c in range(16)])    
+        self.set_multiple_pads_color([(r*16+c,0,0,0) for r in range(4) for c in range(16)])   
+
     def _parse_midi_message(self, msg: mido.Message):
         if msg.type == 'note_on':
             # print(f"DEBUG AkaiFireController: Note ON: {hex(msg.note)}")  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<THIS IS THE DEBUG CALL TO SEE WHAT IS BEING INPUTTED****************

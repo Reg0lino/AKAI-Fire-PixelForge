@@ -1,7 +1,6 @@
 # AKAI_Fire_RGB_Controller/utils.py
 import sys
 import os
-# --- Determine project root based on the location of this utils.py file ---
 PROJECT_DIRECTORY_FROM_UTILS = os.path.dirname(os.path.abspath(__file__))
 # print(
 #     f"DEBUG (utils.py): PROJECT_DIRECTORY_FROM_UTILS initialized to: {PROJECT_DIRECTORY_FROM_UTILS}")

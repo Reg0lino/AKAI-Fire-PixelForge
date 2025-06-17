@@ -305,7 +305,7 @@ class MainWindow(QMainWindow):
     SAMPLER_CONTRAST_KNOB_MIN, SAMPLER_CONTRAST_KNOB_MAX = 0, 400
     SAMPLER_HUE_KNOB_MIN, SAMPLER_HUE_KNOB_MAX = -180, 180
     SAMPLER_FACTOR_KNOB_STEP = 4
-    SAMPLER_HUE_KNOB_STEP = 2
+    SAMPLER_HUE_KNOB_STEP = 1
     GLOBAL_BRIGHTNESS_KNOB_STEP = 1
     ANIMATOR_SPEED_KNOB_STEP = 1
 
@@ -564,6 +564,7 @@ class MainWindow(QMainWindow):
 
     def _create_hardware_top_strip(self) -> QGroupBox:
         from PyQt6.QtWidgets import QStackedWidget
+
         self.top_strip_group = QGroupBox("Device Controls")
         self.top_strip_group.setObjectName("TopStripDeviceControls")
         
@@ -575,9 +576,11 @@ class MainWindow(QMainWindow):
         knob_size = 42
         flat_button_size = QSize(36, 10)
         icon_button_size = QSize(28, 28)
-        # UPDATED: Set font size to 14pt for the grid navigation triangles
-        triangle_label_style = "font-size: 14pt; color: #B0B0B0; font-weight: bold;"
+        grid_triangle_style = "font-size: 14pt; color: #B0B0B0; font-weight: bold;"
+        graphics_triangle_style = "font-size: 9pt; color: #B0B0B0; font-weight: bold;"
+
         top_strip_main_layout.addStretch(1)
+
         # Knobs 1-4
         knob_info = [
             ("knob_volume_top_right", self._handle_knob1_change),
@@ -592,21 +595,17 @@ class MainWindow(QMainWindow):
             knob_stack.addWidget(static_knob_visual)
             functional_dial = QDial()
             functional_dial.setFixedSize(QSize(knob_size, knob_size))
-            functional_dial.setNotchesVisible(False)
-            functional_dial.setWrapping(False)
+            functional_dial.setNotchesVisible(False); functional_dial.setWrapping(False)
             functional_dial.setObjectName(attr_name)
             functional_dial.setStyleSheet("background-color: transparent;")
             functional_dial.valueChanged.connect(handler_slot)
             knob_stack.addWidget(functional_dial)
             top_strip_main_layout.addWidget(knob_stack, 0, Qt.AlignmentFlag.AlignCenter)
-            setattr(self, attr_name, functional_dial)
-            setattr(self, f"{attr_name}_visual", static_knob_visual)
-            setattr(self, f"{attr_name}_stack", knob_stack)
+            setattr(self, attr_name, functional_dial); setattr(self, f"{attr_name}_visual", static_knob_visual); setattr(self, f"{attr_name}_stack", knob_stack)
+
         # Graphics Buttons Layout
         pattern_buttons_layout = QVBoxLayout()
         pattern_buttons_layout.setSpacing(2)
-        # Use a smaller font size just for the up/down triangles
-        graphics_triangle_style = "font-size: 9pt; color: #B0B0B0; font-weight: bold;"
         triangle_up_label = QLabel("▲", styleSheet=graphics_triangle_style)
         self.button_pattern_up_top_right = QPushButton("")
         self.button_pattern_up_top_right.setObjectName("PatternUpButton")
@@ -617,30 +616,44 @@ class MainWindow(QMainWindow):
         self.button_pattern_down_top_right.setFixedSize(flat_button_size)
         triangle_down_label = QLabel("▼", styleSheet=graphics_triangle_style)
         for w in [triangle_up_label, self.button_pattern_up_top_right, graphics_label, self.button_pattern_down_top_right, triangle_down_label]:
-            if isinstance(w, QLabel):
-                w.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            if isinstance(w, QLabel): w.setAlignment(Qt.AlignmentFlag.AlignCenter)
             pattern_buttons_layout.addWidget(w, 0, Qt.AlignmentFlag.AlignCenter)
         self.button_pattern_up_top_right.clicked.connect(self._handle_cycle_active_oled_next_request)
         self.button_pattern_down_top_right.clicked.connect(self._handle_cycle_active_oled_prev_request)
         top_strip_main_layout.addLayout(pattern_buttons_layout)
+        
         # OLED Display
         self.oled_display_mirror_widget = QLabel(objectName="OLEDMirror", toolTip="Click to open OLED Customizer")
         self.oled_display_mirror_widget.setFixedSize(QSize(int(128 * 1.2), int(64 * 1.2)))
         self.oled_display_mirror_widget.setStyleSheet("QLabel#OLEDMirror { background-color: black; border: 1px solid #383838; }")
         self._setup_oled_mirror_clickable()
         top_strip_main_layout.addWidget(self.oled_display_mirror_widget, 0, Qt.AlignmentFlag.AlignCenter)
-        self.oled_play_pause_icon_label = QLabel(self.top_strip_group)
+
+        # --- THIS IS THE FIX ---
+        # Create the play/pause icon, load its image, and add it to the main horizontal layout.
+        self.oled_play_pause_icon_label = QLabel()
         self.oled_play_pause_icon_label.setObjectName("OLEDPlayPauseIconLabel")
         self.oled_play_pause_icon_label.setToolTip("Toggle OLED Active Graphic Pause/Play")
+        try:
+            icon_path = get_resource_path(os.path.join("resources", "icons", "play-pause.png"))
+            if os.path.exists(icon_path):
+                base_pixmap = QPixmap(icon_path)
+                scaled_pixmap = base_pixmap.scaled(QSize(16, 16), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                self.oled_play_pause_icon_label.setPixmap(scaled_pixmap)
+                self.oled_play_pause_icon_label.setFixedSize(scaled_pixmap.size())
+        except Exception: pass
         self.oled_play_pause_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self.oled_play_pause_icon_label.setEnabled(False)
         self.oled_play_pause_icon_label.installEventFilter(self)
-        self.oled_play_pause_icon_label.hide()
+        top_strip_main_layout.addWidget(self.oled_play_pause_icon_label, 0, Qt.AlignmentFlag.AlignCenter)
+        # --- END OF FIX ---
+        
         # Browser Button
         self.button_browser_top_right = QPushButton("")
         self.button_browser_top_right.setObjectName("BrowserButton")
         self.button_browser_top_right.setFixedSize(icon_button_size)
         top_strip_main_layout.addWidget(self.button_browser_top_right, 0, Qt.AlignmentFlag.AlignCenter)
+
         # Select Knob
         select_knob_stack = QStackedWidget()
         select_knob_stack.setFixedSize(QSize(knob_size, knob_size))
@@ -651,7 +664,6 @@ class MainWindow(QMainWindow):
         self.knob_select_top_right.setFixedSize(QSize(knob_size, knob_size))
         self.knob_select_top_right.setNotchesVisible(False)
         self.knob_select_top_right.setStyleSheet("background-color: transparent;")
-        # This connection is for the visual indicator only, not main logic.
         self.knob_select_top_right.valueChanged.connect(
             lambda value, knob=select_knob_visual, qd=self.knob_select_top_right: 
                 knob.set_indicator_angle(-135 + ((value - qd.minimum()) / (qd.maximum() - qd.minimum())) * 270.0 if qd.maximum() > qd.minimum() else 0)
@@ -660,18 +672,18 @@ class MainWindow(QMainWindow):
         setattr(self, "SelectKnobTopRight_visual", select_knob_visual)
         setattr(self, "SelectKnobTopRight_stack", select_knob_stack)
         top_strip_main_layout.addWidget(select_knob_stack, 0, Qt.AlignmentFlag.AlignCenter)
+
         # Grid Nav Buttons Layout
         grid_buttons_layout = QHBoxLayout()
         grid_buttons_layout.setSpacing(1)
-        triangle_left = QLabel("◀", styleSheet=triangle_label_style)
+        triangle_left = QLabel("◀", styleSheet=grid_triangle_style)
         self.button_grid_nav_focus_prev_top_right = QPushButton("", objectName="GridLeftButton")
         self.button_grid_nav_focus_prev_top_right.setFixedSize(flat_button_size)
         self.button_grid_nav_focus_next_top_right = QPushButton("", objectName="GridRightButton")
         self.button_grid_nav_focus_next_top_right.setFixedSize(flat_button_size)
-        triangle_right = QLabel("▶", styleSheet=triangle_label_style)
+        triangle_right = QLabel("▶", styleSheet=grid_triangle_style)
         for w in [triangle_left, self.button_grid_nav_focus_prev_top_right, self.button_grid_nav_focus_next_top_right, triangle_right]:
-            if isinstance(w, QLabel):
-                w.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            if isinstance(w, QLabel): w.setAlignment(Qt.AlignmentFlag.AlignCenter)
             grid_buttons_layout.addWidget(w, 0, Qt.AlignmentFlag.AlignCenter)
         top_strip_main_layout.addLayout(grid_buttons_layout)
         top_strip_main_layout.addStretch(1)
@@ -681,25 +693,6 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(50, self._calculate_and_set_knob_positions_for_overlay)
         return self.top_strip_group
 
-    def _position_oled_toggle_icon(self):
-        if not all([self.oled_play_pause_icon_label, self.oled_display_mirror_widget]):
-            return
-        if not self.oled_display_mirror_widget.parentWidget().isVisible():
-            # Widget positions might not be calculated yet if the parent isn't visible.
-            # We can try again in a moment.
-            QTimer.singleShot(50, self._position_oled_toggle_icon)
-            return
-        # Get the position of the OLED mirror relative to its parent container
-        mirror_pos = self.oled_display_mirror_widget.pos()
-        # Calculate the icon's position
-        icon_width = self.oled_play_pause_icon_label.width()
-        icon_height = self.oled_play_pause_icon_label.height()
-        # Position at bottom-right corner of the mirror widget
-        target_x = mirror_pos.x() + self.oled_display_mirror_widget.width() - icon_width + 16
-        target_y = mirror_pos.y() + self.oled_display_mirror_widget.height() - icon_height
-        self.oled_play_pause_icon_label.move(target_x, target_y)
-        self.oled_play_pause_icon_label.raise_()
-        self.oled_play_pause_icon_label.show()
 
     def _setup_oled_mirror_clickable(self):
         """Makes the OLED mirror QLabel clickable to open the customizer."""
@@ -1978,24 +1971,18 @@ class MainWindow(QMainWindow):
             self.screen_sampler_manager.update_ui_for_global_state(is_out_conn, is_out_conn)
         QTimer.singleShot(0, self._update_global_ui_interaction_states)
 
-# In class MainWindow:
-# REPLACE the entire _update_contextual_knob_configs method with this one.
 
     def _update_contextual_knob_configs(self):
         """Updates knob ranges, labels (via overlay), and tooltips based on context."""
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
         animator_is_playing = self.is_animator_playing
-
         labels = ["", "", "", "", ""]
         dials = [self.knob_volume_top_right, self.knob_pan_top_right,
-                 self.knob_filter_top_right, self.knob_resonance_top_right, self.knob_select_top_right]
-
+                self.knob_filter_top_right, self.knob_resonance_top_right, self.knob_select_top_right]
         for dial in dials:
             if dial:
                 dial.blockSignals(True)
-
         # --- Configure each knob based on context ---
-
         # Knob 1 (Brightness)
         if self.knob_volume_top_right:
             if sampler_is_active:
@@ -2007,7 +1994,6 @@ class MainWindow(QMainWindow):
                 self.knob_volume_top_right.setValue(
                     int(self.global_pad_brightness * 100))
                 labels[0] = "Global Brightness"
-
         # Knob 2 (Saturation / Unassigned)
         if self.knob_pan_top_right:
             if sampler_is_active:
@@ -2018,7 +2004,6 @@ class MainWindow(QMainWindow):
                 self.knob_pan_top_right.setRange(0, 127)
                 self.knob_pan_top_right.setValue(64)
                 labels[1] = ""
-
         # Knob 3 (Contrast / Unassigned)
         if self.knob_filter_top_right:
             if sampler_is_active:
@@ -2029,7 +2014,6 @@ class MainWindow(QMainWindow):
                 self.knob_filter_top_right.setRange(0, 127)
                 self.knob_filter_top_right.setValue(64)
                 labels[2] = ""
-
         # Knob 4 (Hue / Speed / Unassigned)
         if self.knob_resonance_top_right:
             if animator_is_playing and self.animator_manager:
@@ -2048,30 +2032,21 @@ class MainWindow(QMainWindow):
                 self.knob_resonance_top_right.setRange(0, 127)
                 self.knob_resonance_top_right.setValue(64)
                 labels[3] = ""
-
         # Knob 5 (Select)
         labels[4] = "Select"
-
         # --- Apply the labels and tooltips ---
         if hasattr(self, 'knob_label_overlay') and self.knob_label_overlay:
             self.knob_label_overlay.set_labels(labels)
-
         self._update_all_knob_tooltips()
-
         for dial in dials:
             if dial:
                 dial.blockSignals(False)
-
         self._update_all_knob_visuals()
-
-# In class MainWindow:
-# ADD this new method.
 
     def _update_all_knob_tooltips(self):
         """Sets the tooltip for all 5 knobs based on the current context."""
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
         animator_is_playing = self.is_animator_playing
-
         knob_stacks = [
             getattr(self, "knob_volume_top_right_stack", None),
             getattr(self, "knob_pan_top_right_stack", None),
@@ -2079,7 +2054,6 @@ class MainWindow(QMainWindow):
             getattr(self, "knob_resonance_top_right_stack", None),
             getattr(self, "SelectKnobTopRight_stack", None),
         ]
-
         # Knob 1
         if knob_stacks[0]:
             if sampler_is_active:
@@ -2088,7 +2062,6 @@ class MainWindow(QMainWindow):
             else:
                 knob_stacks[0].setToolTip(
                     f"Global Pad Brightness ({self.knob_volume_top_right.value()}%)")
-
         # Knob 2
         if knob_stacks[1]:
             if sampler_is_active:
@@ -2096,7 +2069,6 @@ class MainWindow(QMainWindow):
                     f"Sampler: Saturation ({self.knob_pan_top_right.value() / 100.0:.2f}x)")
             else:
                 knob_stacks[1].setToolTip("Unassigned")
-
         # Knob 3
         if knob_stacks[2]:
             if sampler_is_active:
@@ -2104,7 +2076,6 @@ class MainWindow(QMainWindow):
                     f"Sampler: Contrast ({self.knob_filter_top_right.value() / 100.0:.2f}x)")
             else:
                 knob_stacks[2].setToolTip("Unassigned")
-
         # Knob 4
         if knob_stacks[3]:
             if animator_is_playing:
@@ -2116,7 +2087,6 @@ class MainWindow(QMainWindow):
                     f"Sampler: Hue Shift ({self.knob_resonance_top_right.value():+d})")
             else:
                 knob_stacks[3].setToolTip("Unassigned")
-
         # Knob 5
         if knob_stacks[4]:
             knob_stacks[4].setToolTip("Select Item / Press to Apply (Mind the UI if there are unsaved changes in animator)")
@@ -2843,7 +2813,6 @@ class MainWindow(QMainWindow):
             # knows it was an explicit stop.
             self._stop_action_issued_for_oled = True
             self.animator_manager.action_stop()
-            # The _on_animator_playback_status_for_oled slot will then correctly show "■ STOP"
 
     def _handle_hardware_animator_stop_request(self):
         if self.animator_manager:
@@ -3827,6 +3796,22 @@ class MainWindow(QMainWindow):
             can_connect = bool(current_text and current_text != "No MIDI output ports found")
             self.connect_button_direct_ref.setEnabled(can_connect)
         # else: self.connect_button_direct_ref.setEnabled(True) # If connected, button is "Disconnect"
+
+
+    def resizeEvent(self, event):
+        """
+        Overrides the default resize event to reposition custom UI elements
+        that are not managed by a layout.
+        """
+        # Call the base class implementation first
+        super().resizeEvent(event)
+
+        # Reposition our manually placed elements after a short delay to allow layouts to settle.
+        # This ensures the knob labels and the play/pause icon stay in the correct place.
+        if hasattr(self, '_calculate_and_set_knob_positions_for_overlay'):
+            QTimer.singleShot(0, self._calculate_and_set_knob_positions_for_overlay)
+        if hasattr(self, '_position_oled_toggle_icon'):
+            QTimer.singleShot(0, self._position_oled_toggle_icon)
 
     def toggle_connection(self):
         """Toggles MIDI connection state and handles initial OLED animation."""

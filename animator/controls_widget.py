@@ -39,8 +39,8 @@ ICON_NAV_FIRST = "|◀"
 ICON_NAV_PREV = "◀"
 ICON_NAV_NEXT = "▶"
 ICON_NAV_LAST = "▶|"
-ICON_PLAY = "🎬"
-ICON_PAUSE = "❚❚"
+ICON_PLAY = "⏯"
+ICON_PAUSE = "⏯"
 ICON_STOP = "🛑"
 
 
