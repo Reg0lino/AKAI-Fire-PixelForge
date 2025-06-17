@@ -1,9 +1,4 @@
 # AKAI_Fire_RGB_Controller/gui/visualizer_settings_dialog.py
-
-# TODO hardware inputs like knobs for brightness and speed as well as a dedicated start button
-# TODO make sure the signals dont fuck up and override eachother, (knob 1 glb brightness)
-
-
 import json
 import os
 from PyQt6.QtWidgets import (
