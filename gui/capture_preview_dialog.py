@@ -1,15 +1,14 @@
-### START OF FILE capture_preview_dialog.py ###
 # AKAI_Fire_RGB_Controller/gui/capture_preview_dialog.py
 import sys
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QPushButton, QWidget,
-    QSizePolicy, QSpacerItem, QSplitter, QApplication
+    QSizePolicy, QSpacerItem, QSplitter, QApplication, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QImage, QPixmap
 from PIL import Image # Keep PIL import
 
-# Assuming MonitorViewWidget is correctly imported from the same directory
+
 try:
     from .monitor_view_widget import MonitorViewWidget
 except ImportError:
@@ -21,8 +20,6 @@ except ImportError:
         def set_target_monitor_and_update_view(self, monitor_id): pass
         def set_current_selection_from_params(self, monitor_id, region_rect_percentage): pass
 
-# Assuming ScreenSamplerCore is in features, relative to project root
-# This path might need adjustment based on your project structure if run standalone
 try:
     from features.screen_sampler_core import ScreenSamplerCore
 except ImportError:
@@ -73,86 +70,103 @@ class CapturePreviewDialog(QDialog):
         main_layout = QVBoxLayout(self)
         splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter, 1)
-
         self.monitor_view_widget = MonitorViewWidget()
         splitter.addWidget(self.monitor_view_widget)
-
         right_panel_widget = QWidget()
         right_panel_layout = QVBoxLayout(right_panel_widget)
-        right_panel_layout.setContentsMargins(5,5,5,5)
-
+        right_panel_layout.setContentsMargins(5, 5, 5, 5)
         self.preview_image_label = QLabel("Waiting for preview...")
         self.preview_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_image_label.setMinimumSize(300, 180)
-        self.preview_image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
-        self.preview_image_label.setStyleSheet("background-color: #282828; border: 1px solid #444;")
+        self.preview_image_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.preview_image_label.setStyleSheet(
+            "background-color: #282828; border: 1px solid #444;")
         right_panel_layout.addWidget(self.preview_image_label, 1)
-
         controls_widget = QWidget()
         controls_layout = QVBoxLayout(controls_widget)
         controls_layout.setSpacing(10)
-
-        adj_label_min_width = 70 
-        val_label_min_width = 55 # Increased slightly for "+180°"
-
+        adj_label_min_width = 70
+        val_label_min_width = 55
         # --- REORDERED SLIDERS ---
         # 1. Brightness
         bri_layout = QHBoxLayout()
-        bri_label = QLabel("Brightness:"); bri_label.setMinimumWidth(adj_label_min_width)
+        bri_label = QLabel("Brightness:")
+        bri_label.setMinimumWidth(adj_label_min_width)
         bri_layout.addWidget(bri_label)
         self.brightness_slider = QSlider(Qt.Orientation.Horizontal)
-        self.brightness_slider.setRange(SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL)
-        self.brightness_slider.setValue(self._factor_to_slider(self.current_params['adjustments']['brightness']))
+        self.brightness_slider.setRange(
+            SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL)
+        self.brightness_slider.setValue(self._factor_to_slider(
+            self.current_params['adjustments']['brightness']))
         bri_layout.addWidget(self.brightness_slider)
-        self.brightness_value_label = QLabel(); self.brightness_value_label.setMinimumWidth(val_label_min_width)
+        self.brightness_value_label = QLabel()
+        self.brightness_value_label.setMinimumWidth(val_label_min_width)
         bri_layout.addWidget(self.brightness_value_label)
         controls_layout.addLayout(bri_layout)
-
         # 2. Saturation
         sat_layout = QHBoxLayout()
-        sat_label = QLabel("Saturation:"); sat_label.setMinimumWidth(adj_label_min_width)
+        sat_label = QLabel("Saturation:")
+        sat_label.setMinimumWidth(adj_label_min_width)
         sat_layout.addWidget(sat_label)
         self.saturation_slider = QSlider(Qt.Orientation.Horizontal)
-        self.saturation_slider.setRange(SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL)
-        self.saturation_slider.setValue(self._factor_to_slider(self.current_params['adjustments']['saturation']))
+        self.saturation_slider.setRange(
+            SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL)
+        self.saturation_slider.setValue(self._factor_to_slider(
+            self.current_params['adjustments']['saturation']))
         sat_layout.addWidget(self.saturation_slider)
-        self.saturation_value_label = QLabel(); self.saturation_value_label.setMinimumWidth(val_label_min_width)
+        self.saturation_value_label = QLabel()
+        self.saturation_value_label.setMinimumWidth(val_label_min_width)
         sat_layout.addWidget(self.saturation_value_label)
         controls_layout.addLayout(sat_layout)
-
         # 3. Contrast
         con_layout = QHBoxLayout()
-        con_label = QLabel("Contrast:"); con_label.setMinimumWidth(adj_label_min_width)
+        con_label = QLabel("Contrast:")
+        con_label.setMinimumWidth(adj_label_min_width)
         con_layout.addWidget(con_label)
         self.contrast_slider = QSlider(Qt.Orientation.Horizontal)
         self.contrast_slider.setRange(SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL)
-        self.contrast_slider.setValue(self._factor_to_slider(self.current_params['adjustments']['contrast']))
+        self.contrast_slider.setValue(self._factor_to_slider(
+            self.current_params['adjustments']['contrast']))
         con_layout.addWidget(self.contrast_slider)
-        self.contrast_value_label = QLabel(); self.contrast_value_label.setMinimumWidth(val_label_min_width)
+        self.contrast_value_label = QLabel()
+        self.contrast_value_label.setMinimumWidth(val_label_min_width)
         con_layout.addWidget(self.contrast_value_label)
         controls_layout.addLayout(con_layout)
-
         # 4. Hue Shift
         hue_layout = QHBoxLayout()
-        hue_label = QLabel("Hue Shift:"); hue_label.setMinimumWidth(adj_label_min_width)
+        hue_label = QLabel("Hue Shift:")
+        hue_label.setMinimumWidth(adj_label_min_width)
         hue_layout.addWidget(hue_label)
         self.hue_slider = QSlider(Qt.Orientation.Horizontal)
         self.hue_slider.setRange(SLIDER_MIN_HUE, SLIDER_MAX_HUE)
-        self.hue_slider.setValue(int(round(self.current_params['adjustments']['hue_shift']))) # Initial value as int
+        self.hue_slider.setValue(int(
+            # Initial value as int
+            round(self.current_params['adjustments']['hue_shift'])))
         hue_layout.addWidget(self.hue_slider)
-        self.hue_value_label = QLabel(); self.hue_value_label.setMinimumWidth(val_label_min_width)
+        self.hue_value_label = QLabel()
+        self.hue_value_label.setMinimumWidth(val_label_min_width)
         hue_layout.addWidget(self.hue_value_label)
         controls_layout.addLayout(hue_layout)
-        # --- END REORDERED ---
-
+        # --- NEW: Live Sync Checkbox ---
+        self.sync_checkbox = QCheckBox("Live Sync with Main Window Knobs")
+        self.sync_checkbox.setToolTip(
+            "When checked, these sliders will update in real-time if the\n"
+            "main window's knobs are adjusted while this dialog is open.\n"
+            "Uncheck to prevent sliders from moving unexpectedly while you adjust them."
+        )
+        self.sync_checkbox.setChecked(True)  # Default to ON
+        controls_layout.addWidget(self.sync_checkbox, 0,
+                                Qt.AlignmentFlag.AlignCenter)
         self.reset_button = QPushButton("Reset Adjustments")
-        controls_layout.addWidget(self.reset_button, 0, Qt.AlignmentFlag.AlignCenter)
-        
+        controls_layout.addWidget(self.reset_button, 0,
+                                Qt.AlignmentFlag.AlignCenter)
         right_panel_layout.addWidget(controls_widget)
         right_panel_layout.addStretch(0)
         right_panel_widget.setLayout(right_panel_layout)
         splitter.addWidget(right_panel_widget)
-        splitter.setSizes([self.width() * 3 // 5, self.width() * 2 // 5]) # Initial split ratio
+        splitter.setSizes([self.width() * 3 // 5, self.width()
+                        * 2 // 5])  # Initial split ratio
 
     def _connect_signals(self):
         self.monitor_view_widget.region_selection_changed.connect(self._on_region_or_monitor_changed_in_view)
@@ -291,24 +305,28 @@ class CapturePreviewDialog(QDialog):
         """
         Updates the dialog's sliders and value labels from an external source
         (e.g., when MainWindow knobs change sampler parameters).
+        Checks the sync checkbox before applying changes.
         """
+        if self.sync_checkbox and not self.sync_checkbox.isChecked():
+            return  # Do not update sliders if live sync is disabled by the user.
         # print(f"CPD TRACE: update_sliders_from_external_adjustments called with: {new_adjustments}") # Optional
-        
         self.current_params['adjustments'] = new_adjustments.copy()
-
-        self.saturation_slider.blockSignals(True); self.contrast_slider.blockSignals(True)
-        self.brightness_slider.blockSignals(True); self.hue_slider.blockSignals(True)
-        
-        self.brightness_slider.setValue(self._factor_to_slider(new_adjustments.get('brightness', DEFAULT_BRIGHTNESS_FACTOR)))
-        self.saturation_slider.setValue(self._factor_to_slider(new_adjustments.get('saturation', DEFAULT_SATURATION_FACTOR)))
-        self.contrast_slider.setValue(self._factor_to_slider(new_adjustments.get('contrast', DEFAULT_CONTRAST_FACTOR)))
-        
+        self.saturation_slider.blockSignals(True)
+        self.contrast_slider.blockSignals(True)
+        self.brightness_slider.blockSignals(True)
+        self.hue_slider.blockSignals(True)
+        self.brightness_slider.setValue(self._factor_to_slider(
+            new_adjustments.get('brightness', DEFAULT_BRIGHTNESS_FACTOR)))
+        self.saturation_slider.setValue(self._factor_to_slider(
+            new_adjustments.get('saturation', DEFAULT_SATURATION_FACTOR)))
+        self.contrast_slider.setValue(self._factor_to_slider(
+            new_adjustments.get('contrast', DEFAULT_CONTRAST_FACTOR)))
         hue_val = new_adjustments.get('hue_shift', DEFAULT_HUE_SHIFT)
-        self.hue_slider.setValue(int(round(hue_val))) # CORRECTED CAST
-        
-        self.saturation_slider.blockSignals(False); self.contrast_slider.blockSignals(False)
-        self.brightness_slider.blockSignals(False); self.hue_slider.blockSignals(False)
-        
+        self.hue_slider.setValue(int(round(hue_val)))  # CORRECTED CAST
+        self.saturation_slider.blockSignals(False)
+        self.contrast_slider.blockSignals(False)
+        self.brightness_slider.blockSignals(False)
+        self.hue_slider.blockSignals(False)
         self._update_all_slider_value_labels()
 
     def update_preview_image(self, pil_image: Image.Image | None):

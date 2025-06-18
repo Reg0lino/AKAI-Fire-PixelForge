@@ -2925,12 +2925,6 @@ class MainWindow(QMainWindow):
             self.oled_manual_override_active_state = True # User manually set to PAUSE
             # print("MW DEBUG: Manually requested PAUSE OLED, override state = True (User wants Pause)")
 
-    def _on_animator_playback_status_changed_for_knobs(self, is_playing: bool):
-        self.is_animator_playing = is_playing
-        if is_playing:
-            self.status_bar.showMessage("Knob 4 now controls Animation Speed (FPS).", 4000)
-        self._update_contextual_knob_configs()
-
     def _update_oled_mirror(self, packed_bitmap_data_7bit: bytearray):
         """Updates the on-screen OLED mirror widget."""
         # print(
@@ -3879,14 +3873,6 @@ class MainWindow(QMainWindow):
                     (f" or input to '{in_port_to_use}'" if can_connect_in and in_port_to_use else "."))
         self.update_connection_status() # Update UI based on new connection state
 
-    def _handle_fire_pad_event_INTERNAL(self, note: int, is_pressed: bool):
-        # print(
-        #     f"MW_PAD_ROUTER: Received Note {note} (0x{note:02X}), Pressed {is_pressed}, DOOM_ACTIVE: {self.is_doom_mode_active}")
-        if self.is_doom_mode_active and self.doom_game_controller:
-            # print(f"MW_PAD_ROUTER: Routing to DoomGameController.") # DEBUG
-            self.doom_game_controller.handle_pad_event(note, is_pressed)
-        else:
-            pass
 
     def closeEvent(self, event: QCloseEvent): 
         # print("MW TRACE: closeEvent triggered.")
@@ -3925,35 +3911,3 @@ class MainWindow(QMainWindow):
         print("MW INFO: Application closeEvent accepted.")
         super().closeEvent(event)
         # print("MW TRACE: closeEvent triggered.")
-        if self.is_doom_mode_active:
-            # If DOOM is active, exit it cleanly first before handling main app save prompts
-            # print("MW TRACE: DOOM mode active during closeEvent, exiting DOOM mode first.")
-            self._exit_doom_mode() 
-            # Let event processing continue to allow animator save prompt if needed
-        # Prompt to save unsaved animator changes (original logic)
-        if self.animator_manager and self.animator_manager.active_sequence_model and \
-            self.animator_manager.active_sequence_model.is_modified:
-            reply = QMessageBox.question(self, "Unsaved Animator Changes",
-                                        f"Animation '{self.animator_manager.active_sequence_model.name}' has unsaved changes. Save before exiting?",
-                                        QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
-                                        QMessageBox.StandardButton.Cancel)
-            if reply == QMessageBox.StandardButton.Save:
-                save_success = self.animator_manager.action_save_sequence_as() # AMW shows dialog
-                if not save_success: 
-                    event.ignore() 
-                    return 
-            elif reply == QMessageBox.StandardButton.Cancel: 
-                event.ignore() 
-                return
-        # Stop other managers and disconnect controller (original logic)
-        if self.screen_sampler_manager: self.screen_sampler_manager.on_application_exit()
-        if self.animator_manager: self.animator_manager.stop_current_animation_playback() # Should be safe to call even if stopped
-        if self.color_picker_manager: self.color_picker_manager.save_color_picker_swatches_to_config()        
-        if self.oled_display_manager:
-            self.oled_display_manager.stop_all_activity() 
-            if self.akai_controller and self.akai_controller.is_connected():
-                self.oled_display_manager.clear_display_content() 
-        if self.akai_controller and (self.akai_controller.is_connected() or self.akai_controller.is_input_connected()):
-            self.akai_controller.disconnect()        
-        print("MW INFO: Application closeEvent accepted.")
-        super().closeEvent(event) # Call base class closeEvent
