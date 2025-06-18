@@ -24,6 +24,7 @@ This project turns the Akai Fire into a dynamic lighting instrument, a rich visu
     *   Includes a robust preset system for saving and loading custom palettes and schemes.
 *   **🎨 NEW: Primary/Secondary Color System!**
     *   The color picker now supports both a primary (left-click) and a secondary (right-click) color for a more intuitive painting workflow, similar to professional image editors.
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/colorpicker.png)
 *   **🔆 NEW: Global Controls Panel**
     *   A dedicated "Global Controls" panel provides an explicit slider for master pad brightness, synced with the hardware knob.
 *   **👹 LazyDOOM Game Mode!**
