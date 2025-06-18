@@ -13,7 +13,6 @@
 This project turns the Akai Fire into a dynamic lighting instrument, a rich visual feedback tool, and even a mini retro gaming console.
 
 ![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/full.png)
-![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/oled.png)
 
 ## ✨ Features (v1.5.0)
 
