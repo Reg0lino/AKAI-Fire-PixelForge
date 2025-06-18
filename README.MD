@@ -4,7 +4,7 @@
 
 **Get the latest standalone executable for Windows from the [GitHub Releases Page](https://github.com/Reg0lino/AKAI-Fire-PixelForge/releases/latest)!**
 *(See "Getting Started (Standalone Executable)" below for installation instructions.)*
-![Image](https://github.com/user-attachments/assets/16759301-d11a-4260-aab8-803e2cc5c84f)
+![Image](https://github.com/Reg0lino/AKAI-Fire-PixelForge/blob/main/images/boring.png)
 
 ## 🎛️ Overview
 
@@ -12,13 +12,14 @@
 
 This project turns the Akai Fire into a dynamic lighting instrument, a rich visual feedback tool, and even a mini retro gaming console.
 
-![Image](https://github.com/user-attachments/assets/fcec95de-555b-4066-87a9-aa0419526ef4)
-![Image](https://github.com/user-attachments/assets/f3bbcca6-abad-454e-b441-ec2d4533f6b0)
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/full.png)
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/oled.png)
 
 ## ✨ Features (v1.5.0)
 
 *   **🎵 NEW: Advanced Audio Visualizer!**
     *   Turns system audio into a real-time light show on the pads.
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/audiovis.png)
     *   **Three Modes:** Choose from "Classic Spectrum Bars", "Pulse Wave", or the comprehensive "Dual VU + Spectrum".
     *   **Live Settings:** A detailed settings dialog allows for real-time tweaking of colors, sensitivity, smoothness, and more while the visualizer is running.
     *   Includes a robust preset system for saving and loading custom palettes and schemes.
@@ -27,25 +28,29 @@ This project turns the Akai Fire into a dynamic lighting instrument, a rich visu
 *   **🔆 NEW: Global Controls Panel**
     *   A dedicated "Global Controls" panel provides an explicit slider for master pad brightness, synced with the hardware knob.
 *   **👹 LazyDOOM Game Mode!**
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/doomoled.png)
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/doomcontrol.png)
     *   Play a retro-style first-person shooter directly on your Akai Fire!
     *   Features procedural map generation, enemies, and full control via pads and keyboard.
 *   **Advanced OLED Display Customization:**
-![Image](https://github.com/user-attachments/assets/bd4aa2e4-a4fb-47e6-909b-2d501bb30c99)
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/oled.png)
     *   **OLED Content Library:** Create, edit, and manage custom "Text Items" and "Image Animation Items" (from static images or GIFs).
     *   **Advanced Image Processing:** Sliders for Brightness, Contrast, Gamma, Sharpen, and Blur. Multiple dithering algorithms (Floyd-Steinberg, Atkinson, Ordered Dithering) with variable strength.
 *   **Direct Pad Painting & Static Layouts:**
     *   Canvas-like drag interface and savable static color layouts.
 *   **Frame-by-Frame Pad Animation Sequencer ("Animator Studio"):**
-![Image](https://github.com/user-attachments/assets/bd3e8232-df5d-41d-ba4b-05975b16d59b)
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/animatorUI.png)
     *   Visual timeline, frame operations (copy/paste, duplicate), and undo/redo support.
 *   **Interactive Screen Sampler ("Ambient Mode"):**
     *   Visually select screen regions and mirror them onto the pads.
     *   Adjust Brightness, Saturation, Contrast, and Hue Shift.
     *   Record sampler output directly into a new animation.
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/sample.png)
 *   **Hardware Integration & Revamped UI:**
     *   **Custom-Rendered Knobs:** Top-strip knobs have been rebuilt for a professional look and feel, providing stable visual feedback.
     *   **Dynamic Knob Control:** Knobs contextually control Global Brightness, Sampler Parameters, or Animator Speed.
     *   **OLED Feedback:** Real-time feedback for knob turns and system events.
+![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/toprow.png)
 
 ## 🛠️ Technology Stack
 
@@ -62,7 +67,7 @@ This project turns the Akai Fire into a dynamic lighting instrument, a rich visu
 ## 🚀 Getting Started (Standalone Executable - Windows)
 
 1.  Go to the [**GitHub Releases Page**](https://github.com/Reg0lino/AKAI-Fire-PixelForge/releases/latest).
-2.  Download `Setup_Akai_Fire_PixelForge_vX.X.X.exe`.
+2.  Download `Setup_Akai_Fire_PixelForge_v1.5.0.exe`.
 3.  Run the installer.
 4.  **IMPORTANT (Windows Users - Antivirus/SmartScreen):**
     *   As an independently developed application, Windows SmartScreen or your antivirus might show a warning.
