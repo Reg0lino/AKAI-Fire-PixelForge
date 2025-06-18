@@ -184,7 +184,17 @@
                     </div>
                     <div class="md:w-1/2 text-gray-300 text-lg space-y-3">
                         <p>Turn your pads into a dynamic, real-time reflection of your desktop! Select any region on any connected monitor, and watch as PixelForge translates the on-screen colors to your controller.</p>
-                        <p>Fine-tune the output with live adjustments for Saturation, Contrast, Brightness, and Hue. Want to capture that awesome visual moment? You can record the sampler's output directly into new animation sequences!</p>
+                        <p>Fine-tune the output with live adjustments for Saturation, Contrast, Brightness, and Hue. But the real power lies in recording...</p>
+                        <div class="p-3 bg-gray-900 border border-yellow-500/30 rounded-md">
+                            <h4 class="font-semibold text-yellow-300 mb-2">Creative Use Cases for Recording:</h4>
+                            <ul class="list-disc list-inside ml-2 space-y-1 text-sm text-gray-400">
+                                <li>Record music visualizers from YouTube or Spotify.</li>
+                                <li>Capture cinematic moments from movies or game trailers.</li>
+                                <li>Turn any GIF from sites like <a href="https://giphy.com" target="_blank" class="text-purple-400 hover:underline">GIPHY</a> into a unique pad animation.</li>
+                                <li>Sample abstract art videos for dynamic, flowing color patterns.</li>
+                            </ul>
+                        </div>
+                        <p>The workflow is simple: find a cool video, position the sampler, hit record, and let PixelForge build a complex animation for you automatically!</p>
                     </div>
                 </div>
             </div>
@@ -199,14 +209,17 @@
                         <img src="images/oled.png" alt="OLED Customizer Dialog showing various options" class="rounded-lg shadow-2xl border-2 border-gray-800 w-full mb-4 transition-transform hover:scale-105 duration-300 cursor-zoom-in zoomable-img" />
                     </div>
                     <div class="md:w-1/2 text-gray-300 text-lg space-y-3">
-                        <p>Transform the 128x64 monochrome screen into your personal message board or micro-cinema! The OLED Content Library Manager lets you create, edit, and save "Text Items" and "Image/Animation Items."</p>
-                        <p>Import static images or animated GIFs and harness the advanced processing pipeline:
-                            <ul class="list-disc list-inside ml-4 space-y-1 text-gray-400"> 
-                                <li><b>Pre-Dithering:</b> Adjust Brightness, Contrast, Gamma, Sharpen, and apply Pre-Dither Blur.</li>
-                                <li><b>Dithering Arsenal:</b> Choose from Floyd-Steinberg, Atkinson, Simple Threshold, and multiple Ordered Dithers.</li>
-                                <li><b>Fine Control:</b> Utilize Variable Dither Strength and add stylistic Noise Injection.</li>
+                        <p>Transform the 128x64 monochrome screen into your personal message board or micro-cinema. The OLED Content Library Manager is your hub for creating, editing, and saving all your custom screen assets.</p>
+                        <div>
+                            <h4 class="text-xl font-semibold text-cyan-300">Advanced Image Processing:</h4>
+                            <p class="text-gray-400">Import static images or animated GIFs and harness a deep processing pipeline to get the perfect look:</p>
+                            <ul class="list-disc list-inside ml-4 mt-2 space-y-1 text-gray-400"> 
+                                <li><b>Pre-Dithering:</b> Adjust Brightness, Contrast, and use **Gamma** to bring out mid-tones in dark images, or **Sharpen** to make logos pop.</li>
+                                <li><b>Dithering Arsenal:</b> Choose **Floyd-Steinberg** for smooth photographic gradients, or **Ordered Dithering (Bayer)** for a chunky, retro, pixel-art feel.</li>
+                                <li><b>Fine Control:</b> Utilize Variable Dither Strength and add stylistic Noise Injection to achieve gritty, lo-fi effects.</li>
                             </ul>
-                        </p>
+                        </div>
+                        <p>Set any of your creations as the default "Active Graphic" that displays on startup, and use the UI icon to manually pause and resume your animations.</p>
                     </div>
                 </div>
             </div>
@@ -224,11 +237,13 @@
                     <div class="md:w-1/2 text-gray-300 text-lg space-y-4">
                         <h4 class="text-2xl font-semibold text-red-400">Gameplay Highlights:</h4>
                         <ul class="list-disc list-inside ml-4 space-y-2">
-                            <li>Navigate unique procedurally generated mazes on the 128x64 OLED.</li>
-                            <li>Battle "Imp" enemies with classic hitscan shooting.</li>
-                            <li>Full pad-based controls for movement, aiming, and actions.</li>
-                            <li>Real-time HP display on OLED and RGB pads.</li>
-                            <li>Choose from multiple difficulty levels.</li>
+                            <li>Navigate unique, procedurally generated mazes on the 128x64 OLED—each with a new layout, ensuring no two playthroughs are the same.</li>
+                            <li>Battle "Imp" enemies with classic hitscan shooting. Circle-strafe to dodge their projectiles!</li>
+                            <li>Full pad-based controls for movement, turning, and actions for a true console-like feel. (Keyboard support also included).</li>
+                            <li>Manage your HP with a real-time display on both the OLED and a dedicated row of RGB pads.</li>
+                            <li>Choose from multiple difficulty levels for an escalating challenge.</li>
+                            <li><b>Immersive Feedback:</b> Feel every hit with on-screen damage glitches and dynamic RGB pad lighting that reflects game events.</li>
+                            <li><b>Game Over & Restart:</b> Fallen in battle? The 'SHOOT' pad will blink, letting you jump right back into the action for another attempt!</li>
                         </ul>
                     </div>
                     <div class="md:w-1/2 space-y-6">
@@ -237,7 +252,6 @@
                     </div>
                 </div>
             </div>
-        </div>
     <div class="section-divider"></div>
     <section id="download" class="relative bg-gray-950 py-16 md:py-24 text-center overflow-hidden">
         <div class="absolute inset-0 flex items-center justify-center opacity-10 z-0 pointer-events-none">
