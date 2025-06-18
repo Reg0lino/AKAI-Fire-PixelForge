@@ -236,7 +236,7 @@ APP_GUIDE_HTML_CONTENT = """
     </li>
     <li>🌟 <b class="tip-accent">Record Sampler Output:</b> This is where the magic happens! Click "Record" to capture the dynamic visuals from the sampler directly into a new animation sequence in the Animator Studio. This is perfect for creating unique animations from videos, music visualizers, or any on-screen content.</li>
 </ul>
-<p class="note"><b>Power User Tip:</b> Websites like <a href="https://giphy.com" target="_blank">GIPHY.com</a> are a goldmine for sampler content. Play a GIF (abstract colors are best), position the sampler region over it, and record the output to create amazing, complex pad animations with ease!</p>
+<p class="note"><b>Power User Tip:</b> Websites like <a href="https://giphy.com/search/abstract-color" target="_blank">GIPHY.com</a> are a goldmine for sampler content. Play a GIF (abstract colors are best), position the sampler region over it, and record the output to create amazing, complex pad animations with ease!</p>
 </div>
 
 <div class="card">
