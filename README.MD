@@ -29,7 +29,9 @@ This project turns the Akai Fire into a dynamic lighting instrument, a rich visu
 *   **🔆 NEW: Global Controls Panel**
     *   A dedicated "Global Controls" panel provides an explicit slider for master pad brightness, synced with the hardware knob.
 *   **👹 LazyDOOM Game Mode!**
+
 ![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/doomoled.png)
+
 ![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/doomcontrol.png)
     *   Play a retro-style first-person shooter directly on your Akai Fire!
     *   Features procedural map generation, enemies, and full control via pads and keyboard.
