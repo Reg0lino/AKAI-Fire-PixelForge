@@ -1,0 +1,12 @@
+{
+    "item_name": "WINGDING",
+    "item_type": "text",
+    "text_content": "dufhlskudvblskjhcblycbsliycbsc73 04r7yt4097 0r7h",
+    "font_family": "Wingdings",
+    "font_size_px": 62,
+    "animation_style": "scroll_left",
+    "animation_params": {
+        "pause_at_ends_ms": 1000
+    },
+    "alignment": "left"
+}

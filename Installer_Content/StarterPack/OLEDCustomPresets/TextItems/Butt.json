@@ -1,0 +1,12 @@
+{
+    "item_name": "Butt",
+    "item_type": "text",
+    "text_content": "BUTT BUTT BUTT BUTT",
+    "font_family": "Stencil",
+    "font_size_px": 43,
+    "animation_style": "scroll_left",
+    "animation_params": {
+        "pause_at_ends_ms": 1000
+    },
+    "alignment": "left"
+}

@@ -1,0 +1,14 @@
+{
+    "name": "Ocean Depths (Static gradient: Dark Blue top, fading to Lighter Teal bottom in bands)",
+    "description": "Static gradient from dark blue at the top to lighter teal at the bottom in horizontal bands.",
+    "colors": [
+        "#00008B", "#00008B", "#00008B", "#00008B", "#00008B", "#00008B", "#00008B", "#00008B",
+        "#0000CD", "#0000CD", "#0000CD", "#0000CD", "#0000CD", "#0000CD", "#0000CD", "#0000CD",
+        "#4169E1", "#4169E1", "#4169E1", "#4169E1", "#4169E1", "#4169E1", "#4169E1", "#4169E1",
+        "#008080", "#008080", "#008080", "#008080", "#008080", "#008080", "#008080", "#008080",
+        "#20B2AA", "#20B2AA", "#20B2AA", "#20B2AA", "#20B2AA", "#20B2AA", "#20B2AA", "#20B2AA",
+        "#40E0D0", "#40E0D0", "#40E0D0", "#40E0D0", "#40E0D0", "#40E0D0", "#40E0D0", "#40E0D0",
+        "#48D1CC", "#48D1CC", "#48D1CC", "#48D1CC", "#48D1CC", "#48D1CC", "#48D1CC", "#48D1CC",
+        "#AFEEEE", "#AFEEEE", "#AFEEEE", "#AFEEEE", "#AFEEEE", "#AFEEEE", "#AFEEEE", "#AFEEEE"
+    ]
+}

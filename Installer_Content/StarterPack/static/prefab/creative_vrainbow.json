@@ -1,0 +1,14 @@
+{
+    "name": "Vertical Rainbow (Static: 8 distinct color rows - R,O,Y,G,B,I,V,Pink)",
+    "description": "Static rainbow with 8 distinct horizontal color stripes.",
+    "colors": [
+        "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000",
+        "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500", "#FFA500",
+        "#FFFF00", "#FFFF00", "#FFFF00", "#FFFF00", "#FFFF00", "#FFFF00", "#FFFF00", "#FFFF00",
+        "#00FF00", "#00FF00", "#00FF00", "#00FF00", "#00FF00", "#00FF00", "#00FF00", "#00FF00",
+        "#0000FF", "#0000FF", "#0000FF", "#0000FF", "#0000FF", "#0000FF", "#0000FF", "#0000FF",
+        "#4B0082", "#4B0082", "#4B0082", "#4B0082", "#4B0082", "#4B0082", "#4B0082", "#4B0082",
+        "#EE82EE", "#EE82EE", "#EE82EE", "#EE82EE", "#EE82EE", "#EE82EE", "#EE82EE", "#EE82EE",
+        "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB", "#FFC0CB"
+    ]
+}

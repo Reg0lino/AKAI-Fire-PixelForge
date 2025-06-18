@@ -1,42 +1,36 @@
-# Python Bytecode and Cache
+# ===================================================================
+#  Akai Fire PixelForge - .gitignore
+# ===================================================================
+
+# --- Python & Caches ---
 __pycache__/
 *.py[cod]
 *$py.class
+.mypy_cache/
+.pytest_cache/
+.coverage
 
-# Distribution / Packaging
-dist/
-build/
-*.egg-info/
-*.egg
-*.spec
-*.zip
-*.tar.gz
-*.exe
-*.dmg
-*.pkg
-
-# Virtual environments
+# --- Virtual Environments ---
+# Do not commit virtual environment folders.
 .venv/
 venv/
 ENV/
 env/
 */.env
-*/.venv/
-*/env.bak
-*/venv.bak
 
-# User-specific settings, logs, and temporary files (local development)
-user_settings/
-user_settings_fallback/
-app_errors.log
-*.log
-_temp_*.png
-*.tmp
-*.bat
+# --- Generated Build & Distribution Artifacts ---
+# These folders are created by PyInstaller and Inno Setup and should NEVER be in Git.
+build/
+dist/
+Output/
+*.egg-info/
+*.egg
 
-# IDE / Editor specific
+# --- OS & IDE Specific Files ---
+# These are user-specific and should not be shared.
 .vscode/
 .idea/
+.specstory/
 *.suo
 *.ntvs*
 *.njsproj
@@ -44,7 +38,7 @@ _temp_*.png
 *.sublime-project
 *.sublime-workspace
 
-# OS generated files
+# Common OS-generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -53,44 +47,36 @@ _temp_*.png
 ehthumbs.db
 Thumbs.db
 
-# Backup files
+# --- Logs & Temporary Files ---
+# Local development files that should not be in the repository.
+*.log
+app_crash_log.txt
+*.tmp
 *.bak
 *.swp
 *~
-
-# PyInstaller
-#-----------
-# *.manifest
-*.spec
-
-# Nuitka
-#-----------
-*.build/
-# *.py.เดี่ยว # Nuitka for single file, Thai characters mean "single"
-*.dist/
-*.onefile-build/
-
-# MyPy cache
-.mypy_cache/
-
-# Pytest cache
-.pytest_cache/
-.coverage
-minimal_qt_test.py
-.specstory/history/2025-05-14_16-37-file-akai-fire-rgb-controller-gui-main-window-py.md
-.specstory/
-.spec_chat_5-26-25.md
-test_qfontdatabase.py
 debug_mirror_pil_frame.png
-animator/controls_widget.py
-installer.iss
-CHANGELOG.txt
 
-# Miscellaneous
-Installer_Content/
-README.txt
-Output/
-images/github.png
+# --- User-Specific Settings ---
+# Each user will have their own settings; do not track these.
+user_settings/
+user_settings_fallback/
+user_settings_fallback_cpm/
+user_settings_test/
+
+# --- Personal Test Scripts ---
+# Ignoring specific local test files mentioned in your original gitignore.
 identify_pad_lights.py
 test.html
 audio.py
+test_qfontdatabase.py
+minimal_qt_test.py
+
+# NOTE: We have intentionally REMOVED the following lines from your old file
+# because they are essential project files and SHOULD be in Git:
+# *.spec
+# installer.iss
+# Installer_Content/
+# README.txt
+run_forge_silent.bat
+run_forge.bat
