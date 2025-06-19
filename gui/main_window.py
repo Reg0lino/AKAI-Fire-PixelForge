@@ -62,23 +62,18 @@ class StaticKnobWidget(QWidget):
         # Draw the indicator handle, rotating from the top (0 degrees)
         painter.save()
         painter.rotate(self._angle)
-        
         indicator_radius = (side / 2.0) * 0.60
         indicator_size = side * 0.18
-        
         indicator_rect = QRectF(
             -indicator_size / 2, 
             -indicator_radius - (indicator_size / 2),
             indicator_size, 
             indicator_size
         )
-        
         painter.setBrush(QBrush(self.indicator_body_color))
         painter.setPen(QPen(self.indicator_border_color, 1))
         painter.drawEllipse(indicator_rect)
         painter.restore()
-
-
 
 class KnobLabelOverlay(QWidget):
     """A transparent overlay widget to draw dynamic labels under the knobs."""
@@ -732,11 +727,11 @@ class MainWindow(QMainWindow):
         return input_connection_group
 
     def _populate_right_panel(self):
-        from PyQt6.QtWidgets import QSlider, QGridLayout # Keep local import
+        from PyQt6.QtWidgets import QSlider, QGridLayout, QScrollArea
         if self.right_panel_layout_v is None:
             print("MW CRITICAL ERROR: _populate_right_panel - self.right_panel_layout_v is None!")
             return
-        # --- MIDI Connection Group (Output) ---
+        # --- MIDI Connection Group ---
         connection_group = QGroupBox("🔌 MIDI Output")
         connection_layout = QHBoxLayout(connection_group)
         self.port_combo_direct_ref = QComboBox()
@@ -749,10 +744,9 @@ class MainWindow(QMainWindow):
         connection_layout.addWidget(self.port_combo_direct_ref, 1)
         connection_layout.addWidget(self.connect_button_direct_ref)
         self.right_panel_layout_v.addWidget(connection_group)
-        # --- MODIFIED: Global Controls Group ---
         self.global_controls_group_box = QGroupBox("🔆 Global Controls")
         global_controls_layout = QGridLayout(self.global_controls_group_box)
-        # Brightness Slider and Label
+        # Row 0: Brightness Slider and Label
         self.brightness_slider_label = QLabel("Brightness:")
         self.global_brightness_slider = QSlider(Qt.Orientation.Horizontal)
         self.global_brightness_slider.setRange(0, 100)
@@ -763,29 +757,26 @@ class MainWindow(QMainWindow):
         global_controls_layout.addWidget(self.brightness_slider_label, 0, 0)
         global_controls_layout.addWidget(self.global_brightness_slider, 0, 1)
         global_controls_layout.addWidget(self.brightness_value_label, 0, 2)
-        # App Guide Button (relocated here)
-        self.app_guide_button = QPushButton("🚀 App Guide")
-        self.app_guide_button.setToolTip("Open the App Guide and Hotkey List")
-        self.app_guide_button.setObjectName("AppGuideButton")
-        self.app_guide_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.app_guide_button.clicked.connect(self._open_app_guide_dialog)
-        # Add the button to the grid layout, spanning all columns for centering
-        global_controls_layout.addWidget(
-            self.app_guide_button, 1, 2, Qt.AlignmentFlag.AlignRight)
-        global_controls_layout.setColumnStretch(1, 1) # Make slider expand
+        # Row 1: App Guide Button, aligned to the right
+        if self.app_guide_button:
+            # Add button to row 1, spanning all 3 columns, with alignment set to right.
+            global_controls_layout.addWidget(self.app_guide_button, 1, 0, 1, 3, Qt.AlignmentFlag.AlignRight)
+        # Set the middle column (with the slider) to take all the stretch
+        global_controls_layout.setColumnStretch(1, 1)
+        
         self.right_panel_layout_v.addWidget(self.global_controls_group_box)
-        # Add remaining widgets as before
-        if self.color_picker_manager: self.right_panel_layout_v.addWidget(self.color_picker_manager)
+        # --- Color Picker and other widgets (no changes here) ---
+        if self.color_picker_manager:
+            self.right_panel_layout_v.addWidget(self.color_picker_manager)
+        
         if self.static_layouts_manager: self.right_panel_layout_v.addWidget(self.static_layouts_manager)
+        
         if self.audio_visualizer_ui_manager:
             self.audio_visualizer_ui_manager.setTitle("🎵 Audio Visualizer")
             self.right_panel_layout_v.addWidget(self.audio_visualizer_ui_manager)
-        # The QWidget and QHBoxLayout that held the App Guide and LazyDOOM buttons are now gone.
+        
         self.right_panel_layout_v.addStretch(1)
         
-
-# In class MainWindow:
-# REPLACE this entire method:
 
     def _populate_left_panel(self):
         """Populates the left panel with the hardware top strip, pad grid, animator UI, and new control deck."""
@@ -793,42 +784,34 @@ class MainWindow(QMainWindow):
             print(
                 "MW CRITICAL ERROR: _populate_left_panel - self.left_panel_layout is None!")
             return
-
         # 1. Add Hardware Top Strip
         hardware_top_strip_widget = self._create_hardware_top_strip()
         self.left_panel_layout.addWidget(hardware_top_strip_widget, 0)
-
         # 2. Add Pad Grid Section
         pad_grid_container = self._create_pad_grid_section()
         self.left_panel_layout.addWidget(pad_grid_container, 0)
-
         # 3. Add AnimatorManagerWidget UI
         if self.animator_manager:
             self.animator_manager.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             self.left_panel_layout.addWidget(self.animator_manager, 1)
-
-        # --- NEW: Bottom Control Deck Layout ---
         # Create a persistent container with a parent to prevent garbage collection
         self.bottom_control_deck_container = QWidget(self.left_panel_widget)
         bottom_control_deck_layout = QHBoxLayout(
             self.bottom_control_deck_container)
         bottom_control_deck_layout.setContentsMargins(0, 0, 0, 0)
         bottom_control_deck_layout.setSpacing(10)
-
         # Left side: Screen Sampler
         if self.screen_sampler_manager:
             sampler_ui_widget = self.screen_sampler_manager.get_ui_widget()
             if sampler_ui_widget:
                 bottom_control_deck_layout.addWidget(sampler_ui_widget)
-
         # Right side: LazyDOOM "Shrine"
         doom_shrine_group = QGroupBox("👹 LazyDOOM")
         doom_shrine_group.setObjectName("LazyDoomGroup")
         doom_shrine_layout = QVBoxLayout(doom_shrine_group)
         doom_shrine_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         doom_shrine_layout.setSpacing(5)
-
         self.doom_oled_image_label = QLabel()
         try:
             oled_icon_path = get_resource_path(
@@ -839,7 +822,6 @@ class MainWindow(QMainWindow):
             print(f"MW WARNING: Could not load doomoled.png icon: {e}")
         doom_shrine_layout.addWidget(
             self.doom_oled_image_label, 0, Qt.AlignmentFlag.AlignCenter)
-
         self.doom_controls_image_label = QLabel()
         try:
             controls_icon_path = get_resource_path(
@@ -853,16 +835,12 @@ class MainWindow(QMainWindow):
             print(f"MW WARNING: Could not load doomcontrol.png icon: {e}")
         doom_shrine_layout.addWidget(
             self.doom_controls_image_label, 0, Qt.AlignmentFlag.AlignCenter)
-
         if self.button_lazy_doom:
             doom_shrine_layout.addWidget(
                 self.button_lazy_doom, 0, Qt.AlignmentFlag.AlignCenter)
-
         bottom_control_deck_layout.addWidget(doom_shrine_group)
-
         # Add the entire control deck container to the main left panel
         self.left_panel_layout.addWidget(self.bottom_control_deck_container, 0)
-
 
 # --- GROUP 3: OTHER INITIALIZATION & CONFIGURATION HELPERS ---
     def _setup_global_brightness_knob(self):
@@ -2822,7 +2800,6 @@ class MainWindow(QMainWindow):
         print("MW INFO: Built-in OLED startup animation finished. OLED Manager is handling transition to Active Graphic.") # Optional
         pass
 
-
     def _on_sampler_activity_changed(self, is_active: bool):
         """
         Handles sampler start/stop to show OLED cues, update animator, and set button style.
@@ -2832,11 +2809,8 @@ class MainWindow(QMainWindow):
             sampler_ui = self.screen_sampler_manager.get_ui_widget()
             if hasattr(sampler_ui, 'set_sampling_active_state'):
                 sampler_ui.set_sampling_active_state(is_active)
-        # --- END NEW ---
-
         if self.oled_display_manager:
             if is_active:
-                # ... (rest of the OLED message logic remains the same)
                 monitor_name_part = "Mon: ?"
                 if self.screen_sampler_manager and self.screen_sampler_manager.screen_sampler_monitor_list_cache:
                     current_mon_id = self.screen_sampler_manager.current_sampler_params.get('monitor_id', 1)
@@ -2853,7 +2827,6 @@ class MainWindow(QMainWindow):
                 self.oled_display_manager.show_system_message(text=message_text, duration_ms=2000, scroll_if_needed=True)
             else:
                 self.oled_display_manager.show_system_message(text="Sampler OFF", duration_ms=2000, scroll_if_needed=True)
-
         if is_active and self.animator_manager:
             self.animator_manager.action_stop()
         elif not is_active:
@@ -2863,7 +2836,6 @@ class MainWindow(QMainWindow):
                 self._on_animator_frame_data_for_display(colors)
             elif not self.animator_manager or not self.animator_manager.active_sequence_model:
                 self._on_animator_frame_data_for_display(None)
-        
         self._update_global_ui_interaction_states()
         self._update_contextual_knob_configs()
 

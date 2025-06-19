@@ -144,44 +144,63 @@ class AnimatorManagerWidget(QWidget):
 
     def _connect_ui_signals(self):
         # Animator Studio Buttons
-        self.sequence_selection_combo.currentIndexChanged.connect(self._on_sequence_combo_changed)
-        # self.load_sequence_button.clicked.connect(self._on_load_selected_sequence_button_clicked)
-        self.load_sequence_button.clicked.connect(self._request_load_selected_sequence_from_main)
-        self.new_sequence_button.clicked.connect(lambda: self.action_new_sequence(prompt_save=True))
-        self.save_sequence_as_button.clicked.connect(self.action_save_sequence_as)
-        self.delete_sequence_button.clicked.connect(self._on_delete_selected_sequence_button_clicked)
+        self.sequence_selection_combo.currentIndexChanged.connect(
+            self._on_sequence_combo_changed)
+        self.load_sequence_button.clicked.connect(
+            self._request_load_selected_sequence_from_main)
+        self.new_sequence_button.clicked.connect(
+            lambda: self.action_new_sequence(prompt_save=True))
+        self.save_sequence_as_button.clicked.connect(
+            self.action_save_sequence_as)
+        self.delete_sequence_button.clicked.connect(
+            self._on_delete_selected_sequence_button_clicked)
         # Controls Widget
-        self.sequence_controls_widget.add_frame_requested.connect(self.action_add_frame) # Handles "blank" from controls
-        # self.sequence_controls_widget.default_add_button_clicked.connect(self.handle_default_add_button_click) # REMOVED
-        self.sequence_controls_widget.delete_selected_frame_requested.connect(self.action_delete_selected_frames)
-        self.sequence_controls_widget.duplicate_selected_frame_requested.connect(self.action_duplicate_selected_frames)
-        self.sequence_controls_widget.copy_frames_requested.connect(self.action_copy_frames)
-        self.sequence_controls_widget.cut_frames_requested.connect(self.action_cut_frames)
-        self.sequence_controls_widget.paste_frames_requested.connect(self.action_paste_frames)
-        self.sequence_controls_widget.navigate_first_requested.connect(self.action_navigate_first)
-        self.sequence_controls_widget.navigate_prev_requested.connect(self.action_navigate_prev)
-        self.sequence_controls_widget.navigate_next_requested.connect(self.action_navigate_next)
-        self.sequence_controls_widget.navigate_last_requested.connect(self.action_navigate_last)
+        self.sequence_controls_widget.add_frame_requested.connect(
+            self.action_add_frame)
+        self.sequence_controls_widget.delete_selected_frame_requested.connect(
+            self.action_delete_selected_frames)
+        self.sequence_controls_widget.duplicate_selected_frame_requested.connect(
+            self.action_duplicate_selected_frames)
+        self.sequence_controls_widget.copy_frames_requested.connect(
+            self.action_copy_frames)
+        self.sequence_controls_widget.cut_frames_requested.connect(
+            self.action_cut_frames)
+        self.sequence_controls_widget.paste_frames_requested.connect(
+            self.action_paste_frames)
+        self.sequence_controls_widget.navigate_first_requested.connect(
+            self.action_navigate_first)
+        self.sequence_controls_widget.navigate_prev_requested.connect(
+            self.action_navigate_prev)
+        self.sequence_controls_widget.navigate_next_requested.connect(
+            self.action_navigate_next)
+        self.sequence_controls_widget.navigate_last_requested.connect(
+            self.action_navigate_last)
         self.sequence_controls_widget.play_requested.connect(self.action_play)
-        self.sequence_controls_widget.pause_requested.connect(self.action_pause)
         self.sequence_controls_widget.stop_requested.connect(self.action_stop)
-        self.sequence_controls_widget.frame_delay_changed.connect(self.on_controls_frame_delay_changed)
+        self.sequence_controls_widget.frame_delay_changed.connect(
+            self.on_controls_frame_delay_changed)
         # Timeline Widget
-        self.sequence_timeline_widget.add_frame_action_triggered.connect(self.on_timeline_add_frame_action) # Connects to revised method
-        self.sequence_timeline_widget.frame_selected.connect(self.on_timeline_frame_selected)
-        self.sequence_timeline_widget.copy_frames_action_triggered.connect(self.action_copy_frames)
-        self.sequence_timeline_widget.cut_frames_action_triggered.connect(self.action_cut_frames)
-        self.sequence_timeline_widget.paste_frames_action_triggered.connect(self.action_paste_frames)
-        self.sequence_timeline_widget.duplicate_selected_action_triggered.connect(self.action_duplicate_selected_frames)
-        self.sequence_timeline_widget.delete_selected_action_triggered.connect(self.action_delete_selected_frames)
-        self.sequence_timeline_widget.select_all_action_triggered.connect(self.action_select_all_frames)
-        
+        self.sequence_timeline_widget.add_frame_action_triggered.connect(
+            self.on_timeline_add_frame_action)
+        self.sequence_timeline_widget.frame_selected.connect(
+            self.on_timeline_frame_selected)
+        # ... (rest of the timeline connections are unchanged)
+        self.sequence_timeline_widget.copy_frames_action_triggered.connect(
+            self.action_copy_frames)
+        self.sequence_timeline_widget.cut_frames_action_triggered.connect(
+            self.action_cut_frames)
+        self.sequence_timeline_widget.paste_frames_action_triggered.connect(
+            self.action_paste_frames)
+        self.sequence_timeline_widget.duplicate_selected_action_triggered.connect(
+            self.action_duplicate_selected_frames)
+        self.sequence_timeline_widget.delete_selected_action_triggered.connect(
+            self.action_delete_selected_frames)
+        self.sequence_timeline_widget.select_all_action_triggered.connect(
+            self.action_select_all_frames)
         self.sequence_timeline_widget.insert_blank_frame_before_action_triggered.connect(
-            lambda index: self.action_add_frame("blank", at_index=index)
-        )
+            lambda index: self.action_add_frame("blank", at_index=index))
         self.sequence_timeline_widget.insert_blank_frame_after_action_triggered.connect(
-            lambda index: self.action_add_frame("blank", at_index=index + 1)
-        )
+            lambda index: self.action_add_frame("blank", at_index=index + 1))
 
     def _connect_signals_for_active_sequence_model(self):
         # Disconnect previous model's signals first if any
@@ -460,13 +479,14 @@ class AnimatorManagerWidget(QWidget):
             self.playback_status_update.emit("No frames to select.", 1500)
         self._update_animator_controls_enabled_state() # Update local button states based on selection
 
-    def action_play_pause_toggle(self): # For global spacebar if MainWindow routes it here
+    def action_play_pause_toggle(self):
         self.request_sampler_disable.emit()
         if self.active_sequence_model.get_frame_count() == 0:
             self.playback_status_update.emit("Cannot play: No frames in sequence.", 2000)
             return
         if self.active_sequence_model.get_is_playing():
-            self.action_pause()
+            # If it's playing, we now call stop.
+            self.action_stop()
         else:
             self.action_play()
 
@@ -690,8 +710,6 @@ class AnimatorManagerWidget(QWidget):
         if start_idx == -1 or start_idx >= self.active_sequence_model.get_frame_count(): start_idx = 0
         self.active_sequence_model._playback_frame_index = start_idx # Directly set for start
         self.active_sequence_model.start_playback() # This will emit playback_state_changed
-
-    def action_pause(self): self.active_sequence_model.pause_playback()
 
     def action_stop(self): self.active_sequence_model.stop_playback()
 

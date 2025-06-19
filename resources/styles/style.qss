@@ -402,7 +402,6 @@ QPushButton#EyedropperToolButton:focus, QPushButton#EyedropperToolButton:checked
     background-color: #316644;
 }
 
-/* --- MODIFIED QDIAL STYLING (FINAL VERSION) --- */
 /* This is a more specific selector to prevent styles from being overridden on connect/update */
 QGroupBox#TopStripDeviceControls QDial {
     background-color: #101010;  /* Dark solid background */
@@ -441,27 +440,33 @@ QToolTip {
     border-radius: 3px;
     font-size: 9pt;            /* <<< THIS IS THE FIX: Force a specific, normal font size */
 }
-/* --- ADD these rules to the end of your style.qss file --- */
-
-/* General styling for any button in the "active" state (green) */
-/* This will apply to the "Sampling" and "Enable Visualizer" buttons */
-QPushButton[active="true"] {
+/* Green 'active' state for the Sampler and Visualizer toggle buttons */
+QPushButton#SamplingToggleButton[active="true"],
+QPushButton#VisualizerToggleButton[active="true"],
+QPushButton#AnimatorPlayButton[active="true"] {
     background-color: #285238; /* A deep green */
     border: 1px solid #389055;  /* A brighter green border */
     color: #E0E0E0;             /* Bright text */
+    font-weight: bold;
 }
-
-QPushButton[active="true"]:hover {
+QPushButton#SamplingToggleButton[active="true"]:hover,
+QPushButton#VisualizerToggleButton[active="true"]:hover,
+QPushButton#AnimatorPlayButton[active="true"]:hover {
     background-color: #316644;
 }
-
-/* Specific override for the LazyDOOM button when it is active (red) */
+/* Red 'active' state for the LazyDOOM button */
 QPushButton#LazyDoomButton[active="true"] {
     background-color: #6d1a1a; /* A deep red */
     border: 1px solid #c83b3b;  /* A brighter red border */
     color: #E0E0E0;
+    font-weight: bold;
 }
-
 QPushButton#LazyDoomButton[active="true"]:hover {
     background-color: #832a2a;
+}
+QLabel#DoomImagePreview {
+    border: 1px solid #660000;
+    border-radius: 3px;
+    padding: 2px;
+    background-color: #101010; /* A near-black background to make the images pop */
 }

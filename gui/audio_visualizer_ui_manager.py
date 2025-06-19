@@ -96,6 +96,7 @@ class AudioVisualizerUIManager(QGroupBox):
         action_button_layout.addWidget(self.setup_button)
 
         self.start_stop_button = QPushButton()
+        self.start_stop_button.setObjectName("VisualizerToggleButton")
         self.start_stop_button.setCheckable(True)
         self.start_stop_button.toggled.connect(self._on_start_stop_toggled)
         self.start_stop_button.setMinimumWidth(140)

@@ -58,8 +58,9 @@ class ScreenSamplerUIManager(QGroupBox):
         # --- Top Controls (Always Visible when group is enabled) ---
         top_controls_layout = QHBoxLayout()
 
-        # MODIFIED: Shortened button text and set preferred size policy
-        self.enable_sampling_button = QPushButton("Sampling")
+        # MODIFIED: Shortened button text and set preferred size policy <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        self.enable_sampling_button = QPushButton("Screen Sampling")
+        self.enable_sampling_button.setObjectName("SamplingToggleButton")
         self.enable_sampling_button.setCheckable(True)
         self.enable_sampling_button.setToolTip(
             "Toggle screen color sampling for ambient light.")
@@ -180,7 +181,7 @@ class ScreenSamplerUIManager(QGroupBox):
         if checked:
             # If enabling and monitor list is still at "Populating...", request population
             if self.monitor_combo and self.monitor_combo.count() > 0 and \
-               self.monitor_combo.itemText(0) == "Populating monitors...":
+                self.monitor_combo.itemText(0) == "Populating monitors...":
                 self.request_monitor_list_population.emit()
             self.status_message_requested.emit("Ambient sampling toggled ON.", 2000)
         else:
