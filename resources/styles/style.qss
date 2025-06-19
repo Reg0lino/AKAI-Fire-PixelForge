@@ -441,3 +441,27 @@ QToolTip {
     border-radius: 3px;
     font-size: 9pt;            /* <<< THIS IS THE FIX: Force a specific, normal font size */
 }
+/* --- ADD these rules to the end of your style.qss file --- */
+
+/* General styling for any button in the "active" state (green) */
+/* This will apply to the "Sampling" and "Enable Visualizer" buttons */
+QPushButton[active="true"] {
+    background-color: #285238; /* A deep green */
+    border: 1px solid #389055;  /* A brighter green border */
+    color: #E0E0E0;             /* Bright text */
+}
+
+QPushButton[active="true"]:hover {
+    background-color: #316644;
+}
+
+/* Specific override for the LazyDOOM button when it is active (red) */
+QPushButton#LazyDoomButton[active="true"] {
+    background-color: #6d1a1a; /* A deep red */
+    border: 1px solid #c83b3b;  /* A brighter red border */
+    color: #E0E0E0;
+}
+
+QPushButton#LazyDoomButton[active="true"]:hover {
+    background-color: #832a2a;
+}

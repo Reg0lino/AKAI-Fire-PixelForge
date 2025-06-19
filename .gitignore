@@ -81,3 +81,5 @@ minimal_qt_test.py
 run_forge_silent.bat
 run_forge.bat
 mockup 2.0
+gui/main_window.py
+mockup 2.0.png

@@ -57,28 +57,44 @@ class ScreenSamplerUIManager(QGroupBox):
         main_layout = QVBoxLayout(self)
         # --- Top Controls (Always Visible when group is enabled) ---
         top_controls_layout = QHBoxLayout()
-        self.enable_sampling_button = QPushButton("Toggle Ambient Sampling")
+
+        # MODIFIED: Shortened button text and set preferred size policy
+        self.enable_sampling_button = QPushButton("Sampling")
         self.enable_sampling_button.setCheckable(True)
-        self.enable_sampling_button.setToolTip("Toggle screen color sampling for ambient light.")
+        self.enable_sampling_button.setToolTip(
+            "Toggle screen color sampling for ambient light.")
+        self.enable_sampling_button.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         top_controls_layout.addWidget(self.enable_sampling_button)
-        self.configure_preview_button = QPushButton("Configure Region && Adjustments...")
-        self.configure_preview_button.setToolTip("Open visual region selector and color adjustments window.")
+
+        # MODIFIED: Shortened button text and set preferred size policy
+        self.configure_preview_button = QPushButton("Configure...")
+        self.configure_preview_button.setToolTip(
+            "Open visual region selector and color adjustments window.")
+        self.configure_preview_button.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         top_controls_layout.addWidget(self.configure_preview_button)
+
         main_layout.addLayout(top_controls_layout)
+
         # --- Settings Container (Can be toggled by enable_sampling_button) ---
         self.settings_container_widget = QWidget()
         settings_layout = QVBoxLayout(self.settings_container_widget)
-        settings_layout.setContentsMargins(0, 8, 0, 0) # Add some top margin
+        settings_layout.setContentsMargins(0, 8, 0, 0)
         settings_layout.setSpacing(8)
+
         # Monitor Selection
         monitor_layout = QHBoxLayout()
         monitor_layout.addWidget(QLabel("Target Monitor:"))
         self.monitor_combo = QComboBox()
-        self.monitor_combo.setToolTip("Select the monitor for screen sampling.")
-        self.monitor_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.monitor_combo.setToolTip(
+            "Select the monitor for screen sampling.")
+        self.monitor_combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.monitor_combo.addItem("Populating monitors...")
         monitor_layout.addWidget(self.monitor_combo, 1)
         settings_layout.addLayout(monitor_layout)
+
         # Sampling Speed/Frequency
         settings_layout.addWidget(QLabel("Sampling Speed:"))
         freq_display_layout = QHBoxLayout()
@@ -87,38 +103,49 @@ class ScreenSamplerUIManager(QGroupBox):
         self.frequency_slider.setValue(DEFAULT_SAMPLING_FPS)
         self.frequency_slider.setSingleStep(1)
         self.frequency_slider.setPageStep(5)
-        self.frequency_slider.setTickInterval((MAX_SAMPLING_FPS - MIN_SAMPLING_FPS) // 5 if MAX_SAMPLING_FPS > MIN_SAMPLING_FPS + 4 else 1)
+        self.frequency_slider.setTickInterval(
+            (MAX_SAMPLING_FPS - MIN_SAMPLING_FPS) // 5 if MAX_SAMPLING_FPS > MIN_SAMPLING_FPS + 4 else 1)
         self.frequency_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         freq_display_layout.addWidget(self.frequency_slider, 1)
         self.frequency_display_label = QLabel()
-        self.frequency_display_label.setMinimumWidth(90) # Adjusted for "XX FPS (XXXms)"
-        self.frequency_display_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self._update_frequency_display_label(DEFAULT_SAMPLING_FPS) # Set initial display
+        self.frequency_display_label.setMinimumWidth(90)
+        self.frequency_display_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._update_frequency_display_label(DEFAULT_SAMPLING_FPS)
         freq_display_layout.addWidget(self.frequency_display_label)
         settings_layout.addLayout(freq_display_layout)
+
         # Sampler Recording Controls
         recording_controls_layout = QHBoxLayout()
         recording_controls_layout.setSpacing(6)
         self.record_button = QPushButton(f"{ICON_RECORD} Record")
-        self.record_button.setToolTip("Start or Stop recording the screen sampler output.")
+        self.record_button.setToolTip(
+            "Start or Stop recording the screen sampler output.")
+        self.record_button.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         recording_controls_layout.addWidget(self.record_button)
-        # Set Max Frames Button
+
         self.set_max_frames_button = QPushButton(f"{ICON_SETTINGS} Max")
-        self.set_max_frames_button.setToolTip("Set maximum number of frames for sampler recording.")
-        font_metrics = self.set_max_frames_button.fontMetrics()
-        text_width = font_metrics.horizontalAdvance(f"{ICON_SETTINGS} Max Frames") # A bit more text for better default
-        self.set_max_frames_button.setFixedWidth(text_width + 25) # Icon padding + general padding
+        self.set_max_frames_button.setToolTip(
+            "Set maximum number of frames for sampler recording.")
+        self.set_max_frames_button.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        # REMOVED: setFixedWidth call
         recording_controls_layout.addWidget(self.set_max_frames_button)
-    # --- Recording Status Label ---
+
         self.recording_status_label = QLabel("Idle.")
-        self.recording_status_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self.recording_status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.recording_status_label.setToolTip("Status of the sampler recording.")
+        self.recording_status_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.recording_status_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.recording_status_label.setToolTip(
+            "Status of the sampler recording.")
         recording_controls_layout.addWidget(self.recording_status_label, 1)
-# --- Add the settings container to the main layout ---
+
         settings_layout.addLayout(recording_controls_layout)
         main_layout.addWidget(self.settings_container_widget)
-        main_layout.addStretch(1) # Pushes everything to the top
+        # REMOVED: addStretch(1) to make the widget vertically compact
+
 # signals
     def _connect_signals(self):
         if self.enable_sampling_button:
@@ -249,6 +276,7 @@ class ScreenSamplerUIManager(QGroupBox):
         """Sets the text of the recording status label."""
         if self.recording_status_label:
             self.recording_status_label.setText(text)
+
 # --- Set the controls interaction enabled state ---
     def set_controls_interaction_enabled(self, enabled: bool):
         # print(f"DEBUG SSUI.set_controls_interaction_enabled: called with enabled={enabled}")
@@ -261,6 +289,7 @@ class ScreenSamplerUIManager(QGroupBox):
             actual_combo_enable = enabled and is_populated
             self.monitor_combo.setEnabled(actual_combo_enable)
         #    print(f"DEBUG SSUI.set_controls_interaction_enabled: monitor_combo.setEnabled({actual_combo_enable}) (is_populated={is_populated})")
+
 # --- Set the overall enabled state of the group box ---
     def set_overall_enabled_state(self, enabled: bool):
         """
@@ -274,7 +303,7 @@ class ScreenSamplerUIManager(QGroupBox):
         # Configure button depends on monitors being available (or at least fetchable)
         monitors_seem_available_or_fetchable = True # Assume fetchable if group is enabled
         if self.monitor_combo and self.monitor_combo.count() == 1 and \
-           self.monitor_combo.itemText(0) == "No Monitors Found":
+            self.monitor_combo.itemText(0) == "No Monitors Found":
             monitors_seem_available_or_fetchable = False
         if self.configure_preview_button:
             self.configure_preview_button.setEnabled(enabled and monitors_seem_available_or_fetchable)
@@ -291,7 +320,7 @@ class ScreenSamplerUIManager(QGroupBox):
             if self.recording_status_label:
                 self.recording_status_label.setText("Sampler Disabled.")
         elif enabled and self.monitor_combo and self.monitor_combo.count() > 0 and \
-             self.monitor_combo.itemText(0) == "Populating monitors...":
+            self.monitor_combo.itemText(0) == "Populating monitors...":
             # If group is enabled and monitors haven't been populated, request it.
             self.request_monitor_list_population.emit()
 # --- Force disable sampling UI from external source ---
@@ -299,6 +328,16 @@ class ScreenSamplerUIManager(QGroupBox):
         """Called by ScreenSamplerManager if sampling needs to be stopped externally."""
         if self.enable_sampling_button and self.enable_sampling_button.isChecked():
             self.enable_sampling_button.setChecked(False) # This triggers all necessary UI updates and signals
+
+    def set_sampling_active_state(self, is_active: bool):
+        """Sets the 'active' property on the 'Sampling' button for styling."""
+        if not self.enable_sampling_button:
+            return
+        self.enable_sampling_button.setProperty("active", is_active)
+        # Force Qt to re-evaluate the stylesheet for this specific widget
+        self.style().unpolish(self.enable_sampling_button)
+        self.style().polish(self.enable_sampling_button)
+
 # --- For standalone testing of this UI Manager ---
 if __name__ == '__main__':
     from PyQt6.QtWidgets import QApplication

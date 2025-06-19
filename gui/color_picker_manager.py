@@ -13,7 +13,7 @@ from .sv_picker import SVPicker
 from .hue_slider import HueSlider
 
 # --- Constants ---
-MAX_SAVED_COLORS = 24  # 3 rows of 8
+MAX_SAVED_COLORS = 32  # 3 rows of 8
 CONFIG_FILE_NAME = "fire_controller_config.json"
 CONFIG_KEY_SAVED_COLORS = "color_picker_swatches"
 
@@ -257,6 +257,7 @@ class ColorPickerManager(QGroupBox):
             self.saved_color_buttons.append(swatch)
             swatches_grid_layout.addWidget(swatch, row, col)
         my_colors_layout.addLayout(swatches_grid_layout)
+        my_colors_layout.addSpacing(10)  # Adds pixels of vertical padding
         my_colors_buttons_layout = QHBoxLayout()
         self.add_saved_color_button.setToolTip(
             "Add active color to an empty swatch.")

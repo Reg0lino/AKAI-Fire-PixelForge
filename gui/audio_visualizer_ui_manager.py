@@ -79,7 +79,7 @@ class AudioVisualizerUIManager(QGroupBox):
         action_button_layout = QHBoxLayout()
         action_button_layout.setContentsMargins(
             0, 4, 0, 0)  # A little top margin for spacing
-        action_button_layout.setSpacing(8)
+        action_button_layout.setSpacing(10)
         action_button_layout.addStretch(1)  # Pushes buttons to the right
 
         self.setup_button = QPushButton(" Setup...")

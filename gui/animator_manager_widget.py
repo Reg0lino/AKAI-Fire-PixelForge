@@ -133,7 +133,7 @@ class AnimatorManagerWidget(QWidget):
         main_layout.addWidget(separator_line)
         self.sequence_timeline_widget = SequenceTimelineWidget()
         self.sequence_timeline_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        desired_min_timeline_height = 120 # Try this first (e.g., 2 rows * 50px/row + 20px padding/spacing)
+        desired_min_timeline_height = 80 # Try this first (e.g., 2 rows * 50px/row + 20px padding/spacing)
         self.sequence_timeline_widget.setMinimumHeight(desired_min_timeline_height)
         main_layout.addWidget(self.sequence_timeline_widget) # Stretch factor for this widget is handled by its size policy now
         self.sequence_controls_widget = SequenceControlsWidget()
