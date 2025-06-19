@@ -133,7 +133,6 @@ class ScreenSamplerManager(QObject):
         if hasattr(self.ui_manager, 'set_recording_status_text'):
             self.ui_manager.set_recording_status_text("Sampler Off / Device Disconnected")
 
-    # ... (_get_user_config_dir_path, get_ui_widget, _connect_signals as before) ...
     def _get_user_config_dir_path(self) -> str: # Unchanged
         config_dir_to_use = ""
         try:
@@ -164,82 +163,80 @@ class ScreenSamplerManager(QObject):
         if adjustment_key not in self.current_sampler_params['adjustments']:
             print(f"SSM WARNING: Invalid adjustment key '{adjustment_key}' in update_sampler_adjustment.")
             return
-
         # Potentially clamp or validate new_value based on adjustment_key if necessary
         # For now, assume MainWindow sends valid, mapped values.
         self.current_sampler_params['adjustments'][adjustment_key] = new_value
-        
-        print(f"SSM INFO: Sampler adjustment '{adjustment_key}' updated to {new_value}")
-
+        # print(f"SSM INFO: Sampler adjustment '{adjustment_key}' updated to {new_value}")
         self._save_prefs_for_current_monitor()  # Save the change to persistent storage for this monitor
-        
         # If sampling is currently active, restart the thread with the new parameters
         if self.is_sampling_thread_active:
             self._synchronize_and_control_sampling_thread(True) 
-            
         # Emit signal so MainWindow can update its knobs if this change came from somewhere else (e.g., dialog)
         # or to confirm the change if it came from a knob.
         self.sampler_adjustments_changed.emit(self.current_sampler_params['adjustments'].copy())
 
-    # --- Modify _handle_dialog_full_params_changed ---
-    def _handle_dialog_full_params_changed(self, full_dialog_params: dict):
-        # ... (existing logic to update self.current_sampler_params from full_dialog_params) ...
-        new_monitor_id = full_dialog_params.get('monitor_id', self.current_sampler_params['monitor_id'])
-        self.current_sampler_params['monitor_id'] = new_monitor_id
-        self.current_sampler_params['region_rect_percentage'] = full_dialog_params.get(
-            'region_rect_percentage', self.current_sampler_params['region_rect_percentage']
-        )
-        self.current_sampler_params['adjustments'] = full_dialog_params.get(
-            'adjustments', self.current_sampler_params['adjustments']
-        ).copy() # Ensure it's a copy
 
+# In class ScreenSamplerManager:
+# ADD this new method (or replace if a placeholder exists):
 
-        self._save_prefs_for_current_monitor()
-
-        if hasattr(self.ui_manager, 'set_selected_monitor_ui'): # Check if method exists
-            self.ui_manager.set_selected_monitor_ui(self.current_sampler_params['monitor_id'])
-
-        if self.is_sampling_thread_active:
-            self._synchronize_and_control_sampling_thread(True)
-        
-        # --- ADD: Emit the new signal ---
-        self.sampler_adjustments_changed.emit(self.current_sampler_params['adjustments'].copy())
-
-    # --- Modify _apply_prefs_for_current_monitor ---
     def _apply_prefs_for_current_monitor(self):
-        # ... (existing logic to load prefs for the current_sampler_params['monitor_id']) ...
-        # print(f"DEBUG SSM._apply_prefs: Current monitor_id to apply for: {self.current_sampler_params['monitor_id']}") # Optional
-        monitor_key = self._generate_monitor_key(self.current_sampler_params['monitor_id'])
-        # print(f"DEBUG SSM._apply_prefs: Generated key: {monitor_key}") # Optional
-        # print(f"DEBUG SSM._apply_prefs: Available keys in prefs: {list(self.sampler_monitor_prefs.keys())}") # Optional
-
+        """
+        Applies saved preferences for the currently active monitor.
+        If no preferences exist, it creates and applies a default.
+        """
+        monitor_key = self._generate_monitor_key(
+            self.current_sampler_params['monitor_id'])
         if monitor_key and monitor_key in self.sampler_monitor_prefs:
+            # Prefs exist, load them
             saved_prefs = self.sampler_monitor_prefs[monitor_key]
-            # print(f"DEBUG SSM._apply_prefs: Found prefs for key '{monitor_key}': {saved_prefs}") # Optional
-            self.current_sampler_params['region_rect_percentage'] = saved_prefs.get('region_rect_percentage', self.current_sampler_params['region_rect_percentage'])
-            self.current_sampler_params['adjustments'] = saved_prefs.get('adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()).copy() # Ensure copy
-            # print(f"DEBUG SSM._apply_prefs: AFTER apply, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}") # Optional
+            self.current_sampler_params['region_rect_percentage'] = saved_prefs.get(
+                'region_rect_percentage', {'x': 0.4, 'y': 0.4, 'width': 0.2, 'height': 0.2})
+            self.current_sampler_params['adjustments'] = saved_prefs.get(
+                'adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy())
         else:
-            # print(f"DEBUG SSM._apply_prefs: No prefs found for key '{monitor_key}'. Using defaults.") # Optional
-            self.current_sampler_params['region_rect_percentage'] = {'x': 0.4, 'y': 0.4, 'width': 0.2, 'height': 0.2}
-            self.current_sampler_params['adjustments'] = ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()
-            # print(f"DEBUG SSM._apply_prefs: AFTER default, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}") # Optional
+            # No prefs for this monitor, create a default centered 20% box
+            default_region = {'x': 0.4, 'y': 0.4, 'width': 0.2, 'height': 0.2}
+            self.current_sampler_params['region_rect_percentage'] = default_region
+            self.current_sampler_params['adjustments'] = ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy(
+            )
+            # Also save this new default so it's remembered
+            if monitor_key:
+                self.sampler_monitor_prefs[monitor_key] = {
+                    'region_rect_percentage': default_region,
+                    'adjustments': self.current_sampler_params['adjustments'].copy()
+                }
 
-        # --- ADD: Emit signal after applying preferences ---
-        # This ensures GUI knobs update if preferences were loaded/applied (e.g., on startup or monitor change)
-        self.sampler_adjustments_changed.emit(self.current_sampler_params['adjustments'].copy())
+        # Emit signal so UI (like main window knobs) can update
+        self.sampler_adjustments_changed.emit(
+            self.current_sampler_params['adjustments'].copy())
+
+
+    def _save_prefs_for_current_monitor(self):
+        """Saves the current parameters (region/adjustments) for the currently active monitor."""
+        monitor_key = self._generate_monitor_key(
+            self.current_sampler_params['monitor_id'])
+        if monitor_key:
+            current_monitor_data_to_save = {
+                'region_rect_percentage': self.current_sampler_params['region_rect_percentage'].copy(),
+                'adjustments': self.current_sampler_params['adjustments'].copy()
+            }
+            # Update the in-memory cache
+            self.sampler_monitor_prefs[monitor_key] = current_monitor_data_to_save
+            # Persist to disk immediately
+            self._save_sampler_preferences_to_file()
+
+        # Emit signal so UI (like main window knobs) can update
+        self.sampler_adjustments_changed.emit(
+            self.current_sampler_params['adjustments'].copy())
 
     def set_overall_enabled_state(self, enabled_from_main_window: bool, device_connected: bool):
         if not GUI_IMPORTS_OK: return
-
         sampler_core_can_be_active = enabled_from_main_window and device_connected
         
         if hasattr(self.ui_manager, 'set_overall_enabled_state'):
             self.ui_manager.set_overall_enabled_state(sampler_core_can_be_active)
         else:
             print(f"WARNING (SSM.set_overall_enabled_state): self.ui_manager missing 'set_overall_enabled_state'")
-
-
         if sampler_core_can_be_active:
             if not self.screen_sampler_monitor_list_cache:
                 self.populate_monitor_list_for_ui()
@@ -248,16 +245,15 @@ class ScreenSamplerManager(QObject):
                 self._synchronize_and_control_sampling_thread(False)
         
         if not hasattr(self.ui_manager, 'set_recording_status_text') or \
-           not hasattr(self.ui_manager, 'update_record_button_ui'):
+            not hasattr(self.ui_manager, 'update_record_button_ui'):
             print(f"WARNING (SSM.set_overall_enabled_state): self.ui_manager missing text/button update methods")
             return
-
         if not device_connected:
             self.ui_manager.set_recording_status_text("Device Disconnected")
             self.ui_manager.update_record_button_ui(is_recording=False, can_record=False)
         elif not sampler_core_can_be_active:
-             self.ui_manager.set_recording_status_text("Sampler UI Disabled")
-             self.ui_manager.update_record_button_ui(is_recording=False, can_record=False)
+            self.ui_manager.set_recording_status_text("Sampler UI Disabled")
+            self.ui_manager.update_record_button_ui(is_recording=False, can_record=False)
         elif not self.is_sampling_thread_active:
             self.ui_manager.set_recording_status_text("Sampler OFF")
             self.ui_manager.update_record_button_ui(is_recording=False, can_record=False)
@@ -267,20 +263,18 @@ class ScreenSamplerManager(QObject):
         else:
             self.ui_manager.set_recording_status_text("Idle. Ready to record.")
             self.ui_manager.update_record_button_ui(is_recording=False, can_record=True)
-            
+
     def update_ui_for_global_state(self, overall_sampler_ui_enabled: bool, can_toggle_sampling_button_enabled: bool):
         """
         Updates the ScreenSamplerUIManager based on global application state.
         - overall_sampler_ui_enabled: Should the main sampler groupbox be enabled (e.g., based on MIDI connection).
         - can_toggle_sampling_button_enabled: Specific flag for the 'Toggle Ambient Sampling' button 
-                                              (e.g., disabled if animator is playing).
+                                                (e.g., disabled if animator is playing).
         """
         if not GUI_IMPORTS_OK or not hasattr(self.ui_manager, 'set_overall_enabled_state'):
             return
-
         # 1. Set the overall enabled state of the sampler's QGroupBox UI
         self.ui_manager.set_overall_enabled_state(overall_sampler_ui_enabled)
-
         # 2. Specifically set the enabled state of the "Toggle Ambient Sampling" button
         if hasattr(self.ui_manager, 'enable_sampling_button') and self.ui_manager.enable_sampling_button:
             # If overall_sampler_ui_enabled is False, the button will be disabled by its parent QGroupBox.
@@ -288,13 +282,12 @@ class ScreenSamplerManager(QObject):
             # needs to be controlled (e.g., by animator playback).
             actual_toggle_button_state = overall_sampler_ui_enabled and can_toggle_sampling_button_enabled
             self.ui_manager.enable_sampling_button.setEnabled(actual_toggle_button_state)
-
             # If the toggle button is being disabled WHILE it's checked (i.e., sampling is active),
             # then force sampling off.
             if not actual_toggle_button_state and self.ui_manager.enable_sampling_button.isChecked():
                 self.ui_manager.enable_sampling_button.setChecked(False) # This will trigger its toggle signal
-                                                                      # and ScreenSamplerManager will stop sampling.
-        
+        # and ScreenSamplerManager will stop sampling.
+
         # 3. Update other sampler UI elements like record button based on current states
         #    The set_overall_enabled_state method in ScreenSamplerUIManager already handles
         #    some of this, but we might need to re-evaluate its internal logic or call it here.
@@ -308,13 +301,13 @@ class ScreenSamplerManager(QObject):
                             can_toggle_sampling_button_enabled and \
                             self.is_sampling_thread_active and \
                             not self.is_actively_recording) or \
-                           (overall_sampler_ui_enabled and \
+                            (overall_sampler_ui_enabled and \
                             self.is_actively_recording) # Can always stop if recording
             )
         
         # Update configure button state too (might be part of ui_manager.set_overall_enabled_state)
         if hasattr(self.ui_manager, 'configure_preview_button') and self.ui_manager.configure_preview_button:
-             self.ui_manager.configure_preview_button.setEnabled(overall_sampler_ui_enabled)
+            self.ui_manager.configure_preview_button.setEnabled(overall_sampler_ui_enabled)
 
     def is_sampling_active(self) -> bool:
         return self.is_sampling_thread_active
@@ -328,12 +321,9 @@ class ScreenSamplerManager(QObject):
         if newly_selected_monitor_id != self.current_sampler_params.get('monitor_id'):
             self.current_sampler_params['monitor_id'] = newly_selected_monitor_id
             self._apply_prefs_for_current_monitor()
-
         self.current_sampler_params['frequency_ms'] = basic_ui_params.get('frequency_ms', self.current_sampler_params['frequency_ms'])
-
         if self.capture_preview_dialog and self.capture_preview_dialog.isVisible():
             self.capture_preview_dialog.set_current_parameters_from_main(self.current_sampler_params)
-
         self._synchronize_and_control_sampling_thread(enable_toggle)
 
 
@@ -341,14 +331,11 @@ class ScreenSamplerManager(QObject):
 
     def populate_monitor_list_for_ui(self, force_fetch: bool = False):
         # print(f"--- SSM populate_monitor_list_for_ui ENTER --- (force_fetch={force_fetch}, cache_exists={bool(self.screen_sampler_monitor_list_cache)})")
-
         if not GUI_IMPORTS_OK or not FEATURES_IMPORTS_OK:
             # print("DEBUG SSM.populate_monitor_list_for_ui: Skipping due to missing critical imports.")
             return
-
         # Determine if a fetch is truly needed
         needs_fetch = force_fetch or not self.screen_sampler_monitor_list_cache
-        
         if needs_fetch:
             # print(f"DEBUG SSM.populate_monitor_list_for_ui: Needs fetch. force_fetch={force_fetch}, cache_empty={not self.screen_sampler_monitor_list_cache}")
             try:
@@ -365,7 +352,6 @@ class ScreenSamplerManager(QObject):
                 self.screen_sampler_monitor_list_cache = [] # Ensure cache is empty on error
         # else:
             # print(f"DEBUG SSM.populate_monitor_list_for_ui: No fetch needed. Using cached monitors: {self.screen_sampler_monitor_list_cache}")
-
         # Update the UI manager's combo box with the (potentially new) cache
         if hasattr(self.ui_manager, 'populate_monitors_combo_external'):
             # print(f"DEBUG SSM.populate_monitor_list_for_ui: Calling ui_manager.populate_monitors_combo_external with cache.")
@@ -375,28 +361,23 @@ class ScreenSamplerManager(QObject):
             # If ui_manager is a placeholder due to import errors, this might happen.
             # Or if the real ScreenSamplerUIManager is missing the method.
             return # Cannot proceed without this UI update method
-
         # Logic to select a default monitor in the UI and apply its preferences,
         # especially if the current selection is invalid or after a fresh fetch.
         if self.screen_sampler_monitor_list_cache: # Only proceed if we have monitors
             current_monitor_ids_in_cache = [m['id'] for m in self.screen_sampler_monitor_list_cache]
-            
             monitor_id_to_apply_prefs_for = self.current_sampler_params.get('monitor_id', 1) # Start with current or default
             apply_prefs_needed = False
-
             if monitor_id_to_apply_prefs_for not in current_monitor_ids_in_cache:
                 # print(f"DEBUG SSM.populate_monitor_list_for_ui: Current monitor_id {monitor_id_to_apply_prefs_for} not in cache. Setting to default: {self.screen_sampler_monitor_list_cache[0]['id']}")
                 monitor_id_to_apply_prefs_for = self.screen_sampler_monitor_list_cache[0]['id']
                 self.current_sampler_params['monitor_id'] = monitor_id_to_apply_prefs_for
                 apply_prefs_needed = True # ID changed, so prefs for this new ID need to be applied.
-            
             # Update the UI to select the (potentially new) current monitor_id
             if hasattr(self.ui_manager, 'set_selected_monitor_ui'):
                 # print(f"DEBUG SSM.populate_monitor_list_for_ui: Calling ui_manager.set_selected_monitor_ui with ID: {monitor_id_to_apply_prefs_for}")
                 self.ui_manager.set_selected_monitor_ui(monitor_id_to_apply_prefs_for)
             else:
                 print("WARNING (SSM.populate_monitor_list_for_ui): self.ui_manager missing 'set_selected_monitor_ui'")
-
             # If the monitor ID changed to a default, or if this was a forced refresh that might change what's "current"
             # we should re-apply preferences for the now-current monitor_id.
             # Also, apply if it's the very first time (needs_fetch was true due to empty cache initially).
@@ -407,7 +388,6 @@ class ScreenSamplerManager(QObject):
             print("DEBUG SSM.populate_monitor_list_for_ui: No monitors in cache to select or apply prefs for.")
             # self.current_sampler_params['monitor_id'] could be left as is, or reset to a default like 1.
             # The UI will show "No monitors found".
-
         # Update the capture preview dialog if it's open and visible
         if self.capture_preview_dialog and hasattr(self.capture_preview_dialog, 'isVisible') and self.capture_preview_dialog.isVisible():
             if hasattr(self.capture_preview_dialog, 'set_initial_monitor_data'):
@@ -418,7 +398,6 @@ class ScreenSamplerManager(QObject):
                 )
             else:
                 print("WARNING (SSM.populate_monitor_list_for_ui): capture_preview_dialog missing 'set_initial_monitor_data'")
-        
         print(f"--- SSM populate_monitor_list_for_ui EXIT ---")
 
     def toggle_sampling_state(self):
@@ -427,12 +406,9 @@ class ScreenSamplerManager(QObject):
             print("SSM ERROR: UI Manager or toggle button not available for toggle_sampling_state.")
             self.sampler_status_update.emit("Error: Sampler UI not ready.", 3000)
             return
-
         current_state_is_on = self.ui_manager.enable_sampling_button.isChecked()
         new_state_to_set = not current_state_is_on
-        
         # print(f"SSM TRACE: toggle_sampling_state called. Current visual state is ON: {current_state_is_on}. Setting to: {new_state_to_set}") # Optional
-        
         # Update the UI button state, which in turn triggers _handle_ui_sampling_control_changed
         # This ensures the logic flow is consistent with a GUI click.
         if hasattr(self.ui_manager.enable_sampling_button, 'setChecked'):
@@ -442,7 +418,6 @@ class ScreenSamplerManager(QObject):
                 'monitor_capture_id': self.current_sampler_params.get('monitor_id', 1),
                 'frequency_ms': self.current_sampler_params.get('frequency_ms', self._fps_to_ms(DEFAULT_SAMPLING_FPS))
             })
-        
         # Status update is handled by _synchronize_and_control_sampling_thread via _handle_ui_sampling_control_changed
 
     def cycle_target_monitor(self):
@@ -450,13 +425,11 @@ class ScreenSamplerManager(QObject):
         if not self.is_sampling_thread_active:
             self.sampler_status_update.emit("Enable sampler to cycle monitors.", 2000)
             return
-
         if not self.screen_sampler_monitor_list_cache:
             self.populate_monitor_list_for_ui(force_fetch=True) # Try to get monitors if cache is empty
             if not self.screen_sampler_monitor_list_cache:
                 self.sampler_status_update.emit("No monitors available to cycle.", 3000)
                 return
-        
         if len(self.screen_sampler_monitor_list_cache) <= 1:
             self.sampler_status_update.emit("Only one monitor available.", 2000)
             # Optionally, still emit current monitor name if needed for OLED refresh
@@ -465,39 +438,31 @@ class ScreenSamplerManager(QObject):
             if current_monitor_info:
                 self.sampler_monitor_changed.emit(current_monitor_info.get('name_for_ui', f"Monitor {current_monitor_id}"))
             return
-
         current_monitor_id = self.current_sampler_params.get('monitor_id', 1)
         current_idx = -1
         for i, monitor in enumerate(self.screen_sampler_monitor_list_cache):
             if monitor['id'] == current_monitor_id:
                 current_idx = i
                 break
-        
         next_idx = (current_idx + 1) % len(self.screen_sampler_monitor_list_cache)
         new_monitor_info = self.screen_sampler_monitor_list_cache[next_idx]
         new_monitor_id = new_monitor_info['id']
-
         self.current_sampler_params['monitor_id'] = new_monitor_id
-        
         # Update the UI ComboBox to reflect the new selection
         if GUI_IMPORTS_OK and hasattr(self.ui_manager, 'set_selected_monitor_ui'):
             self.ui_manager.set_selected_monitor_ui(new_monitor_id)
-        
         # Apply preferences for the newly selected monitor
         self._apply_prefs_for_current_monitor() 
-        
         # If sampling is active, restart it with the new monitor settings
         if self.is_sampling_thread_active:
             self._synchronize_and_control_sampling_thread(True) # True to (re)start sampling
-
         new_monitor_name = new_monitor_info.get('name_for_ui', f"Monitor {new_monitor_id}")
         self.sampler_status_update.emit(f"Sampler switched to: {new_monitor_name}", 2500)
         self.sampler_monitor_changed.emit(new_monitor_name) # Emit signal for OLED update
         # print(f"SSM TRACE: Cycled monitor to ID: {new_monitor_id}, Name: {new_monitor_name}") # Optional
-        
+
     def _show_capture_preview_dialog(self):
         if not GUI_IMPORTS_OK: return
-
         if not self.screen_sampler_monitor_list_cache:
             self.populate_monitor_list_for_ui(force_fetch=True)
             if not self.screen_sampler_monitor_list_cache:
@@ -506,19 +471,14 @@ class ScreenSamplerManager(QObject):
                 else:
                     self.sampler_status_update.emit("Cannot open preview: No monitor data.", 3000)
                 return
-
         if not self.capture_preview_dialog:
             self.capture_preview_dialog = CapturePreviewDialog(parent=self.ui_manager if isinstance(self.ui_manager, QObject) else None)
             self.capture_preview_dialog.sampling_parameters_changed.connect(self._handle_dialog_full_params_changed)
             self.capture_preview_dialog.dialog_closed.connect(self._on_capture_preview_dialog_closed)
-
         # 1. Apply preferences for the currently selected monitor to self.current_sampler_params
         # This ensures self.current_sampler_params has the latest loaded/saved state for this monitor.
         self._apply_prefs_for_current_monitor()
-        
-        # ADD THIS DEBUG PRINT:
         # print(f"DEBUG SSM._show_capture_preview_dialog: AFTER apply_prefs, current_sampler_params BEING PASSED IS: monitor_id={self.current_sampler_params.get('monitor_id')}, region={self.current_sampler_params.get('region_rect_percentage')}, adjustments={self.current_sampler_params.get('adjustments')}")
-
         # 2. Inform the dialog about all available monitors and which one is currently targeted.
         #    The dialog uses this to set up its MonitorViewWidget.
         if hasattr(self.capture_preview_dialog, 'set_initial_monitor_data'):
@@ -528,26 +488,20 @@ class ScreenSamplerManager(QObject):
             )
         # else:
         #     print("CRITICAL WARNING (SSM._show_capture_preview_dialog): capture_preview_dialog missing 'set_initial_monitor_data'")
-
-
         # 3. Pass the specific parameters (including region and adjustments for the target monitor)
         #    to the dialog so it can set its sliders and the MonitorViewWidget's selection box.
         if hasattr(self.capture_preview_dialog, 'set_current_parameters_from_main'):
             self.capture_preview_dialog.set_current_parameters_from_main(self.current_sampler_params)
         # else:
         #     print("CRITICAL WARNING (SSM._show_capture_preview_dialog): capture_preview_dialog missing 'set_current_parameters_from_main'")
-
-
         if self._last_processed_pil_image:
             if hasattr(self.capture_preview_dialog, 'update_preview_image'):
                 self.capture_preview_dialog.update_preview_image(self._last_processed_pil_image)
             else:
                 print("WARNING (SSM._show_capture_preview_dialog): capture_preview_dialog missing 'update_preview_image'")
-
         self.capture_preview_dialog.show()
         self.capture_preview_dialog.activateWindow()
         self.capture_preview_dialog.raise_()
-
 
     def _on_capture_preview_dialog_closed(self):
         if self.capture_preview_dialog:
@@ -560,30 +514,58 @@ class ScreenSamplerManager(QObject):
             self.capture_preview_dialog = None
 
     def _handle_dialog_full_params_changed(self, full_dialog_params: dict):
-        new_monitor_id = full_dialog_params.get('monitor_id', self.current_sampler_params['monitor_id'])
-        self.current_sampler_params['monitor_id'] = new_monitor_id
-        self.current_sampler_params['region_rect_percentage'] = full_dialog_params.get('region_rect_percentage', self.current_sampler_params['region_rect_percentage'])
-        self.current_sampler_params['adjustments'] = full_dialog_params.get('adjustments', self.current_sampler_params['adjustments'])
+        """
+        Handles parameter changes from the CapturePreviewDialog. This is the core
+        of the per-monitor state logic.
+        """
+        new_monitor_id = full_dialog_params.get(
+            'monitor_id', self.current_sampler_params['monitor_id'])
 
+        # --- NEW LOGIC: Check if the monitor has changed ---
+        if new_monitor_id != self.current_sampler_params['monitor_id']:
+            # The monitor has been cycled.
+            # 1. Update the manager's current monitor ID.
+            self.current_sampler_params['monitor_id'] = new_monitor_id
+
+            # 2. Apply the saved (or default) preferences for this NEW monitor.
+            #    This method will update self.current_sampler_params with the correct region/adjustments.
+            self._apply_prefs_for_current_monitor()
+
+            # 3. Tell the dialog to update its view to reflect these just-loaded preferences.
+            if self.capture_preview_dialog and self.capture_preview_dialog.isVisible():
+                self.capture_preview_dialog.set_current_parameters_from_main(
+                    self.current_sampler_params)
+        else:
+            # The monitor did NOT change, user was just dragging/resizing or changing adjustments.
+            # Update params directly from what the dialog sent.
+            self.current_sampler_params['region_rect_percentage'] = full_dialog_params.get(
+                'region_rect_percentage', self.current_sampler_params['region_rect_percentage'])
+            self.current_sampler_params['adjustments'] = full_dialog_params.get(
+                'adjustments', self.current_sampler_params['adjustments']).copy()
+
+        # --- SAVE & SYNC ---
+        # Save the potentially new state for the current monitor.
         self._save_prefs_for_current_monitor()
 
+        # Sync the main window UI (monitor dropdown)
         if hasattr(self.ui_manager, 'set_selected_monitor_ui'):
-            self.ui_manager.set_selected_monitor_ui(self.current_sampler_params['monitor_id'])
-        else:
-            print(f"WARNING (SSM._handle_dialog_full_params_changed): self.ui_manager missing 'set_selected_monitor_ui'")
+            self.ui_manager.set_selected_monitor_ui(
+                self.current_sampler_params['monitor_id'])
 
-
+        # Restart the sampling thread if it's active to apply changes.
         if self.is_sampling_thread_active:
             self._synchronize_and_control_sampling_thread(True)
 
+        # Emit signal to update main window knobs.
+        self.sampler_adjustments_changed.emit(
+            self.current_sampler_params['adjustments'].copy())
+
     def _synchronize_and_control_sampling_thread(self, should_be_enabled: bool):
         if not FEATURES_IMPORTS_OK: return
-
         if should_be_enabled:
             if not self.is_sampling_thread_active:
                 self.is_sampling_thread_active = True
                 self.sampling_activity_changed.emit(True)
-
             self.sampling_thread.start_sampling(
                 monitor_capture_id=self.current_sampler_params['monitor_id'],
                 region_rect_percentage=self.current_sampler_params['region_rect_percentage'],
@@ -595,14 +577,11 @@ class ScreenSamplerManager(QObject):
             if self.is_sampling_thread_active:
                 if self.is_actively_recording:
                     self._stop_recording_logic(inform_user=False)
-
                 if self.sampling_thread.isRunning():
                     self.sampling_thread.stop_sampling()
-
                 self.is_sampling_thread_active = False
                 self.sampling_activity_changed.emit(False)
                 self.sampler_status_update.emit("Screen sampling stopped.", 2000)
-
         if GUI_IMPORTS_OK and hasattr(self.ui_manager, 'update_record_button_ui') and hasattr(self.ui_manager, 'set_recording_status_text'):
             if self.is_sampling_thread_active and not self.is_actively_recording:
                 self.ui_manager.set_recording_status_text("Idle. Ready to record.")
@@ -613,15 +592,13 @@ class ScreenSamplerManager(QObject):
 
     def force_disable_sampling_ui(self):
         if not GUI_IMPORTS_OK: return
-
         if hasattr(self.ui_manager, 'enable_sampling_button') and self.ui_manager.enable_sampling_button and \
-           hasattr(self.ui_manager.enable_sampling_button, 'isChecked') and \
-           hasattr(self.ui_manager.enable_sampling_button, 'setChecked'):
+            hasattr(self.ui_manager.enable_sampling_button, 'isChecked') and \
+            hasattr(self.ui_manager.enable_sampling_button, 'setChecked'):
             if self.ui_manager.enable_sampling_button.isChecked():
-                 self.ui_manager.enable_sampling_button.setChecked(False)
+                self.ui_manager.enable_sampling_button.setChecked(False)
         else:
             self._synchronize_and_control_sampling_thread(False)
-
 
     def stop_sampling_thread(self):
         self._synchronize_and_control_sampling_thread(False)
@@ -639,7 +616,6 @@ class ScreenSamplerManager(QObject):
                 if self.current_recording_frame_count >= self.MAX_RECORDING_FRAMES:
                     self.sampler_status_update.emit(f"Max recording frames ({self.MAX_RECORDING_FRAMES}) reached.", 3000)
                     self._stop_recording_logic()
-
         if self.is_sampling_thread_active:
             self.sampled_colors_for_display.emit(colors_list)
 
@@ -661,20 +637,19 @@ class ScreenSamplerManager(QObject):
 
     def _on_ui_record_button_clicked(self):
         if not GUI_IMPORTS_OK: return
-
         if self.is_actively_recording:
             self._stop_recording_logic()
         else:
             if not self.is_sampling_thread_active:
                 reply = QMessageBox.question(self.ui_manager if isinstance(self.ui_manager, QObject) else None, 
-                                             "Sampler Inactive",
-                                             "Screen sampler is not active.\nStart sampling to begin recording?",
-                                             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                             QMessageBox.StandardButton.No)
+                                            "Sampler Inactive",
+                                            "Screen sampler is not active.\nStart sampling to begin recording?",
+                                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                            QMessageBox.StandardButton.No)
                 if reply == QMessageBox.StandardButton.Yes:
                     if hasattr(self.ui_manager, 'enable_sampling_button') and self.ui_manager.enable_sampling_button and \
-                       hasattr(self.ui_manager.enable_sampling_button, 'setChecked'):
-                         self.ui_manager.enable_sampling_button.setChecked(True)
+                        hasattr(self.ui_manager.enable_sampling_button, 'setChecked'):
+                        self.ui_manager.enable_sampling_button.setChecked(True)
                     else:
                         self._handle_ui_sampling_control_changed(True, {
                             'monitor_capture_id': self.current_sampler_params['monitor_id'],
@@ -700,12 +675,10 @@ class ScreenSamplerManager(QObject):
             if GUI_IMPORTS_OK and hasattr(self.ui_manager, 'update_record_button_ui'):
                 self.ui_manager.update_record_button_ui(is_recording=False, can_record=False)
             return
-
         self.is_actively_recording = True
         self.recorded_sampler_frames.clear()
         self.current_recording_frame_count = 0
         self.captured_sampler_frequency_ms = self.current_sampler_params['frequency_ms']
-
         self.sampler_status_update.emit("Sampler recording started...", 0)
         if GUI_IMPORTS_OK and hasattr(self.ui_manager, 'update_record_button_ui') and hasattr(self.ui_manager, 'set_recording_status_text'):
             self.ui_manager.update_record_button_ui(is_recording=True, can_record=False)
@@ -715,23 +688,18 @@ class ScreenSamplerManager(QObject):
         was_recording = self.is_actively_recording
         self.is_actively_recording = False
         final_frame_count = self.current_recording_frame_count
-
         if GUI_IMPORTS_OK and hasattr(self.ui_manager, 'update_record_button_ui') and hasattr(self.ui_manager, 'set_recording_status_text'):
             self.ui_manager.update_record_button_ui(is_recording=False, can_record=self.is_sampling_thread_active)
-
             if not was_recording and final_frame_count == 0:
                 if self.is_sampling_thread_active:
                     self.ui_manager.set_recording_status_text("Idle.")
                 return
-
             if inform_user:
                 self.sampler_status_update.emit(f"Recording stopped. {final_frame_count} frames captured.", 5000)
-            
             if self.is_sampling_thread_active :
                 self.ui_manager.set_recording_status_text(f"Idle. ({final_frame_count} frames recorded)")
             else:
                 self.ui_manager.set_recording_status_text(f"Sampler OFF ({final_frame_count} frames recorded)")
-        
         if self.recorded_sampler_frames:
             self._process_and_save_recorded_frames()
         elif inform_user:
@@ -739,19 +707,17 @@ class ScreenSamplerManager(QObject):
 
     def _process_and_save_recorded_frames(self):
         if not self.recorded_sampler_frames or not GUI_IMPORTS_OK: return
-
         num_frames = len(self.recorded_sampler_frames)
         timestamp_str = time.strftime("%Y%m%d-%H%M")
         default_name = f"Sampled {timestamp_str} ({num_frames}f)"
-
         user_name, ok = QInputDialog.getText(self.ui_manager if isinstance(self.ui_manager, QObject) else None, 
-                                             "Name Recorded Sequence",
-                                             "Enter name:", text=default_name)
+                                            "Name Recorded Sequence",
+                                            "Enter name:", text=default_name)
         if not (ok and user_name and user_name.strip()):
             if QMessageBox.question(self.ui_manager if isinstance(self.ui_manager, QObject) else None, 
-                                   "Discard?", "Discard recorded frames?",
-                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                   QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+                                    "Discard?", "Discard recorded frames?",
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                    QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
                 self.recorded_sampler_frames.clear(); self.current_recording_frame_count = 0
                 if hasattr(self.ui_manager, 'set_recording_status_text'):
                     self.ui_manager.set_recording_status_text("Recording discarded.")
@@ -762,11 +728,9 @@ class ScreenSamplerManager(QObject):
                     self.is_actively_recording = True 
                     self.ui_manager.update_record_button_ui(is_recording=True, can_record=False)
             return
-
         final_name_base = user_name.strip()
         if not self.animator_manager_ref:
             self.sampler_status_update.emit("Error: Animator reference missing for saving.", 5000); return
-
         try:
             sanitized_base = self.animator_manager_ref._sanitize_filename(final_name_base)
             sampler_dir = self.animator_manager_ref._get_sequence_dir_path("sampler")
@@ -774,7 +738,6 @@ class ScreenSamplerManager(QObject):
             print("WARNING: AnimatorManagerWidget utility methods not found. Using basic fallback for saving.")
             sanitized_base = "".join(c if c.isalnum() or c in (' ', '_', '-') else '_' for c in final_name_base).rstrip()
             sampler_dir = os.path.join(self.presets_base_path, "sequences", "sampler_recordings")
-
         os.makedirs(sampler_dir, exist_ok=True)
         actual_filepath = os.path.join(sampler_dir, f"{sanitized_base}.json")
         actual_model_name = final_name_base
@@ -785,13 +748,11 @@ class ScreenSamplerManager(QObject):
             new_sanitized_base_name_part = "".join(c if c.isalnum() or c in (' ', '_', '-') else '_' for c in actual_model_name).rstrip()
             actual_filepath = os.path.join(sampler_dir, f"{new_sanitized_base_name_part}.json")
             if counter > 100: self.sampler_status_update.emit("Save Error: Too many filename collisions.", 5000); return
-
         temp_model = SequenceModel(name=actual_model_name)
         for frame_hex_data in self.recorded_sampler_frames:
             temp_model.frames.append(AnimationFrame(colors=frame_hex_data))
         temp_model.frame_delay_ms = self.captured_sampler_frequency_ms
         temp_model.loop = True
-
         if temp_model.save_to_file(actual_filepath):
             self.sampler_status_update.emit(f"Sequence '{actual_model_name}' saved.", 3000)
             self.new_sequence_from_recording_ready.emit(actual_filepath)
@@ -801,7 +762,6 @@ class ScreenSamplerManager(QObject):
             self.sampler_status_update.emit(f"Error saving to '{actual_filepath}'.", 5000)
             if hasattr(self.ui_manager, 'set_recording_status_text'):
                 self.ui_manager.set_recording_status_text("Error saving recording.")
-
         self.recorded_sampler_frames.clear()
         self.current_recording_frame_count = 0
 
@@ -818,89 +778,35 @@ class ScreenSamplerManager(QObject):
                 self.ui_manager.set_recording_status_text(
                     f"REC 🔴 {self.current_recording_frame_count}/{self.MAX_RECORDING_FRAMES}")
 
-# In ScreenSamplerManager
-    def _generate_monitor_key(self, monitor_id: int) -> str | None:
-        # If cache is empty, it's okay to try and populate it ONCE.
-        # But do not use force_fetch=True here, as that creates the loop if called from populate_monitor_list_for_ui flow.
-        # populate_monitor_list_for_ui itself will decide if a fetch is needed based on its own force_fetch flag and cache state.
-        if not self.screen_sampler_monitor_list_cache:
-            # print(f"DEBUG SSM._generate_monitor_key: Cache empty, calling populate_monitor_list_for_ui(force_fetch=False)")
-            # Call with force_fetch=False. If populate_monitor_list_for_ui was *just* called and filled the cache,
-            # it won't re-fetch. If it's a genuine first call from somewhere else, it will fetch if needed.
-            self.populate_monitor_list_for_ui(force_fetch=False) 
-            # After the call, the cache should be populated if monitors were found. Check again.
-            if not self.screen_sampler_monitor_list_cache: # Still empty after attempt?
-                 # print(f"DEBUG SSM._generate_monitor_key: Cache still empty after pop attempt. Returning None.")
-                 return None
-        
-        monitor_info = next((m for m in self.screen_sampler_monitor_list_cache if m['id'] == monitor_id), None)
-        if monitor_info:
-            return f"{monitor_info['width']}x{monitor_info['height']}_{monitor_info['left']}_{monitor_info['top']}"
-        return None
-
-    def _apply_prefs_for_current_monitor(self):
-        # print(f"DEBUG SSM._apply_prefs: Current monitor_id to apply for: {self.current_sampler_params['monitor_id']}")
-        monitor_key = self._generate_monitor_key(self.current_sampler_params['monitor_id'])
-        # print(f"DEBUG SSM._apply_prefs: Generated key: {monitor_key}")
-        # print(f"DEBUG SSM._apply_prefs: Available keys in prefs: {list(self.sampler_monitor_prefs.keys())}")
-
-        if monitor_key and monitor_key in self.sampler_monitor_prefs:
-            saved_prefs = self.sampler_monitor_prefs[monitor_key]
-            # print(f"DEBUG SSM._apply_prefs: Found prefs for key '{monitor_key}': {saved_prefs}")
-            self.current_sampler_params['region_rect_percentage'] = saved_prefs.get('region_rect_percentage', self.current_sampler_params['region_rect_percentage'])
-            self.current_sampler_params['adjustments'] = saved_prefs.get('adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy())
-            # print(f"DEBUG SSM._apply_prefs: AFTER apply, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}")
-        else:
-            # print(f"DEBUG SSM._apply_prefs: No prefs found for key '{monitor_key}'. Using defaults.")
-            self.current_sampler_params['region_rect_percentage'] = {'x': 0.4, 'y': 0.4, 'width': 0.2, 'height': 0.2}
-            self.current_sampler_params['adjustments'] = ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()
-            # print(f"DEBUG SSM._apply_prefs: AFTER default, current_sampler_params[region]: {self.current_sampler_params['region_rect_percentage']}")
-
-
-    def _save_prefs_for_current_monitor(self):
-        """Saves the current_sampler_params (region/adjustments) for the current monitor_id
-           AND updates the in-memory cache of all monitor preferences."""
-        monitor_key = self._generate_monitor_key(self.current_sampler_params['monitor_id'])
-        if monitor_key:
-            # Create the data to save for this specific monitor
-            current_monitor_data_to_save = {
-                'region_rect_percentage': self.current_sampler_params['region_rect_percentage'].copy(),
-                'adjustments': self.current_sampler_params['adjustments'].copy()
-            }
-            
-            # Update the in-memory cache
-            self.sampler_monitor_prefs[monitor_key] = current_monitor_data_to_save
-            # print(f"DEBUG SSM._save_prefs_for_current_monitor: Updated in-memory self.sampler_monitor_prefs[{monitor_key}] to: {current_monitor_data_to_save}")
-
-            # Persist all monitor preferences (including this update) to disk
-            self._save_sampler_preferences_to_file()
-
     def _load_sampler_preferences(self):
+        """Loads sampler preferences, including per-monitor configurations."""
+        self.sampler_monitor_prefs = {} # Reset
         if os.path.exists(self.sampler_prefs_file_path):
             try:
                 with open(self.sampler_prefs_file_path, 'r') as f:
                     loaded_prefs = json.load(f)
+                # --- MODIFIED: Load the entire dictionary of monitor configs ---
                 self.sampler_monitor_prefs = loaded_prefs.get("monitor_configurations", {})
-                last_active_key = loaded_prefs.get("last_active_monitor_key")
-                if last_active_key and last_active_key in self.sampler_monitor_prefs and self.screen_sampler_monitor_list_cache:
-                     for mon_info in self.screen_sampler_monitor_list_cache:
-                        key_check = f"{mon_info['width']}x{mon_info['height']}_{mon_info['left']}_{mon_info['top']}"
-                        if key_check == last_active_key:
-                            self.current_sampler_params['monitor_id'] = mon_info['id']
-                            break
+                last_monitor_id = loaded_prefs.get("last_active_monitor_id", 1)
+                self.current_sampler_params['monitor_id'] = last_monitor_id
+                
                 self.sampler_status_update.emit("Sampler preferences loaded.", 1500)
             except Exception as e:
                 self.sampler_status_update.emit(f"Error loading sampler prefs: {e}", 3000)
                 self.sampler_monitor_prefs = {}
         else:
             self.sampler_status_update.emit("Sampler prefs file not found. Using defaults.", 1500)
+        
+        # Apply preferences for the loaded (or default) monitor
         self._apply_prefs_for_current_monitor()
 
     def _save_sampler_preferences_to_file(self):
+        """Saves all per-monitor configurations to the user preferences file."""
         try:
             data_to_save = {
+                # --- MODIFIED: Save the entire dictionary ---
                 "monitor_configurations": self.sampler_monitor_prefs,
-                "last_active_monitor_key": self._generate_monitor_key(self.current_sampler_params['monitor_id'])
+                "last_active_monitor_id": self.current_sampler_params['monitor_id']
             }
             os.makedirs(os.path.dirname(self.sampler_prefs_file_path), exist_ok=True)
             with open(self.sampler_prefs_file_path, 'w') as f:
@@ -928,3 +834,15 @@ class ScreenSamplerManager(QObject):
                 self.capture_preview_dialog.update_sliders_from_external_adjustments(adjustments)
             else:
                 print("SSM WARNING: CapturePreviewDialog missing 'update_sliders_from_external_adjustments'")
+
+    def _generate_monitor_key(self, monitor_id: int) -> str | None:
+        """Generates a stable, unique key for a monitor based on its geometry."""
+        if not self.screen_sampler_monitor_list_cache:
+            # This should ideally be populated before this is called, but as a fallback:
+            self.populate_monitor_list_for_ui(force_fetch=False) 
+        
+        monitor_info = next((m for m in self.screen_sampler_monitor_list_cache if m['id'] == monitor_id), None)
+        if monitor_info:
+            # Key format: "widthxheight_left_top" e.g., "1920x1080_0_0"
+            return f"{monitor_info['width']}x{monitor_info['height']}_{monitor_info['left']}_{monitor_info['top']}"
+        return None
