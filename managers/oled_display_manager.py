@@ -1150,3 +1150,58 @@ class OLEDDisplayManager(QObject):
         # print("OLED Mgr WARNING: play_animation_item_temporarily is complex with new model, consider text cues.")
         item_name = item_data.get("item_name", "Animation")
         self.show_system_message(f"Playing: {item_name}", duration_ms)
+        
+    def get_active_graphic_logical_frames(self) -> list[list[str]] | None:
+        """
+        Retrieves the logical frame data for the currently active graphic.
+        Returns None if no active graphic or if it's not an animation type.
+        """
+        if self._active_graphic_item_data and self._active_graphic_item_data.get("item_type") == "image_animation":
+            return self._active_graphic_item_data.get("frames_logical")
+        return None
+
+    def render_logical_frames_to_gif(self, logical_frames: list[list[str]], export_path: str, options: dict):
+        """
+        Renders a list of logical 1-bit frames to a GIF file.
+        Args:
+            logical_frames: A list of frames, where each frame is a list of 64 strings.
+            export_path: The full path to save the GIF file.
+            options: A dictionary from OLEDGifExportDialog with 'scale', 'invert', 'delay', 'loop'.
+        """
+        if not logical_frames:
+            raise ValueError("No logical frames provided to render.")
+        scale = options.get('scale', 1)
+        invert = options.get('invert', False)
+        delay_ms = options.get('delay', 100)
+        loop = options.get('loop', 0)
+        output_width = self.OLED_WIDTH * scale
+        output_height = self.OLED_HEIGHT * scale
+        # Define ON/OFF colors based on the 'invert' option
+        on_color = (0, 0, 0) if invert else (255, 255, 255)
+        off_color = (255, 255, 255) if invert else (0, 0, 0)
+        pil_frames = []
+        for frame_data in logical_frames:
+            # Create a new blank image for this frame using the 'OFF' color
+            frame_image = Image.new(
+                'RGB', (output_width, output_height), color=off_color)
+            draw = ImageDraw.Draw(frame_image)
+            for y, row_str in enumerate(frame_data):
+                for x, pixel_char in enumerate(row_str):
+                    # Only draw the 'ON' pixels
+                    if pixel_char == '1':
+                        x0, y0 = x * scale, y * scale
+                        x1, y1 = x0 + scale, y0 + scale
+                        draw.rectangle([x0, y0, x1, y1], fill=on_color)
+            pil_frames.append(frame_image)
+        if not pil_frames:
+            raise ValueError(
+                "Frame rendering resulted in an empty image list.")
+        # Save the collected Pillow frames as an animated GIF
+        pil_frames[0].save(
+            export_path,
+            save_all=True,
+            append_images=pil_frames[1:],
+            duration=delay_ms,
+            loop=loop,
+            optimize=False  # Optimization can be slow; keep it simple for reliability
+        )

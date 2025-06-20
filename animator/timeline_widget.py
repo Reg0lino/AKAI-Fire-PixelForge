@@ -1,7 +1,7 @@
 # AKAI_Fire_RGB_Controller/animator/timeline_widget.py
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QListWidget, QListWidgetItem,
-                             QAbstractItemView, QMenu, QStyledItemDelegate, QApplication,
-                             QStyleOptionViewItem, QStyle) # <<< ADD QStyle HERE
+                            QAbstractItemView, QMenu, QStyledItemDelegate, QApplication,
+                            QStyleOptionViewItem, QStyle) # <<< ADD QStyle HERE
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QSize, QRect, QModelIndex
 from PyQt6.QtGui import QAction, QPainter, QColor, QBrush, QPen, QKeySequence
 
@@ -138,22 +138,10 @@ class FrameThumbnailDelegate(QStyledItemDelegate):
             # Ensure "No Data" text fits within the available space for the grid
             if no_data_rect.height() > 0 and no_data_rect.width() > 0 :
                 painter.drawText(no_data_rect, Qt.AlignmentFlag.AlignCenter, "No Data")
-        # Border for playback/edit frame if not selected
-        # if not is_selected:
-        #     if is_playback_frame:
-        #         painter.setPen(QPen(QColor("lime"), 1.5))
-        #         painter.drawRect(rect.adjusted(0,0,-1,-1))
-        #     elif is_current_edit_frame:
-        #         painter.setPen(QPen(QColor("gold"), 1.5))
-        #         painter.drawRect(rect.adjusted(0,0,-1,-1))
         painter.restore()
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         return QSize(THUMBNAIL_ITEM_WIDTH, THUMBNAIL_ITEM_HEIGHT)
-
-# In file: AKAI_Fire_RGB_Controller/animator/timeline_widget.py
-# REPLACE the entire SequenceTimelineWidget class with this one.
-
 
 class SequenceTimelineWidget(QWidget):
     # NEW: Simplified signal emits the full list of selected indices.
@@ -190,11 +178,9 @@ class SequenceTimelineWidget(QWidget):
         self.frame_list_widget.setStyleSheet("""
             QListWidget { border: 1px solid #444; background-color: #282828; }
         """)
-
         # --- FIX: Disconnected currentItemChanged and now only use itemSelectionChanged ---
         self.frame_list_widget.itemSelectionChanged.connect(
             self._on_item_selection_changed)
-
         self.frame_list_widget.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu)
         self.frame_list_widget.customContextMenuRequested.connect(
@@ -214,23 +200,19 @@ class SequenceTimelineWidget(QWidget):
         return sorted(list(set(selected_indices)))
 
     def update_frames_display(self, all_frames_color_data: list[list[str]],
-                              current_edit_idx: int = -1,
-                              current_playback_idx: int = -1):
+                                current_edit_idx: int = -1,
+                                current_playback_idx: int = -1):
         self.frame_list_widget.blockSignals(True)
         self._all_frames_data = all_frames_color_data
         self.thumbnail_delegate.set_frame_data_list(self._all_frames_data)
-
         previously_selected_indices = self.get_selected_item_indices()
-
         self.frame_list_widget.clear()
         for i in range(len(all_frames_color_data)):
             item = QListWidgetItem()
             self.frame_list_widget.addItem(item)
-
         self.update_delegate_visual_state(
             current_edit_idx, current_playback_idx)
         self.select_items_by_indices(previously_selected_indices)
-
         self.frame_list_widget.blockSignals(False)
         self.frame_list_widget.update()
 
@@ -350,7 +332,6 @@ class SequenceTimelineWidget(QWidget):
             return
         if not isinstance(new_frame_colors, list) or len(new_frame_colors) != (THUMBNAIL_ROWS * THUMBNAIL_COLS):
             return
-
         self._all_frames_data[frame_index] = new_frame_colors
         model_idx = self.frame_list_widget.model().index(frame_index, 0)
         if model_idx.isValid():

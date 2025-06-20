@@ -47,16 +47,12 @@ class SequenceModel(QObject):
         self.description = "A cool sequence of pad layouts."
         self.frame_delay_ms = DEFAULT_FRAME_DELAY_MS
         self.loop = True
-        
         self.frames: list[AnimationFrame] = [] # Explicitly type hint
         self._current_edit_frame_index = -1 # -1 means no frame is selected for editing
-
         self._undo_stack = []
         self._redo_stack = []
-
         self._is_playing = False
         self._playback_frame_index = 0 # Current frame index during playback
-
         self.loaded_filepath = None # Path if loaded from/saved to a file
         self.is_modified = False # Flag to track unsaved changes
         # <<< NEW ATTRIBUTE for managing paint stroke undo >>>
@@ -71,11 +67,8 @@ class SequenceModel(QObject):
     def _push_undo_state(self):
         # if len(self.frames) == 0 and not self._undo_stack :
         #      pass
-
         if len(self._undo_stack) >= MAX_UNDO_STEPS:
             self._undo_stack.pop(0)  # Remove the oldest state
-
-        # --- START OF DETAILED LOGGING FOR UNDO STATE ---
         # print(
             # f"MODEL_UNDO_DEBUG: _push_undo_state called. Current edit frame index: {self._current_edit_frame_index}")
         if 0 <= self._current_edit_frame_index < len(self.frames):
@@ -86,7 +79,7 @@ class SequenceModel(QObject):
                 log_sample = frame_colors_for_log[:5] + \
                     ["..."] + frame_colors_for_log[-5:]
                 is_blank_log = all(c == QColor("black").name()
-                                   for c in frame_colors_for_log)
+                                    for c in frame_colors_for_log)
                 # print(
                     # f"MODEL_UNDO_DEBUG:   Content of current edit frame (idx {self._current_edit_frame_index}) being snapshotted: {log_sample}, IsBlank: {is_blank_log}")
             # else:
@@ -108,12 +101,9 @@ class SequenceModel(QObject):
         # else:  # No frames in sequence
             # print(
                 # f"MODEL_UNDO_DEBUG:   No frames in sequence. Pushing current state (name, delay).")
-        # --- END OF DETAILED LOGGING FOR UNDO STATE ---
-
         # Create deep copies of frames for the undo state
         frames_copy = [AnimationFrame(
             colors=frame.get_all_colors()) for frame in self.frames]
-
         self._undo_stack.append({
             "frames": frames_copy,
             "current_edit_frame_index": self._current_edit_frame_index,
@@ -131,7 +121,6 @@ class SequenceModel(QObject):
         self.frames = state_dict["frames"] # These are already AnimationFrame objects
         self.name = state_dict.get("name", self.name) 
         self.frame_delay_ms = state_dict.get("frame_delay_ms", self.frame_delay_ms)
-
         new_edit_index = state_dict["current_edit_frame_index"]
         
         # Validate and set the current_edit_frame_index
@@ -142,13 +131,11 @@ class SequenceModel(QObject):
             self._current_edit_frame_index = 0 if self.frames else -1
         else:
             self._current_edit_frame_index = new_edit_index
-
         self.frames_changed.emit()
         self.properties_changed.emit() # If name/delay changed
         self.current_edit_frame_changed.emit(self._current_edit_frame_index)
         self._mark_modified() # Applying an undo/redo state means it's now different from saved (or its previous state)
-        
-        
+
     def begin_paint_stroke(self):
         # print(f"MODEL DEBUG: begin_paint_stroke() called. Current _paint_action_in_progress: {self._paint_action_in_progress}") # <<< ADD DEBUG
         if not self._paint_action_in_progress:
@@ -161,12 +148,10 @@ class SequenceModel(QObject):
     def end_paint_stroke(self):
         # print(f"MODEL DEBUG: end_paint_stroke() called. Setting _paint_action_in_progress to False.") # <<< ADD DEBUG
         self._paint_action_in_progress = False
-        
-        
+
     def undo(self):
         if not self._undo_stack:
             return False
-        
         # Current state becomes a redo state (deep copy frames)
         current_frames_copy = [AnimationFrame(colors=frame.get_all_colors()) for frame in self.frames]
         self._redo_stack.append({
@@ -175,7 +160,6 @@ class SequenceModel(QObject):
             "name": self.name, 
             "frame_delay_ms": self.frame_delay_ms
         })
-        
         previous_state = self._undo_stack.pop()
         self._apply_state(previous_state)
         # self._mark_modified() is called by _apply_state
@@ -184,7 +168,6 @@ class SequenceModel(QObject):
     def redo(self):
         if not self._redo_stack:
             return False
-            
         # Current state becomes an undo state (deep copy frames)
         current_frames_copy = [AnimationFrame(colors=frame.get_all_colors()) for frame in self.frames]
         self._undo_stack.append({
@@ -195,7 +178,6 @@ class SequenceModel(QObject):
         })
         if len(self._undo_stack) > MAX_UNDO_STEPS: # Manage undo stack size
             self._undo_stack.pop(0)
-
         redone_state = self._redo_stack.pop()
         self._apply_state(redone_state)
         # self._mark_modified() is called by _apply_state
@@ -211,7 +193,6 @@ class SequenceModel(QObject):
             # Insert at the specified index
             self.frames.insert(at_index, frame_object)
             new_index = at_index
-        
         # After adding, set current edit frame to the newly added one
         self.set_current_edit_frame_index(new_index) # This emits current_edit_frame_changed
         self.frames_changed.emit() # This signals timeline to update its display
@@ -229,10 +210,8 @@ class SequenceModel(QObject):
     def duplicate_frames_at_indices(self, indices_to_duplicate: list[int]) -> list[int]:
         if not indices_to_duplicate or not self.frames:
             return []
-
         # Sort indices to process them in order, and remove duplicates
         sorted_unique_indices = sorted(list(set(indices_to_duplicate)))
-
         frames_to_add_copies = []
         for index_val in sorted_unique_indices:
             if 0 <= index_val < len(self.frames):
@@ -242,27 +221,21 @@ class SequenceModel(QObject):
                 frames_to_add_copies.append(AnimationFrame(colors=copied_colors))
             # else:
                 # print(f"DEBUG SM DFAI (dup): Index {index_val} out of bounds for duplication.")
-
         if not frames_to_add_copies:
             return []
-
         self._push_undo_state() 
-
         # Determine the insertion point: after the last item in the original selection block
         valid_original_indices = [idx for idx in sorted_unique_indices if 0 <= idx < len(self.frames)]
         if not valid_original_indices: 
             if self._undo_stack: self._undo_stack.pop() 
             return []
-
         insertion_point_index = max(valid_original_indices) + 1
         newly_created_indices = []
-
         for i, new_frame_copy in enumerate(frames_to_add_copies):
             actual_insert_index = insertion_point_index + i
             # self.frames.insert will handle bounds correctly if actual_insert_index > len(self.frames) by appending
             self.frames.insert(actual_insert_index, new_frame_copy)
             newly_created_indices.append(actual_insert_index)
-        
         if newly_created_indices:
             # Set current edit frame to the first of the newly duplicated frames
             self.set_current_edit_frame_index(min(newly_created_indices)) # This emits signals
@@ -270,23 +243,18 @@ class SequenceModel(QObject):
             self._mark_modified()
         else: 
             if self._undo_stack: self._undo_stack.pop()
-
         return newly_created_indices
 
     def delete_frames_at_indices(self, indices_to_delete: list[int]) -> bool:
         if not indices_to_delete or not self.frames:
             return False
-
         # Sort indices in descending order to avoid shifting issues during deletion
         # Also remove duplicates to process each index only once.
         sorted_indices_desc = sorted(list(set(indices_to_delete)), reverse=True)
-
         valid_deletions_occurred = False
         self._push_undo_state()
-
         original_edit_index_at_start = self._current_edit_frame_index
         current_edit_index_tracker = self._current_edit_frame_index # Will be adjusted
-
         for index_val in sorted_indices_desc:
             if 0 <= index_val < len(self.frames):
                 del self.frames[index_val]
@@ -298,12 +266,9 @@ class SequenceModel(QObject):
                     current_edit_index_tracker -= 1
             # else:
                 # print(f"DEBUG SM DFAI (del): Index {index_val} out of bounds for deletion.")
-
-
         if not valid_deletions_occurred:
             if self._undo_stack: self._undo_stack.pop() # Pop undo if nothing actually changed
             return False
-
         # Determine the new current_edit_frame_index
         new_potential_edit_index = -1
         if not self.frames:
@@ -324,11 +289,9 @@ class SequenceModel(QObject):
                     new_potential_edit_index = len(self.frames) - 1
                 # else: list is empty, new_potential_edit_index remains -1
             elif self.frames: # Should not be reached if indices_to_delete was empty, but defensive
-                 new_potential_edit_index = len(self.frames) - 1
+                new_potential_edit_index = len(self.frames) - 1
             # else: list is empty, new_potential_edit_index remains -1
-        
         # print(f"DEBUG SM DFAI: original_edit_index_at_start: {original_edit_index_at_start}, current_edit_index_tracker (after deletes): {current_edit_index_tracker}, new_potential_edit_index: {new_potential_edit_index}")
-        
         self.set_current_edit_frame_index(new_potential_edit_index) # Emits signals
         self.frames_changed.emit()
         self._mark_modified()
@@ -340,15 +303,13 @@ class SequenceModel(QObject):
         Args:
             frames_to_paste: A list of AnimationFrame objects to paste.
             at_index: The index at which to start inserting the pasted frames.
-                      If out of bounds, frames will be appended.
+            If out of bounds, frames will be appended.
         Returns:
             A list of indices where the new frames were inserted.
         """
         if not frames_to_paste:
             return []
-
         self._push_undo_state()
-
         # Create deep copies of the frames from the clipboard to ensure they are independent
         copied_frames_for_pasting = []
         for frame_to_copy in frames_to_paste:
@@ -357,15 +318,12 @@ class SequenceModel(QObject):
                 copied_frames_for_pasting.append(AnimationFrame(colors=frame_to_copy.get_all_colors()))
             # else:
                 # print(f"Warning: Item in frames_to_paste is not an AnimationFrame: {type(frame_to_copy)}")
-
         if not copied_frames_for_pasting: # Should not happen if frames_to_paste was valid
             if self._undo_stack: self._undo_stack.pop()
             return []
-
         # Validate at_index, default to appending if out of range
         if not (0 <= at_index <= len(self.frames)):
             at_index = len(self.frames) 
-
         newly_created_indices = []
         for i, new_frame_copy in enumerate(copied_frames_for_pasting):
             actual_insert_index = at_index + i
@@ -379,7 +337,6 @@ class SequenceModel(QObject):
             self._mark_modified()
         else: # If for some reason no frames were actually inserted (e.g., clipboard was empty after filtering)
             if self._undo_stack: self._undo_stack.pop()
-
         return newly_created_indices
 
     def get_frame_count(self):
@@ -423,7 +380,7 @@ class SequenceModel(QObject):
         Permanently applies color grading FX to the specified frames by calling
         the central color utility function. This is an undoable action.
         """
-        # --- FIX: Import from the new location in the 'managers' package ---
+        # --- Import from the new location in the 'managers' package ---
         from managers.color_fx_utils import apply_fx_filter
         if not indices:
             return
@@ -443,7 +400,6 @@ class SequenceModel(QObject):
         # Ensure the sequence is marked as needing a save.
         self._mark_modified()
 
-
     def update_pad_in_current_edit_frame(self, pad_index_0_63: int, color_hex: str) -> bool:
         current_frame_obj = self.get_current_edit_frame_object()
         if current_frame_obj:
@@ -459,7 +415,7 @@ class SequenceModel(QObject):
                 self._mark_modified() # Still mark sequence as modified
             return True
         return False
-    
+
     def set_name(self, name: str):
         if self.name != name:
             # self._push_undo_state() # Decide if name/property changes are on main undo stack or separate
@@ -509,7 +465,7 @@ class SequenceModel(QObject):
                 self._mark_modified()
             return True
         return False
-            
+
     # --- Playback Methods ---
     def start_playback(self, start_index: int = None):
         if self.get_frame_count() > 0:
@@ -583,7 +539,6 @@ class SequenceModel(QObject):
         model.description = data.get("description", "")
         model.frame_delay_ms = data.get("frame_delay_ms", DEFAULT_FRAME_DELAY_MS)
         model.loop = data.get("loop", True)
-        
         loaded_frames_data = data.get("frames", [])
         for frame_colors_hex_list in loaded_frames_data:
             if isinstance(frame_colors_hex_list, list) and len(frame_colors_hex_list) == 64:
@@ -607,19 +562,16 @@ class SequenceModel(QObject):
         try:
             with open(filepath, "r") as f:
                 data = json.load(f)
-            
             # Basic validation of top-level keys
             if not all(k in data for k in ["name", "frames"]) or not isinstance(data["frames"], list):
                 # print(f"SequenceModel: File {filepath} missing 'name' or 'frames' list or 'frames' is not a list.")
                 return False
-
             # Use filename as a fallback for name if not in JSON, or override with filename-derived name
             filename_name = os.path.splitext(os.path.basename(filepath))[0].replace("_", " ").replace("-", " ")
             self.name = data.get("name", filename_name) # Prefer name from file, fallback to filename
             self.description = data.get("description", "")
             self.frame_delay_ms = data.get("frame_delay_ms", DEFAULT_FRAME_DELAY_MS)
             self.loop = data.get("loop", True)
-            
             self.frames.clear() # Clear existing frames
             loaded_frames_data = data.get("frames", [])
             for frame_idx, frame_colors_hex_list in enumerate(loaded_frames_data):
@@ -634,14 +586,11 @@ class SequenceModel(QObject):
                     self.frames.append(AnimationFrame(colors=valid_frame_colors))
                 # else:
                     # print(f"SequenceModel Warning: Invalid frame data (not list of 64) at frame {frame_idx} in {filepath}. Skipping frame.")
-
             self._undo_stack.clear() # Reset undo/redo history for newly loaded sequence
             self._redo_stack.clear()
             self._current_edit_frame_index = 0 if self.frames else -1 # Select first frame or none
-            
             self.loaded_filepath = filepath
             self.is_modified = False # Freshly loaded is not modified relative to the file
-            
             # print(f"SequenceModel: Sequence '{self.name}' loaded from {filepath}, Frames: {len(self.frames)}")
             self.frames_changed.emit()
             self.properties_changed.emit()
@@ -653,7 +602,6 @@ class SequenceModel(QObject):
         except Exception as e:
             # print(f"SequenceModel: General Error loading sequence from {filepath}: {e}")
             pass
-        
         # If loading failed, reset to a clean state or ensure partial load doesn't corrupt
         self.loaded_filepath = None
         self.is_modified = False # Or True if you want to prompt save for a failed load attempt
@@ -665,14 +613,11 @@ class SequenceModel(QObject):
             # Ensure the name in the data matches the current model name, especially if it was changed
             # after a load or if saving a "New Sequence" for the first time.
             # self.to_dict() already uses self.name.
-            
             with open(filepath, "w") as f:
                 json.dump(data_to_save, f, indent=4)
-            
             self.loaded_filepath = filepath # Update loaded path
             self.is_modified = False      # Successfully saved, no longer modified from file
             # print(f"SequenceModel: Sequence '{self.name}' saved to {filepath}")
-            
             # Emit properties_changed in case the name was formally set (e.g. from "New Sequence")
             # and needs to be reflected in UI (like a combo box managed by SequenceFileManager)
             self.properties_changed.emit()
@@ -685,7 +630,6 @@ class SequenceModel(QObject):
         """Clears all frames from the sequence."""
         if not self.frames: # No frames to clear
             return
-
         self._push_undo_state()
         self.frames.clear()
         self.set_current_edit_frame_index(-1) # No frame selected

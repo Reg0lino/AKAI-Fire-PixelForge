@@ -178,6 +178,6 @@ class AudioVisualizerUIManager(QGroupBox):
         Public slot to allow external widgets (like the main menu bar)
         to toggle the visualizer's enabled state.
         """
-        # This method programmatically "clicks" the internal enable/disable button.
-        if self.enable_button:
-            self.enable_button.click()
+        # --- Use the correct button attribute name 'enable_visualizer_button' ---
+        if hasattr(self, 'enable_visualizer_button') and self.enable_visualizer_button:
+            self.enable_visualizer_button.click()

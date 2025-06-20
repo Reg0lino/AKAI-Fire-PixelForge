@@ -1,52 +1,85 @@
 # Changelog - Akai Fire PixelForge
 
+## [Version 1.6.0] - UI & FX Overhaul - (In Development)
+
+This is a landmark release focused on a massive professional-grade overhaul of the application's user interface, user experience, and creative capabilities. The entire application layout has been re-architected for a more logical, clean, and scalable workflow. This version introduces a powerful, non-destructive "Color Grading / FX" system, a fully-featured menu bar, and a cascade of stability fixes that solidify the entire application.
+
+### ✨ **NEW FEATURES & ENHANCEMENTS**
+
+*   **NEW: Universal Color Grading / Live FX System:**
+    *   A new "🎨 Color Grading / FX" panel has been added, replacing the old "Global Controls" widget.
+    *   This panel provides real-time, non-destructive control over **Brightness, Saturation, Contrast, and Hue**.
+    *   **Universal Filter:** When enabled, these effects apply globally to all visual output on the hardware, including static layouts, individually painted pads, and animator playback.
+    *   **"Apply to Selected Frames" Action:** A new button allows users to permanently "bake in" the current FX settings to selected animator frames. This action shows a confirmation dialog and is fully integrated with the existing **Undo/Redo system**.
+    *   **Intelligent Knob Control:** The top-strip knobs automatically sync with and control the FX sliders.
+
+*   **NEW: Full-Featured Application Menu Bar:**
+    *   A professional menu bar (`File`, `Edit`, `Animation`, `Tools`, `Help`) has been added to the top of the window, providing a logical home for every application feature.
+    *   **New File Operations:** Includes actions for "📂 Load Sequence..." from a file dialog and a placeholder for "⬇️ Export Animation as GIF...".
+    *   **Reorganized Edit/Animation Menus:** "Edit" now handles universal actions like Undo/Redo, while a new dedicated "Animation" menu contains all frame-specific operations (Cut, Copy, Paste, Duplicate, etc.).
+    *   **Tools Menu:** Provides direct access to toggle or configure all major features: Screen Sampler, Audio Visualizer, OLED Customizer, and LazyDOOM.
+    *   **Help Menu:** Includes an "About" dialog and a link to the project's GitHub page.
+
+*   **NEW: Enhanced Hardware Workflow & Feedback:**
+    *   **Context-Aware "Select/Speed" Knob:** The fifth knob now intelligently switches function. In the animator, it controls list navigation when idle, but automatically becomes a **Speed** controller with full visual feedback during playback.
+    *   **OLED "SAVE?" Cue:** When a user tries to load a new sequence via the hardware knob while having unsaved changes, the OLED now displays a "SAVE?" message, directing them to the confirmation dialog on the main screen.
+
+*   **NEW: Default Animator State on Connect:**
+    *   Upon connecting the device, the animator now automatically creates and selects a single, blank frame. This provides a ready-to-use "canvas" and fixes numerous bugs related to starting with an empty state (e.g., non-functional Undo, FX, and painting).
+    *   **Intelligent Save Prompt:** The "Unsaved Changes" dialog will no longer appear for this initial, untouched blank frame, providing a smoother startup experience.
+
+### 🎨 **UI/UX REDESIGN & POLISH**
+
+*   **Major Layout Overhaul:**
+    *   The main window has been restructured. The `Animator Studio` is now the primary expanding widget, ensuring maximum space for timeline editing.
+    *   A new "Control Deck" at the bottom of the left panel now logically groups the `Screen Sampler` and `LazyDOOM` widgets.
+*   **Color Grading / FX Panel Refinement:**
+    *   The panel layout has been redesigned into a compact 2x2 grid to maximize slider length and provide a professional, clean appearance.
+    *   Includes a single "⟳ All" master reset button for convenience.
+*   **Top-Strip Device Controls Polish:**
+    *   The labels for the four main knobs now display the full words ("Brightness", "Saturation", etc.) for improved clarity.
+*   **Menu Bar Styling:** The menu bar and its dropdowns are now fully custom-styled to match the application's dark theme, with proper hover and selection highlights for an intuitive, professional feel.
+
+### 🐛 **BUG FIXES & STABILITY**
+
+*   **Fixed All Knob Control & Sync Bugs:**
+    *   Completely resolved the logical feedback loop that caused knobs to feel "dead" or unresponsive.
+    *   Fixed the visual synchronization of the Speed knob, which now correctly snaps to the animation's current FPS and updates in real-time.
+    *   Fixed the initial startup position of the four main knobs, which now correctly default to their centered, neutral position.
+    *   Fixed the Select knob press action, which is now correctly ignored during animation playback.
+*   **Fixed Animator Selection & UI Bugs:**
+    *   Resolved the critical bug that prevented drag-selection in the animator timeline from working correctly in all directions.
+    *   Fixed the infinite-loop crash caused by the "Unsaved Changes" dialog re-appearing when loading a new sequence.
+*   **Fixed "Black vs. Grey" Pad Color:**
+    *   Corrected the pad drawing logic to ensure that pads with a black color (`#000000`) are rendered as true black on the GUI, not dark grey.
+*   **Fixed Cross-Feature Crashes:**
+    *   Resolved multiple `AttributeError` and `TypeError` crashes that occurred when trying to enable one master feature (like the Audio Visualizer) while another (like the Screen Sampler) was running. The new state management system now correctly grays out and disables conflicting actions.
+*   **Architectural Refactoring:**
+    *   Completely refactored the `ScreenSamplerManager` and its UI components to resolve a critical startup crash caused by an initialization paradox. This has made the entire feature stable and robust.
+
+---
+
 ## [Version 1.5.0] - June 17, 2025
 
-This major release completes the powerful Audio Visualizer feature, overhauls the Color Picker with a professional primary/secondary color system, and introduces a significant UI/UX redesign of core components like the top "Device Controls" strip. This version represents a substantial leap forward in both creative features and application stability.
+This major release completed the powerful Audio Visualizer feature, overhauled the Color Picker with a professional primary/secondary color system, and introduced a significant UI/UX redesign of core components like the top "Device Controls" strip.
 
-### ✨ NEW FEATURES & ENHANCEMENTS
-
-*   **Advanced Audio Visualizer (Feature Complete):**
-    *   **"Dual VU + Spectrum" Mode:** The final visualizer mode is now fully implemented. It features two VU meters on the sides and a central 5-band audio spectrum, each with its own independent settings for colors, sensitivity, and smoothing.
-    *   **"Pulse Wave" Mode Enhancement:** The visualization has been visually enhanced with a soft "fade" effect on adjacent columns for a smoother look.
-    *   **Expanded Prefab Palettes:** Added 8 new creative, built-in color palettes for the "Classic Spectrum Bars" mode, including "DOOM Inferno", "Matrix Code", and "Cyberpunk Neon".
-    *   **Live Settings:** The `Setup...` dialog can now be opened while the visualizer is running, allowing for real-time tweaking of all parameters.
-
-*   **Color Picker Overhaul (Primary/Secondary Colors):**
-    *   The painting workflow has been upgraded to a professional **Primary (Left-Click)** and **Secondary (Right-Click)** color system.
-    *   The Color Picker UI has been redesigned with a new interactive color well to show and select the active color, and a `⇄` button to instantly swap them.
-    *   The overall layout of the widget has been significantly improved for a more compact, logical, and polished appearance.
-
-*   **Main Window UI/UX Overhaul:**
-    *   **"Device Controls" Strip Redesign:** The entire top strip has been rebuilt for a professional look and stability using custom-rendered knob widgets that are immune to system style changes.
-    *   **Global Controls Panel:** Added a new `QGroupBox` on the right-hand panel with a dedicated `QSlider` for "Global Pad Brightness," which is perfectly synced with the physical hardware knob.
-    *   **Enhanced User Feedback:** Implemented dynamic tooltips for hardware knobs that update with their current function and value.
-
-### 🐛 BUG FIXES & STABILITY
-
-*   **Fixed All Knob-Related Crashes and Bugs:** Systematically eliminated a cascade of crashes that occurred when interacting with the top-strip knobs. Resolved logic flaws that caused spurious OLED feedback and prevented GUI interaction.
-*   **Fixed Color Picker Functionality:**
-    *   Resolved a critical bug where the color picker UI (SV-picker, sliders, input fields) would not update in real-time as a color was being changed.
-    *   Fixed an issue where moving the SV-picker would incorrectly cause the Hue slider to flicker or jump ("cross-talk").
-    *   Corrected tooltip styling to ensure consistent, readable tooltips for all color picker elements, especially the swap button and color swatches.
-*   **Fixed `VisualizerSettingsDialog` Bugs:** Resolved issues with preset management and initialization crashes in the audio visualizer settings.
-*   **Fixed `MainWindow` Layout & Initialization:** Resolved multiple critical layout bugs and `AttributeError` crashes during application startup.
+*   **NEW FEATURES & ENHANCEMENTS:**
+    *   **Advanced Audio Visualizer (Feature Complete):** "Dual VU + Spectrum" mode implemented, "Pulse Wave" mode enhanced, 8 new prefab palettes added, and live settings dialog enabled.
+    *   **Color Picker Overhaul:** Upgraded to a professional Primary (Left-Click) and Secondary (Right-Click) color system with a redesigned UI.
+    *   **Main Window UI/UX Overhaul:** Rebuilt "Device Controls" strip with custom-rendered knobs, added a global brightness slider, and implemented dynamic tooltips.
+*   **BUG FIXES & STABILITY:**
+    *   Fixed all knob-related crashes and logic flaws.
+    *   Fixed critical bugs in the Color Picker where the UI would not update in real-time.
+    *   Resolved preset management and initialization crashes in the `VisualizerSettingsDialog`.
 
 ---
 
 ## [Version 1.0.1] - June 8, 2025
 
-This version introduced a significant overhaul and initial detailed implementation of the Audio Visualizer feature, focusing on the "Classic Spectrum Bars" mode, robust settings management, and user profile/prefab support.
+This version introduced a significant overhaul and initial detailed implementation of the Audio Visualizer feature, focusing on the "Classic Spectrum Bars" mode.
 
-*   **NEW FEATURE: Advanced Audio Visualizer - Classic Spectrum Bars (Part 1):**
-    *   **Core Visualization Engine (`AudioVisualizerManager`):** Successful audio capture from loopback devices, FFT processing, 8-band power calculation, and mapping to the Akai Fire pad grid.
-    *   **Comprehensive Settings Management (`AudioVisualizerManager`):** Introduced `all_mode_settings_cache` for all visualizer modes, persisted to `visualizer_main_settings.json`.
-    *   **Detailed Settings Dialog (`VisualizerSettingsDialog`):** A new dialog with a dedicated tab for "Spectrum Bars" providing UI for individual bar colors, sensitivity, and smoothing. Implemented an integrated palette management system.
-    *   **Main Application Integration:** `AudioVisualizerUIManager` added to the main window for device/mode selection and visualizer activation.
-*   **BUG FIXES & STABILITY (Audio Visualizer):**
-    *   Resolved critical key mismatches that prevented settings from being applied.
-    *   Corrected profile list update logic in the settings dialog.
-    *   Fixed premature stopping of the audio processing thread.
+*   **NEW FEATURE:** Advanced Audio Visualizer - Classic Spectrum Bars (Part 1).
+*   **BUG FIXES & STABILITY:** Resolved critical key mismatches and profile list update logic in the visualizer.
 
 ---
 
@@ -54,13 +87,9 @@ This version introduced a significant overhaul and initial detailed implementati
 
 This landmark v1.0.0 release introduced the highly anticipated **"LazyDOOM" on OLED** feature and finalized the advanced OLED image processing pipeline.
 
-*   **NEW FEATURE: LazyDOOM on OLED! 👹:**
-    *   A fully playable, DOOM-themed first-person raycaster game running on the Akai Fire's 128x64 OLED display.
-    *   Features procedural map generation, combat mechanics, and selectable difficulty levels.
-*   **OTHER FEATURES & ENHANCEMENTS (v1.0.0):**
-    *   **Advanced OLED Image Processing & Dithering Finalized:** The full suite of image processing tools (Gamma, Blur, Sharpen, Noise, new Dithering algorithms) was stabilized and fully integrated into the `OLEDCustomizerDialog`.
-*   **BUG FIXES & STABILITY (v1.0.0):**
-    *   Fixed a critical initialization bug in the `OLEDCustomizerDialog` that prevented the item library from functioning correctly.
+*   **NEW FEATURE:** LazyDOOM on OLED! 👹
+*   **OTHER FEATURES:** Advanced OLED Image Processing & Dithering Finalized.
+*   **BUG FIXES:** Fixed a critical initialization bug in the `OLEDCustomizerDialog`.
 
 ---
 
@@ -68,7 +97,7 @@ This landmark v1.0.0 release introduced the highly anticipated **"LazyDOOM" on O
 
 *   **v0.9.x Releases:** Focused on experimental features that would be stabilized in v1.0.0, including advanced OLED dithering options and the initial integration of the LazyDOOM game.
 *   **v0.8.0 & v0.7.0:** Focused on stabilizing the Screen Sampler, implementing persistent user settings for the sampler and color picker, and adding "My Colors" swatch management.
-*   **Pre-v0.7.0:** Initial development phases, including the creation of the core Animator Studio, the first MVP of the Screen Sampler, and major refactoring efforts to establish the modular architecture of the application.
+*   **Pre-v0.7.0:** Initial development phases, including the creation of the core Animator Studio, the first MVP of the Screen Sampler, and major refactoring efforts to establish the modular architecture.
 
 ---
 *Akai Fire PixelForge - Developed by Reg0lino with extensive AI assistance from Gemini models.*

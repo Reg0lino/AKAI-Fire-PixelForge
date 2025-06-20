@@ -2,6 +2,8 @@
 import sys
 import os
 import json
+from .oled_gif_export_dialog import OLEDGifExportDialog
+from PIL import Image, ImageDraw
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QDialogButtonBox, QFontComboBox, QSpinBox, QWidget, QSizePolicy, QFrame,
@@ -67,6 +69,7 @@ class OLEDCustomizerDialog(QDialog):
     dialog_closed = pyqtSignal()
 
     def __init__(self,
+                 oled_display_manager_ref,
                 current_active_graphic_path: str | None,
                 current_global_scroll_delay_ms: int,
                 available_oled_items: list, # Note: available_oled_items is not directly used by dialog anymore
@@ -77,20 +80,18 @@ class OLEDCustomizerDialog(QDialog):
         self.setWindowTitle("⚙️ OLED Active Graphic Manager")
         self.resize(DIALOG_INITIAL_WIDTH, DIALOG_INITIAL_HEIGHT)
         self.setMinimumSize(DIALOG_MINIMUM_WIDTH, DIALOG_MINIMUM_HEIGHT)
-
+        # oled reference
+        self.oled_display_manager_ref = oled_display_manager_ref
         # Store initial state for comparison and for emitting changes
         self._initial_active_graphic_path = current_active_graphic_path
         self._initial_global_scroll_delay_ms = current_global_scroll_delay_ms
-        
         # This will hold the path of the item that should become active if the user accepts.
         # It's initialized with the incoming active path.
         # It will be updated if the user selects something from the library and hits "Save as Active Graphic",
         # or if an editor item is saved and applied.
         self._intended_active_graphic_relative_path: str | None = self._initial_active_graphic_path
-
         # Flag to track if the global scroll speed slider was changed by the user
         self._global_scroll_speed_changed_by_user = False
-
         # Initialize all UI attributes to None first (as before)
         # self.default_startup_item_combo will be removed from this list
         self.global_scroll_speed_level_slider: QSlider | None = None
@@ -163,7 +164,6 @@ class OLEDCustomizerDialog(QDialog):
         self.animation_items_dir = os.path.join(
             self.user_oled_presets_base_path, USER_OLED_ANIM_ITEMS_SUBDIR)
         self.available_app_fonts = available_app_fonts
-
         # State Variables (as before)
         self._preview_scroll_timer = QTimer(self)
         self._preview_scroll_timer.timeout.connect(self._scroll_preview_step)
@@ -193,7 +193,6 @@ class OLEDCustomizerDialog(QDialog):
         self._library_preview_anim_fps = 15.0
         self._library_preview_anim_loop_behavior = "Loop Infinitely"
         self._is_library_preview_anim_playing = False
-        
         self._init_ui()
         self._connect_signals()
         QTimer.singleShot(0, self._load_initial_data)
@@ -202,15 +201,12 @@ class OLEDCustomizerDialog(QDialog):
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
         self.setLayout(main_layout)
-
         # --- Global OLED Settings Group ---
         global_settings_group = QGroupBox("Global OLED Settings")
         global_settings_layout = QHBoxLayout(global_settings_group)
-        
         # Remove "Set as Active Graphic" Combo Box and its label
         # global_settings_layout.addWidget(QLabel("Set as Active Graphic:"))
         # self.default_startup_item_combo = QComboBox() ... (and its setup)
-
         # Center the Global Scroll Speed controls
         global_settings_layout.addStretch(1) # Add stretch before
         global_settings_layout.addWidget(QLabel("Global Scroll Speed:"))
@@ -233,25 +229,20 @@ class OLEDCustomizerDialog(QDialog):
         global_settings_layout.addWidget(
             self.global_scroll_speed_display_label)
         global_settings_layout.addStretch(1) # Add stretch after
-        
         main_layout.addWidget(global_settings_group)
-
         # --- Main Splitter ---
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(self.splitter, 1) 
-
         # --- Left Pane of Splitter (Container for Library and Preview) ---
         left_pane_widget = QWidget()
         left_pane_layout = QVBoxLayout(left_pane_widget)
         left_pane_layout.setContentsMargins(0,0,0,0) 
-
         library_group = QGroupBox("Item Library")
         library_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         library_layout = QVBoxLayout(library_group)
         self.item_library_list = QListWidget()
         self.item_library_list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding) 
         library_layout.addWidget(self.item_library_list, 1) 
-
         library_buttons_layout = QGridLayout()
         self.new_text_item_button = QPushButton("✨ New Text Item")
         self.new_anim_item_button = QPushButton(
@@ -267,7 +258,6 @@ class OLEDCustomizerDialog(QDialog):
             self.delete_selected_item_button, 1, 1)
         library_layout.addLayout(library_buttons_layout)
         left_pane_layout.addWidget(library_group, 1) 
-
         preview_group = QGroupBox("Live Preview (Main)")
         preview_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed) 
         preview_layout = QVBoxLayout(preview_group)
@@ -282,47 +272,47 @@ class OLEDCustomizerDialog(QDialog):
         preview_layout.addWidget(
             self.oled_preview_label, 0, Qt.AlignmentFlag.AlignCenter)
         left_pane_layout.addWidget(preview_group) 
-
         self.splitter.addWidget(left_pane_widget) 
-
         # --- Right Pane of Splitter (Item Editor) ---
         self.item_editor_group = QGroupBox("Item Editor")
         self.item_editor_group.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) 
         item_editor_main_layout = QVBoxLayout(self.item_editor_group)
-
         self.editor_stacked_widget = QStackedWidget()
         self.editor_stacked_widget.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) 
-
         self.text_editor_widget = self._create_text_editor_panel()
         if self.text_editor_widget:
             self.text_editor_widget.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             self.editor_stacked_widget.addWidget(self.text_editor_widget)
-
         self.animation_editor_widget_container = self._create_animation_editor_panel()
         if self.animation_editor_widget_container:
             self.animation_editor_widget_container.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             self.editor_stacked_widget.addWidget(self.animation_editor_widget_container)
-
         item_editor_main_layout.addWidget(self.editor_stacked_widget, 1) 
         self.splitter.addWidget(self.item_editor_group) 
-
         library_initial_width = 280 
         editor_initial_width = DIALOG_INITIAL_WIDTH - library_initial_width - self.splitter.handleWidth() - 20 
         self.splitter.setSizes([library_initial_width, max(100, editor_initial_width)])
-        
-        # --- Dialog Buttons (at the very bottom) ---
+    # --- Dialog Buttons (at the very bottom) ---
+        # Create a horizontal layout to hold the button box and a spacer
+        bottom_button_layout = QHBoxLayout()
+        bottom_button_layout.addStretch(1) # This spacer pushes the button box to the right
         self.button_box = QDialogButtonBox()
-        # self.save_and_apply_button is your "Save as Active Graphic" button
+        # Add the new Export button
+        self.export_gif_button = self.button_box.addButton(
+            "Export as GIF...", QDialogButtonBox.ButtonRole.ActionRole)
+        self.export_gif_button.setEnabled(False) # Initially disabled
+        # Add the main buttons
         self.save_and_apply_button = self.button_box.addButton(
-            "Save as Active Graphic", QDialogButtonBox.ButtonRole.ApplyRole) 
-        # Remove the standard "Save" button
-        # self.button_box.addButton(QDialogButtonBox.StandardButton.Save) 
+            "Save as Active Graphic", QDialogButtonBox.ButtonRole.ApplyRole)
         self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
-        main_layout.addWidget(self.button_box)
+        # Add the button box itself to the horizontal layout
+        bottom_button_layout.addWidget(self.button_box)
+        # Add the horizontal layout containing the buttons to the dialog's main layout
+        main_layout.addLayout(bottom_button_layout)
 
     def _speed_level_to_delay_ms(self, level: int) -> int:
         if level <= MIN_SPEED_LEVEL:
@@ -410,7 +400,6 @@ class OLEDCustomizerDialog(QDialog):
             self.save_this_text_item_button, 0, Qt.AlignmentFlag.AlignRight)
         return widget
 
-
     def _create_animation_editor_panel(self) -> QWidget:
         page_widget = QWidget()
         page_widget.setMinimumHeight(INNER_EDITOR_PANEL_CONTENT_MIN_HEIGHT + 150) 
@@ -422,11 +411,9 @@ class OLEDCustomizerDialog(QDialog):
         anim_editor_layout = QVBoxLayout(scroll_content_widget)
         anim_editor_layout.setContentsMargins(5, 5, 5, 5); 
         anim_editor_layout.setSpacing(8)
-        
         name_layout = QHBoxLayout(); name_layout.addWidget(QLabel("Animation Name:")); 
         self.anim_item_name_edit = QLineEdit(); name_layout.addWidget(self.anim_item_name_edit); 
         anim_editor_layout.addLayout(name_layout)
-        
         source_file_layout = QHBoxLayout(); 
         source_file_layout.addWidget(QLabel("Source Image/GIF:")); 
         self.anim_source_file_label = QLabel("<i>No file selected</i>"); 
@@ -434,7 +421,6 @@ class OLEDCustomizerDialog(QDialog):
         self.anim_source_file_label.setWordWrap(True); source_file_layout.addWidget(self.anim_source_file_label, 1); 
         self.anim_browse_button = QPushButton("Browse..."); source_file_layout.addWidget(self.anim_browse_button); 
         anim_editor_layout.addLayout(source_file_layout)
-        
         import_options_group = QGroupBox("Import & Processing Options")
         import_options_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         import_options_layout = QGridLayout(import_options_group)
@@ -451,12 +437,10 @@ class OLEDCustomizerDialog(QDialog):
         import_options_layout.addWidget(QLabel("Resize Mode:"), row, 0)
         self.anim_resize_mode_combo = QComboBox(); self.anim_resize_mode_combo.addItems(["Stretch to Fit", "Fit (Keep Aspect, Pad)", "Crop to Center"])
         import_options_layout.addWidget(self.anim_resize_mode_combo, row, SLIDER_COL, 1, RESET_BUTTON_COL) # Span slider, value, reset columns
-
         row += 1
         import_options_layout.addWidget(QLabel("Monochrome:"), row, 0)
         self.anim_mono_conversion_combo = QComboBox(); self.anim_mono_conversion_combo.addItems(["Floyd-Steinberg Dither", "Atkinson Dither", "Simple Threshold", "Ordered Dither (Bayer 2x2)", "Ordered Dither (Bayer 4x4)", "Ordered Dither (Bayer 8x8)"])
         import_options_layout.addWidget(self.anim_mono_conversion_combo, row, SLIDER_COL, 1, RESET_BUTTON_COL)
-
         row += 1
         self.anim_dither_strength_widget = QWidget() 
         dither_strength_row_layout = QHBoxLayout(self.anim_dither_strength_widget); 
@@ -479,7 +463,6 @@ class OLEDCustomizerDialog(QDialog):
         dither_strength_row_layout.addWidget(self.reset_dither_strength_button)
         import_options_layout.addWidget(self.anim_dither_strength_widget, row, 0, 1, RESET_BUTTON_COL + 1) 
         self.anim_dither_strength_widget.setVisible(False)
-
         row += 1
         self.anim_threshold_widget = QWidget() 
         threshold_row_layout = QHBoxLayout(self.anim_threshold_widget); 
@@ -501,13 +484,8 @@ class OLEDCustomizerDialog(QDialog):
         threshold_row_layout.addWidget(self.reset_threshold_button)
         import_options_layout.addWidget(self.anim_threshold_widget, row, 0, 1, RESET_BUTTON_COL + 1) 
         self.anim_threshold_widget.setVisible(False)
-
-        # --- Brightness (QDial REMOVED) ---
         row += 1; import_options_layout.addWidget(QLabel("Brightness:"), row, 0)
-        # self.anim_brightness_dial = QDial() # REMOVED QDIAL
-        # ... (QDial setup REMOVED) ...
         # import_options_layout.addWidget(self.anim_brightness_dial, row, 1) # REMOVED QDIAL ADDITION
-
         self.anim_brightness_slider = QSlider(Qt.Orientation.Horizontal); 
         self.anim_brightness_slider.setRange(0, 200); 
         self.anim_brightness_slider.setValue(100); 
@@ -522,7 +500,6 @@ class OLEDCustomizerDialog(QDialog):
         self.reset_brightness_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_brightness_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Brightness")
         import_options_layout.addWidget(self.reset_brightness_button, row, RESET_BUTTON_COL) # Reset button in RESET_BUTTON_COL
-        
         row += 1; import_options_layout.addWidget(QLabel("Gamma:"), row, 0)
         self.anim_gamma_slider = QSlider(Qt.Orientation.Horizontal); 
         self.anim_gamma_slider.setRange(50, 200); 
@@ -538,7 +515,6 @@ class OLEDCustomizerDialog(QDialog):
         self.reset_gamma_button.setFixedWidth(RESET_BUTTON_WIDTH); 
         self.reset_gamma_button.setToolTip(f"{RESET_BUTTON_TOOLTIP_PREFIX}Gamma")
         import_options_layout.addWidget(self.reset_gamma_button, row, RESET_BUTTON_COL)
-        
         row += 1; import_options_layout.addWidget(QLabel("Contrast:"), row, 0)
         self.anim_contrast_slider = QSlider(Qt.Orientation.Horizontal); 
         self.anim_contrast_slider.setRange(0, 200); 
@@ -662,7 +638,6 @@ class OLEDCustomizerDialog(QDialog):
                 if w: w.setEnabled(False)
             if self.anim_source_file_label: self.anim_source_file_label.setText("<i>Image processing unavailable</i>")
         return page_widget
-
 
     def _update_editor_panel_visibility(self, item_type_to_show: str | None):
         if item_type_to_show is not None:
@@ -803,10 +778,6 @@ class OLEDCustomizerDialog(QDialog):
         # Global Settings
         if self.global_scroll_speed_level_slider:
             self.global_scroll_speed_level_slider.valueChanged.connect(self._on_global_scroll_speed_level_slider_changed)
-        
-        # Removed connection for self.default_startup_item_combo as it's deleted
-        # if self.default_startup_item_combo: ...
-
         # Library
         if self.item_library_list is not None: 
             try:
@@ -816,12 +787,10 @@ class OLEDCustomizerDialog(QDialog):
                 print(f"ERROR OCD: EXCEPTION during connecting signals for item_library_list: {e_connect}")
         else:
             print(f"ERROR OCD: self.item_library_list is None, cannot connect signals.")
-
         if self.new_text_item_button: self.new_text_item_button.clicked.connect(self._handle_new_text_item)
         if self.new_anim_item_button: self.new_anim_item_button.clicked.connect(self._handle_new_animation_item)
         if self.edit_selected_item_button: self.edit_selected_item_button.clicked.connect(self._handle_edit_selected_item)
         if self.delete_selected_item_button: self.delete_selected_item_button.clicked.connect(self._handle_delete_selected_item)
-
         # Text Editor
         if self.item_name_edit: self.item_name_edit.textChanged.connect(self._mark_editor_dirty_if_needed)
         if self.text_content_edit: self.text_content_edit.textChanged.connect(self._mark_editor_dirty_if_needed)
@@ -833,7 +802,6 @@ class OLEDCustomizerDialog(QDialog):
         if self.text_anim_item_scroll_speed_spinbox: self.text_anim_item_scroll_speed_spinbox.valueChanged.connect(self._mark_editor_dirty_if_needed)
         if self.text_anim_pause_at_ends_spinbox: self.text_anim_pause_at_ends_spinbox.valueChanged.connect(self._mark_editor_dirty_if_needed)
         if self.save_this_text_item_button: self.save_this_text_item_button.clicked.connect(self._handle_save_this_text_item)
-
         # Animation Editor
         if IMAGE_PROCESSING_AVAILABLE:
             if self.anim_item_name_edit: self.anim_item_name_edit.textChanged.connect(self._mark_editor_dirty_if_needed)
@@ -863,7 +831,9 @@ class OLEDCustomizerDialog(QDialog):
             if self.anim_process_button: self.anim_process_button.clicked.connect(self._handle_anim_process_and_preview)
             if self.anim_play_preview_button: self.anim_play_preview_button.toggled.connect(self._handle_anim_play_pause_preview_toggled)
             if self.save_this_animation_button: self.save_this_animation_button.clicked.connect(self._handle_save_this_animation_item)
-
+        # export gif
+        if hasattr(self, 'export_gif_button'):
+            self.export_gif_button.clicked.connect(self._handle_export_as_gif)
         # Dialog Buttons
         if self.button_box:
             # The .accepted signal is usually connected to QDialogButtonBox.StandardButton.Ok
@@ -881,6 +851,7 @@ class OLEDCustomizerDialog(QDialog):
             self.save_and_apply_button.clicked.connect(self._handle_save_and_apply)
 
 
+
     def _load_initial_data(self):
         initial_speed_level = self._delay_ms_to_speed_level(
             self._initial_global_scroll_delay_ms)
@@ -892,7 +863,6 @@ class OLEDCustomizerDialog(QDialog):
             self._populate_font_family_combo()
         if self.item_library_list is not None:
             self._populate_item_library_list()
-        
         # Attempt to select the initial active item in the QListWidget
         # Ensure paths are compared consistently (e.g., both with forward slashes)
         path_to_select = None
@@ -911,14 +881,11 @@ class OLEDCustomizerDialog(QDialog):
                         self.item_library_list.setCurrentItem(list_item)
                         # _on_library_selection_changed will fire and update preview etc.
                         break
-        
         self._update_library_button_states()
         self._update_save_this_item_button_state()
-
         self._update_library_button_states()
         self._update_save_this_item_button_state()
         # print("DEBUG OCD: _load_initial_data - EXITED METHOD")
-
 
     def _populate_font_family_combo(self):
         self.text_font_family_combo.blockSignals(True)
@@ -931,7 +898,6 @@ class OLEDCustomizerDialog(QDialog):
 
     def _populate_item_library_list(self):
         # print("DEBUG OCD: _populate_item_library_list - ENTERED") # Kept entry log
-
         if self.item_library_list is None:
             print("DEBUG OCD ERROR: _populate_item_library_list - self.item_library_list is None! Aborting.")
             return
@@ -1204,7 +1170,6 @@ class OLEDCustomizerDialog(QDialog):
             self.anim_contrast_slider.setValue(100)
         if self.anim_contrast_value_label:
             self.anim_contrast_value_label.setText("1.00x")
-
         # --- Reset New Controls ---
         if self.anim_gamma_slider:
             self.anim_gamma_slider.setValue(100)  # 1.0 gamma
@@ -1224,8 +1189,6 @@ class OLEDCustomizerDialog(QDialog):
             self.anim_dither_strength_slider.setValue(100)  # 100%
         if self.anim_dither_strength_value_label:
             self.anim_dither_strength_value_label.setText("100%")
-        # --- End Reset New Controls ---
-
         if self.anim_playback_fps_spinbox:
             self.anim_playback_fps_spinbox.setValue(15)
         if self.anim_loop_behavior_combo:
@@ -1460,6 +1423,7 @@ class OLEDCustomizerDialog(QDialog):
         if self.anim_sharpen_value_label:
             self.anim_sharpen_value_label.setText(str(int(round(sharpen_factor_loaded))))
 
+
         # --- Load New Control Values ---
         gamma_value_loaded = float(import_opts.get("gamma_value", 1.0))  # Default to 1.0 (no change)
         if self.anim_gamma_slider:
@@ -1502,6 +1466,8 @@ class OLEDCustomizerDialog(QDialog):
             self.anim_frame_info_label.setText("Frames: N/A (Reload or Re-process)")
             if self.anim_play_preview_button:
                 self.anim_play_preview_button.setEnabled(False)
+        if hasattr(self, 'export_gif_button'):
+            self.export_gif_button.setEnabled(self._processed_logical_frames is not None)
 
     def _handle_delete_selected_item(self):
         selected_qlist_item = self.item_library_list.currentItem()
@@ -1879,7 +1845,6 @@ class OLEDCustomizerDialog(QDialog):
 
     def _mark_editor_dirty_if_needed(self, *args):
         sender = self.sender()
-        
         # self.default_startup_item_combo has been removed.
         # The global_scroll_speed_level_slider changes are handled by _on_global_scroll_speed_level_slider_changed
         # which sets self._global_scroll_speed_changed_by_user and calls _update_save_this_item_button_state.
@@ -1888,19 +1853,15 @@ class OLEDCustomizerDialog(QDialog):
             # Changes to global settings should not mark the *item editor* as dirty.
             # The "Save as Active Graphic" button will be enabled by _global_scroll_speed_changed_by_user flag.
             return
-
         # Only mark dirty if an editor is visible and an item is contextually being edited (new or existing)
         if self.item_editor_group and self.item_editor_group.isVisible() and \
-           (self._is_editing_new_item or self._current_edited_item_path is not None):
-
+            (self._is_editing_new_item or self._current_edited_item_path is not None):
             if not self._editor_has_unsaved_changes:
                 # print("DEBUG OCD: Editor marked dirty.") # Optional debug
                 pass 
             self._editor_has_unsaved_changes = True
-
             active_editor_widget = self.editor_stacked_widget.currentWidget() if self.editor_stacked_widget else None
             should_invalidate_frames = False # Initialize here
-
             if active_editor_widget == self.animation_editor_widget_container:
                 anim_processing_option_senders = [
                     self.anim_resize_mode_combo, self.anim_mono_conversion_combo,
@@ -1913,7 +1874,6 @@ class OLEDCustomizerDialog(QDialog):
                 # Also consider playback_fps and loop_behavior as options that make anim editor dirty
                 # but don't necessarily invalidate *processed* frames, just how they are *used* if saved.
                 # The key is that these options mean the *saved JSON* would be different.
-
                 if sender in anim_processing_option_senders:
                     if sender == self.anim_noise_amount_slider:
                         if self.anim_noise_type_combo and self.anim_noise_type_combo.currentText() != "Off":
@@ -1923,7 +1883,6 @@ class OLEDCustomizerDialog(QDialog):
                 
                 # If playback options change, it's a dirty edit, but doesn't require re-processing frames.
                 # For simplicity, any interaction with these also implies the item is "dirty" if saved.
-
                 if should_invalidate_frames:
                     if self._processed_logical_frames:
                         # print("DEBUG OCD: Animation options changed, invalidating processed frames.") # Optional
@@ -1939,10 +1898,8 @@ class OLEDCustomizerDialog(QDialog):
                         # _update_preview() will be called below if not invalidating frames
                         # if we invalidate, the preview should clear or show "re-process"
                         self._clear_preview_label_content() # More direct way to clear preview
-
             # Always update save button states after potentially marking dirty
             self._update_save_this_item_button_state()
-
             # Update preview if the change doesn't automatically invalidate frames (handled above for anim)
             # or if it's not one of the sliders whose effect is only seen after "Process Frames"
             if not (active_editor_widget == self.animation_editor_widget_container and should_invalidate_frames):
@@ -1951,11 +1908,9 @@ class OLEDCustomizerDialog(QDialog):
             # print("DEBUG OCD: Editor not visible or no item context, not marking dirty.") # Optional
             pass
 
-
     def _update_save_this_item_button_state(self):
         can_save_text_item_locally = False
         can_save_anim_item_locally = False
-        
         # Conditions for enabling "Save as Active Graphic" button
         enable_save_as_active_graphic = False
         if not self.editor_stacked_widget or not self.item_editor_group:
@@ -2000,9 +1955,7 @@ class OLEDCustomizerDialog(QDialog):
         # Enable/Disable the "Save as Active Graphic" button
         if hasattr(self, 'save_and_apply_button') and self.save_and_apply_button:
             self.save_and_apply_button.setEnabled(enable_save_as_active_graphic)
-        
         # The main QDialogButtonBox.StandardButton.Save has been removed, so no logic for it here.
-
 
     def _on_text_scroll_checkbox_changed(self):
         is_scrolling = self.text_scroll_checkbox.isChecked()
@@ -2178,13 +2131,82 @@ class OLEDCustomizerDialog(QDialog):
             QMessageBox.critical(self, "Save Error", f"Failed to save animation item: {e}")
             return False
 
+    def _handle_export_as_gif(self):
+        """
+        Handles the 'Export as GIF...' button click. This now calls the
+        centralized renderer in the OLEDDisplayManager.
+        """
+        if not self._processed_logical_frames:
+            QMessageBox.warning(self, "Export Error", "No processed frames are available to export. Please process an image/GIF first.")
+            return
+        if not self.oled_display_manager_ref:
+            QMessageBox.critical(self, "Internal Error", "OLED Display Manager reference is not available.")
+            return
+        initial_fps = self.anim_playback_fps_spinbox.value()
+        options, ok = OLEDGifExportDialog.get_options(self, initial_fps)
+        if not ok:
+            return
+        item_name = self.anim_item_name_edit.text().strip() or "untitled_oled_anim"
+        safe_filename = "".join(c for c in item_name if c.isalnum() or c in (' ', '_', '-')).rstrip()
+        # Use MainWindow's path if available, else default
+        default_dir = os.path.join(os.path.expanduser("~"), "Documents")
+        if hasattr(self.parent(), 'gif_exports_path'):
+            default_dir = self.parent().gif_exports_path
+        suggested_path = os.path.join(default_dir, f"{safe_filename}.gif")
+        export_path, _ = QFileDialog.getSaveFileName(self, "Export OLED Animation as GIF", suggested_path, "GIF Files (*.gif)")
+        if not export_path:
+            return
+        try:
+            self.setCursor(Qt.CursorShape.WaitCursor)
+            # Call the renderer on the manager, passing it the frames and options
+            self.oled_display_manager_ref.render_logical_frames_to_gif(
+                self._processed_logical_frames, export_path, options)
+            QMessageBox.information(self, "Export Successful", f"Successfully exported GIF to:\n{export_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", f"An unexpected error occurred during GIF export:\n{e}")
+        finally:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+
+    def _render_processed_frames_to_gif(self, export_path: str, options: dict):
+        """Renders the self._processed_logical_frames to a GIF file."""
+        scale = options.get('scale', 1)
+        invert = options.get('invert', False)
+        delay_ms = options.get('delay', 100)
+        loop = options.get('loop', 0)
+        output_width = NATIVE_OLED_WIDTH * scale
+        output_height = NATIVE_OLED_HEIGHT * scale
+        on_color = (0, 0, 0) if invert else (255, 255, 255)
+        off_color = (255, 255, 255) if invert else (0, 0, 0)
+        
+        pil_frames = []
+        for logical_frame in self._processed_logical_frames:
+            # Create a new blank image for this frame
+            frame_image = Image.new('RGB', (output_width, output_height), color=off_color)
+            draw = ImageDraw.Draw(frame_image)
+            for y, row_str in enumerate(logical_frame):
+                for x, pixel_char in enumerate(row_str):
+                    if pixel_char == '1':
+                        # Draw a scaled rectangle for the "on" pixel
+                        x0, y0 = x * scale, y * scale
+                        x1, y1 = x0 + scale, y0 + scale
+                        draw.rectangle([x0, y0, x1, y1], fill=on_color)
+            pil_frames.append(frame_image)
+        if pil_frames:
+            pil_frames[0].save(
+                export_path,
+                save_all=True,
+                append_images=pil_frames[1:],
+                duration=delay_ms,
+                loop=loop,
+                optimize=False # Optimization can be slow; keep it simple
+            )
+
     def _handle_save_and_apply(self): # Assuming this is connected to "Save as Active Graphic"
         save_from_editor_successful_or_not_needed = True
         
         # This will be the relative path of the item to be made active.
         # Initialize with the path that was active when dialog opened, or last successfully applied.
         final_active_graphic_to_set = self._intended_active_graphic_relative_path
-
         # --- Step 1: Handle saving from editor if active and dirty/new ---
         is_editor_active_and_valid_for_save = False
         if self.item_editor_group and self.item_editor_group.isVisible() and self._current_edited_item_type:
@@ -2193,17 +2215,14 @@ class OLEDCustomizerDialog(QDialog):
             elif self._current_edited_item_type == 'animation' and self.anim_item_name_edit and self.anim_item_name_edit.text().strip() and \
                     IMAGE_PROCESSING_AVAILABLE and self._processed_logical_frames:
                 is_editor_active_and_valid_for_save = True
-
         if is_editor_active_and_valid_for_save and (self._editor_has_unsaved_changes or self._is_editing_new_item):
             if self._current_edited_item_type == 'text':
                 save_from_editor_successful_or_not_needed = self._handle_save_this_text_item()
             elif self._current_edited_item_type == 'animation':
                 save_from_editor_successful_or_not_needed = self._handle_save_this_animation_item()
-
             if not save_from_editor_successful_or_not_needed:
                 # Save failed or was cancelled by user (e.g., in QFileDialog)
                 return 
-
             # If save was successful, _current_edited_item_path is now the full path of the saved item.
             # We need its relative path to set as active.
             if self._current_edited_item_path:
@@ -2219,10 +2238,7 @@ class OLEDCustomizerDialog(QDialog):
             else: # Should not happen if editor save was successful
                 print(f"Dialog ERROR: Editor save successful, but _current_edited_item_path is None.")
                 return
-        
         # --- Step 2: If editor wasn't active/dirty, or no item saved from it, check library selection ---
-        # If final_active_graphic_to_set wasn't updated by editor save, check library.
-        # This logic path also covers if only global scroll speed was changed and user hits apply.
         elif self.item_library_list and self.item_library_list.currentItem():
             # If an item is selected in the library, that becomes the intended active graphic
             selected_qlist_item = self.item_library_list.currentItem()
@@ -2230,31 +2246,25 @@ class OLEDCustomizerDialog(QDialog):
             if item_data and item_data.get('relative_path'):
                 final_active_graphic_to_set = item_data.get('relative_path')
             # If library item has no path, final_active_graphic_to_set remains as initialized (e.g. _initial_active_graphic_path or None)
-        
         # If no editor action and no library selection, final_active_graphic_to_set will be
         # whatever was active when the dialog opened (or None), which is fine if only scroll speed changed.
-
         # --- Step 3: Get current global scroll speed ---
         current_global_delay_from_slider = self._initial_global_scroll_delay_ms # Default to initial
         if self.global_scroll_speed_level_slider:
             current_global_delay_from_slider = self._speed_level_to_delay_ms(
                 self.global_scroll_speed_level_slider.value())
-
         # --- Step 4: Emit changes and accept the dialog ---
         self.global_settings_changed.emit(
             final_active_graphic_to_set,
             current_global_delay_from_slider
         )
-        
         # Update internal trackers to reflect what was just applied
         self._intended_active_graphic_relative_path = final_active_graphic_to_set
         self._initial_global_scroll_delay_ms = current_global_delay_from_slider # Update initial for next "dirty" check
         self._global_scroll_speed_changed_by_user = False # Reset flag
         self._editor_has_unsaved_changes = False # If editor was saved, it's no longer dirty
         self._is_editing_new_item = False # If new item was saved, it's no longer "new" in this context
-
         super().accept() # Close the dialog with accept state
-
 
     def _on_anim_mono_conversion_changed(self):
         if not IMAGE_PROCESSING_AVAILABLE: return
@@ -2376,6 +2386,8 @@ class OLEDCustomizerDialog(QDialog):
             self.anim_frame_info_label.setText("Frames: Error | Source FPS: Error")
             self._current_preview_anim_logical_frame = None; self._update_preview()
         self._update_save_this_item_button_state()
+        if hasattr(self, 'export_gif_button'):
+            self.export_gif_button.setEnabled(self._processed_logical_frames is not None)
 
     def _on_global_scroll_speed_level_slider_changed(self, speed_level_value: int):
         delay_ms = self._speed_level_to_delay_ms(speed_level_value)

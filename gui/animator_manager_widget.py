@@ -5,11 +5,13 @@ import json
 import glob 
 import time 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QApplication,
     QGroupBox, QComboBox, QSpacerItem, QMessageBox, QInputDialog, QSizePolicy, QFrame
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor
+from PIL import Image, ImageDraw
+
 # --- Animator-specific project imports ---
 try:
     from animator.timeline_widget import SequenceTimelineWidget
@@ -23,7 +25,6 @@ except ImportError as e:
     class SequenceControlsWidget(QWidget): pass
     class SequenceModel(object): pass
     class AnimationFrame(object): pass
-
 FPS_MIN_DISCRETE_VALUES_AMW = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
 FPS_MAX_TARGET_VALUE_AMW = 90.0
 MIN_FRAME_DELAY_MS_LIMIT_AMW = int(1000.0 / FPS_MAX_TARGET_VALUE_AMW) if FPS_MAX_TARGET_VALUE_AMW > 0 else 10 # e.g., 11ms
@@ -63,6 +64,41 @@ class AnimatorManagerWidget(QWidget):
             self.sequence_management_widget.setEnabled(enabled)
         # Add any other top-level UI groups/widgets specific to animator interaction
         print(f"AnimatorManagerWidget interactive state set to: {enabled}")
+
+    def set_interactive_state_for_playback(self, is_playing: bool):
+        """
+        A more granular state controller specifically for playback.
+        When playing, this disables everything EXCEPT the playback controls.
+        """
+        # The main timeline should not be interactive during playback
+        if self.sequence_timeline_widget:
+            self.sequence_timeline_widget.setEnabled(not is_playing)
+        # The controls widget itself can remain enabled, as it contains the stop button
+        if self.sequence_controls_widget:
+            self.sequence_controls_widget.setEnabled(
+                True)  # Keep the container enabled
+            # But disable specific buttons within it
+            controls_to_disable = [
+                self.sequence_controls_widget.add_frame_button,
+                self.sequence_controls_widget.duplicate_frame_button,
+                self.sequence_controls_widget.delete_frame_button,
+                self.sequence_controls_widget.copy_frames_button,
+                self.sequence_controls_widget.cut_frames_button,
+                self.sequence_controls_widget.paste_frames_button,
+                self.sequence_controls_widget.first_frame_button,
+                self.sequence_controls_widget.prev_frame_button,
+                self.sequence_controls_widget.next_frame_button,
+                self.sequence_controls_widget.last_frame_button
+            ]
+            for button in controls_to_disable:
+                if button:
+                    button.setEnabled(not is_playing)
+            # The play/stop button and speed slider should always reflect the playback state
+            # This is handled by other methods, but we ensure they stay enabled here.
+            self.sequence_controls_widget.play_stop_button.setEnabled(True)
+            self.sequence_controls_widget.speed_slider.setEnabled(True)
+            self.sequence_controls_widget.current_speed_display_label.setEnabled(
+                True)
 
     def __init__(self, user_sequences_base_path, sampler_recordings_path, prefab_sequences_base_path, parent=None):
         super().__init__(parent)
@@ -140,6 +176,7 @@ class AnimatorManagerWidget(QWidget):
         self.save_sequence_as_button.clicked.connect(self.action_save_sequence_as)
         self.delete_sequence_button.clicked.connect(self._on_delete_selected_sequence_button_clicked)
         # Controls Widget signals
+        self.sequence_controls_widget.play_stop_clicked.connect(self.action_play_pause_toggle) # <<< THE FIX
         self.sequence_controls_widget.add_frame_requested.connect(self.action_add_frame)
         self.sequence_controls_widget.delete_selected_frame_requested.connect(self.action_delete_selected_frames)
         self.sequence_controls_widget.duplicate_selected_frame_requested.connect(self.action_duplicate_selected_frames)
@@ -150,8 +187,6 @@ class AnimatorManagerWidget(QWidget):
         self.sequence_controls_widget.navigate_prev_requested.connect(self.action_navigate_prev)
         self.sequence_controls_widget.navigate_next_requested.connect(self.action_navigate_next)
         self.sequence_controls_widget.navigate_last_requested.connect(self.action_navigate_last)
-        self.sequence_controls_widget.play_requested.connect(self.action_play)
-        self.sequence_controls_widget.stop_requested.connect(self.action_stop)
         self.sequence_controls_widget.frame_delay_changed.connect(self.on_controls_frame_delay_changed)
         # Timeline Widget signals
         self.sequence_timeline_widget.selection_changed.connect(self._on_timeline_selection_changed)
@@ -538,12 +573,15 @@ class AnimatorManagerWidget(QWidget):
         self._update_animator_controls_enabled_state() # Update local button states based on selection
 
     def action_play_pause_toggle(self):
-        self.request_sampler_disable.emit()
+        """
+        Authoritative method to toggle animation playback. This is called by
+        UI buttons and global shortcuts.
+        """
+        self.request_sampler_disable.emit() # Ensure other modes are off
         if self.active_sequence_model.get_frame_count() == 0:
             self.playback_status_update.emit("Cannot play: No frames in sequence.", 2000)
             return
         if self.active_sequence_model.get_is_playing():
-            # If it's playing, we now call stop.
             self.action_stop()
         else:
             self.action_play()
@@ -769,24 +807,26 @@ class AnimatorManagerWidget(QWidget):
         self._emit_state_updates() # This will update controls
 
     def on_model_playback_state_changed(self, is_playing: bool):
+        # Update the button's visual state (text, icon)
         self.sequence_controls_widget.update_playback_button_state(is_playing)
+        # Update the interactivity of the UI based on the new playback state
+        self.set_interactive_state_for_playback(is_playing)  # <<< THE FIX
         if is_playing:
             self.playback_status_update.emit("Sequence playing...", 0)
-            self._playback_timer.start(self.active_sequence_model.frame_delay_ms)
+            if self.active_sequence_model.frame_delay_ms > 0:
+                self._playback_timer.start(
+                    self.active_sequence_model.frame_delay_ms)
         else:
             self._playback_timer.stop()
-            is_at_start_after_stop = self.active_sequence_model.get_current_playback_frame_index() == 0 and \
-                                    not self.active_sequence_model.loop
-            if is_at_start_after_stop or not self._playback_timer.isActive():
-                self.playback_status_update.emit("Sequence stopped.", 3000)
-                edit_idx = self.active_sequence_model.get_current_edit_frame_index()
-                current_frame_colors = self.active_sequence_model.get_frame_colors(edit_idx) if edit_idx !=-1 else None
-                self.active_frame_data_for_display.emit(current_frame_colors if current_frame_colors else [QColor("black").name()] * 64)
-            else:
-                self.playback_status_update.emit("Sequence paused.", 3000)
+            self.playback_status_update.emit("Sequence stopped.", 3000)
+            # When stopping, restore the main grid to the current edit frame
+            edit_idx = self.active_sequence_model.get_current_edit_frame_index()
+            current_frame_colors = self.active_sequence_model.get_frame_colors(
+                edit_idx) if edit_idx != -1 else None
+            self.active_frame_data_for_display.emit(
+                current_frame_colors if current_frame_colors else [QColor("black").name()] * 64)
+        # Notify MainWindow of the state change for global UI updates
         self.animator_playback_active_status_changed.emit(is_playing)
-        self._update_ui_for_current_sequence()
-        self._emit_state_updates()
 
     def stop_current_animation_playback(self):
         if self._playback_timer.isActive(): self._playback_timer.stop()
@@ -887,7 +927,8 @@ class AnimatorManagerWidget(QWidget):
         self.active_sequence_model._playback_frame_index = start_idx # Directly set for start
         self.active_sequence_model.start_playback() # This will emit playback_state_changed
 
-    def action_stop(self): self.active_sequence_model.stop_playback()
+    def action_stop(self):
+        self.active_sequence_model.stop_playback()
 
     def on_controls_frame_delay_changed(self, delay_ms: int):
         self.active_sequence_model.set_frame_delay_ms(delay_ms)
@@ -1203,7 +1244,90 @@ class AnimatorManagerWidget(QWidget):
         self._emit_state_updates()
 
     def set_overall_enabled_state(self, enabled: bool):
+        """
+        Called by MainWindow to enable/disable this entire animator panel.
+        Now delegates to a more specific playback state handler if playback is active.
+        """
+        is_currently_playing = self.active_sequence_model.get_is_playing() if self.active_sequence_model else False
+        if not enabled:
+            # If the entire panel is being disabled from the outside, just disable it.
+            self.setEnabled(False)
+        else:
+            # If it's being enabled, turn the widget on, then let the specific
+            # playback handler fine-tune which sub-widgets are interactive.
+            self.setEnabled(True)
+            self.set_interactive_state_for_playback(is_currently_playing)
         """Called by MainWindow to enable/disable this entire animator panel."""
         self.setEnabled(enabled)
         if enabled:
             self._update_animator_controls_enabled_state() # Refresh internal states
+            
+    def export_current_sequence_as_gif(self, export_path: str, options: dict):
+        """
+        Renders the current animation sequence to an animated GIF file using the Pillow library.
+        Args:
+            export_path: The full path (including filename) to save the GIF to.
+            options: A dictionary from GifExportDialog with 'pixel_size', 'spacing',
+                    'delay', and 'loop' keys.
+        """
+        if not self.active_sequence_model or not self.active_sequence_model.frames:
+            self.playback_status_update.emit("Cannot export: No frames in sequence.", 3000)
+            return
+        # Extract options with defaults
+        pixel_size = options.get('pixel_size', 20)
+        spacing = options.get('spacing', 2)
+        delay_ms = options.get('delay', 100)
+        loop = options.get('loop', 0)  # 0 for infinite loop
+        # Constants for the grid
+        GRID_COLS = 16
+        GRID_ROWS = 4
+        # Calculate the total size of one frame image
+        frame_width = (GRID_COLS * pixel_size) + ((GRID_COLS - 1) * spacing)
+        frame_height = (GRID_ROWS * pixel_size) + ((GRID_ROWS - 1) * spacing)
+        # --- Main Rendering Loop ---
+        try:
+            pil_frames = []
+            for i, frame_model in enumerate(self.active_sequence_model.frames):
+                self.playback_status_update.emit(f"Rendering GIF frame {i+1}/{len(self.active_sequence_model.frames)}...", 0)
+                QApplication.processEvents() # Keep UI responsive during render
+                # Create a new blank image for this frame
+                pil_image = Image.new('RGB', (frame_width, frame_height), color='#181818') # Use app bg color
+                draw = ImageDraw.Draw(pil_image)
+                frame_colors = frame_model.get_all_colors()
+                # Iterate over each pad in the frame
+                for pad_index, hex_color in enumerate(frame_colors):
+                    row = pad_index // GRID_COLS
+                    col = pad_index % GRID_COLS
+                    # Calculate the top-left corner of the rectangle for this pad
+                    x0 = col * (pixel_size + spacing)
+                    y0 = row * (pixel_size + spacing)
+                    x1 = x0 + pixel_size
+                    y1 = y0 + pixel_size
+                    # Draw the colored rectangle
+                    draw.rectangle([x0, y0, x1, y1], fill=hex_color)
+                
+                pil_frames.append(pil_image)
+            # Save the collected frames as an animated GIF
+            if pil_frames:
+                self.playback_status_update.emit("Saving GIF file...", 0)
+                QApplication.processEvents()
+                pil_frames[0].save(
+                    export_path,
+                    save_all=True,
+                    append_images=pil_frames[1:],
+                    duration=delay_ms,
+                    loop=loop,
+                    optimize=True # Use Pillow's optimization
+                )
+                self.playback_status_update.emit(f"Successfully exported GIF to {os.path.basename(export_path)}", 5000)
+            else:
+                self.playback_status_update.emit("Export failed: No frames were rendered.", 4000)
+        except Exception as e:
+            error_message = f"GIF export failed: {e}"
+            print(f"ERROR: {error_message}")
+            self.playback_status_update.emit(error_message, 8000)
+            # Show a more detailed error dialog to the user
+            QMessageBox.critical(self, "GIF Export Error", error_message)
+        finally:
+            # Clear any persistent status message
+            QTimer.singleShot(5100, lambda: self.playback_status_update.emit("", 0))

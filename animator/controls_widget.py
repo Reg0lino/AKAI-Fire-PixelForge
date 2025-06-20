@@ -4,27 +4,21 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLa
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence
 
-# --- NEW FPS-based Speed Control Constants ---
 FPS_MIN_DISCRETE_VALUES = [0.5, 1.0, 2.0,
                            3.0, 4.0, 5.0]  # Desired low FPS steps
 FPS_LINEAR_START_VALUE = 6.0  # FPS from which linear steps begin
 FPS_MAX_TARGET_VALUE = 90.0  # New maximum FPS
 DEFAULT_START_FPS_VALUE = 20.0
-
 _NUM_DISCRETE_FPS_STEPS = len(FPS_MIN_DISCRETE_VALUES)
 _SLIDER_IDX_FOR_LINEAR_START = _NUM_DISCRETE_FPS_STEPS
-
 SLIDER_MIN_RAW_VALUE = 0
 SLIDER_MAX_RAW_VALUE = _SLIDER_IDX_FOR_LINEAR_START + \
     int(FPS_MAX_TARGET_VALUE - FPS_LINEAR_START_VALUE)
-
 MIN_FRAME_DELAY_MS_LIMIT = int(
     1000.0 / FPS_MAX_TARGET_VALUE) if FPS_MAX_TARGET_VALUE > 0 else 10
 MAX_FRAME_DELAY_MS_LIMIT = int(
     1000.0 / FPS_MIN_DISCRETE_VALUES[0]) if FPS_MIN_DISCRETE_VALUES else 2000
-
 DEFAULT_FRAME_DELAY_MS_FALLBACK = int(1000.0 / DEFAULT_START_FPS_VALUE)
-
 
 # --- Icons (Unicode Emojis) ---
 ICON_ADD_FRAME = "✚"
@@ -43,27 +37,22 @@ ICON_PLAY = "⏯"
 ICON_PAUSE = "⏯"
 ICON_STOP = "🛑"
 
-
 class SequenceControlsWidget(QWidget):
+    # --- Signals ---
     add_frame_requested = pyqtSignal(str)
     delete_selected_frame_requested = pyqtSignal()
     duplicate_selected_frame_requested = pyqtSignal()
     copy_frames_requested = pyqtSignal()
     cut_frames_requested = pyqtSignal()
     paste_frames_requested = pyqtSignal()
-
     navigate_first_requested = pyqtSignal()
     navigate_prev_requested = pyqtSignal()
     navigate_next_requested = pyqtSignal()
     navigate_last_requested = pyqtSignal()
-
-    play_requested = pyqtSignal()
-    pause_requested = pyqtSignal()
-    stop_requested = pyqtSignal()
-
+    play_stop_clicked = pyqtSignal()  # NEW Simplified Signal
     frame_delay_changed = pyqtSignal(int)  # Emits delay in MS
 
-    # --- NEW HELPER METHODS ---
+    # --- Helper Methods (Unchanged) ---
     def _slider_raw_value_to_fps(self, slider_raw_value: int) -> float:
         clamped_slider_val = max(SLIDER_MIN_RAW_VALUE, min(
             slider_raw_value, SLIDER_MAX_RAW_VALUE))
@@ -83,7 +72,6 @@ class SequenceControlsWidget(QWidget):
             slider_val = _SLIDER_IDX_FOR_LINEAR_START + \
                 int(round(clamped_fps - FPS_LINEAR_START_VALUE))
             return max(_SLIDER_IDX_FOR_LINEAR_START, min(slider_val, SLIDER_MAX_RAW_VALUE))
-
         closest_discrete_idx = 0
         min_diff = float('inf')
         for i, discrete_fps in enumerate(FPS_MIN_DISCRETE_VALUES):
@@ -111,6 +99,7 @@ class SequenceControlsWidget(QWidget):
             self.current_speed_display_label.setText(
                 f"{current_fps:.1f} FPS ({current_delay_ms}ms)")
 
+    # --- UI Initialization ---
     def __init__(self, parent=None):
         super().__init__(parent)
         self_main_layout = QVBoxLayout(self)
@@ -118,13 +107,11 @@ class SequenceControlsWidget(QWidget):
         self_main_layout.setSpacing(8)
         bar1_layout = QHBoxLayout()
         bar1_layout.setSpacing(6)
-        # --- Frame manipulation buttons (no changes here) ---
         self.add_frame_button = QPushButton(f"{ICON_ADD_BLANK} Add Blank")
         self.add_frame_button.setToolTip("Add New Blank Frame (Ctrl+Shift+B)")
         self.add_frame_button.clicked.connect(
             lambda: self.add_frame_requested.emit("blank"))
         bar1_layout.addWidget(self.add_frame_button)
-        # ... (duplicate, delete, copy, cut, paste buttons remain the same) ...
         self.duplicate_frame_button = QPushButton(ICON_DUPLICATE)
         self.duplicate_frame_button.setToolTip(
             "Duplicate Selected Frame(s) (Ctrl+D)")
@@ -152,7 +139,6 @@ class SequenceControlsWidget(QWidget):
         bar1_layout.addWidget(self.paste_frames_button)
         bar1_layout.addSpacerItem(QSpacerItem(
             20, 10, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-        # --- Navigation buttons (no changes here) ---
         self.first_frame_button = QPushButton(ICON_NAV_FIRST)
         self.first_frame_button.clicked.connect(self.navigate_first_requested)
         bar1_layout.addWidget(self.first_frame_button)
@@ -168,17 +154,16 @@ class SequenceControlsWidget(QWidget):
         self_main_layout.addLayout(bar1_layout)
         bar2_layout = QHBoxLayout()
         bar2_layout.setSpacing(6)
-        # --- MODIFIED: Renamed play_pause_button and set its initial text ---
         self.play_stop_button = QPushButton("▶️ Animation")
-        self.play_stop_button.setCheckable(True)
+        # <<< CHANGED: No longer checkable
+        self.play_stop_button.setCheckable(False)
         self.play_stop_button.setToolTip("Play/Stop Sequence (Spacebar)")
-        self.play_stop_button.toggled.connect(self._on_play_stop_toggled)
-        self.play_stop_button.setObjectName(
-            "AnimatorPlayButton")  # Set object name for styling
+        self.play_stop_button.clicked.connect(
+            self.play_stop_clicked.emit)  # <<< CHANGED: Emits simple signal
+        self.play_stop_button.setObjectName("AnimatorPlayButton")
         bar2_layout.addWidget(self.play_stop_button)
         bar2_layout.addSpacerItem(QSpacerItem(
             20, 10, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-        # --- Speed controls (no changes here) ---
         bar2_layout.addWidget(QLabel("Speed:"))
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
         self.speed_slider.setRange(SLIDER_MIN_RAW_VALUE, SLIDER_MAX_RAW_VALUE)
@@ -190,10 +175,8 @@ class SequenceControlsWidget(QWidget):
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         bar2_layout.addWidget(self.current_speed_display_label)
         self_main_layout.addLayout(bar2_layout)
-        # Hidden spinbox (no changes here)
         self.delay_ms_spinbox = QSpinBox()
         self.delay_ms_spinbox.setVisible(False)
-        # Set initial speed display
         initial_slider_raw_val = self._fps_to_slider_raw_value(
             DEFAULT_START_FPS_VALUE)
         self.speed_slider.setValue(initial_slider_raw_val)
@@ -202,28 +185,12 @@ class SequenceControlsWidget(QWidget):
         self._update_speed_display_label(
             DEFAULT_START_FPS_VALUE, initial_delay_ms)
 
-    def _on_play_stop_toggled(self, checked):
-        if checked:
-            self.play_requested.emit()
-        else:
-            # When unchecked, it now means "Stop"
-            self.stop_requested.emit()
-
+    # --- Public Methods for Manager ---
     def update_playback_button_state(self, is_playing: bool):
-        # This public method is called by the manager to sync the UI
-        self.play_stop_button.blockSignals(True)
-        self.play_stop_button.setChecked(is_playing)
         if is_playing:
             self.play_stop_button.setText("🛑 Animation")
         else:
             self.play_stop_button.setText("▶️ Animation")
-        self._update_play_button_active_style(is_playing)
-        self.play_stop_button.blockSignals(False)
-
-    def _update_play_button_active_style(self, is_playing: bool):
-        """Sets the 'active' property on the Play/Stop button for QSS styling."""
-        if not self.play_stop_button:
-            return
         self.play_stop_button.setProperty("active", is_playing)
         self.style().unpolish(self.play_stop_button)
         self.style().polish(self.play_stop_button)
@@ -231,9 +198,7 @@ class SequenceControlsWidget(QWidget):
     def set_controls_enabled_state(self, enabled: bool,
                                     frame_selected: bool = False,
                                     has_frames: bool = False,
-                                    clipboard_has_content: bool = False,
-                                    can_undo: bool = False,
-                                    can_redo: bool = False):
+                                    clipboard_has_content: bool = False):
         self.add_frame_button.setEnabled(enabled)
         can_operate_on_selection = enabled and frame_selected and has_frames
         self.duplicate_frame_button.setEnabled(can_operate_on_selection)
@@ -257,16 +222,6 @@ class SequenceControlsWidget(QWidget):
         self.delay_ms_spinbox.setValue(current_delay_ms)
         self.delay_ms_spinbox.blockSignals(False)
         self.frame_delay_changed.emit(current_delay_ms)
-
-    def _on_delay_spinbox_changed(self, delay_ms_from_spinbox: int):
-        current_fps = self._delay_ms_to_fps(delay_ms_from_spinbox)
-        slider_raw_val_to_set = self._fps_to_slider_raw_value(current_fps)
-        self.speed_slider.blockSignals(True)
-        self.speed_slider.setValue(slider_raw_val_to_set)
-        self.speed_slider.blockSignals(False)
-        self._update_speed_display_label(current_fps, delay_ms_from_spinbox)
-        # Avoid re-emitting frame_delay_changed if slider change already did
-        # self.frame_delay_changed.emit(delay_ms_from_spinbox)
 
     def set_frame_delay_ui(self, delay_ms: int):
         target_fps = self._delay_ms_to_fps(delay_ms)

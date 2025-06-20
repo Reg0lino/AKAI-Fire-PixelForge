@@ -1,6 +1,7 @@
 # AKAI_Fire_RGB_Controller/gui/main_window.py
 from .visualizer_settings_dialog import VisualizerSettingsDialog
 from .audio_visualizer_ui_manager import AudioVisualizerUIManager
+from .gif_export_dialog import GifExportDialog
 from appdirs import user_config_dir
 import sys
 import json
@@ -1917,51 +1918,64 @@ class MainWindow(QMainWindow):
             self.animator_manager.apply_fx_to_selected_frames(fx_params)
 
     def _update_global_ui_interaction_states(self):
+        """
+        This is the master state controller for the entire application.
+        It enables/disables all major UI components and menu actions based on
+        which "master mode" is currently active, ensuring mutual exclusivity.
+        """
+        # 1. Get the current state of all master modes.
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
-        is_visualizer_active_now = self.audio_visualizer_manager.is_capturing if self.audio_visualizer_manager else False
-        is_sampler_active_now = self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False
-        is_anim_playing_now = self.animator_manager.active_sequence_model.get_is_playing() if self.animator_manager and self.animator_manager.active_sequence_model else False
-        is_doom_active_now = self.is_doom_mode_active
-        # --- DOOM Mode takes precedence ---
-        if is_doom_active_now:
-            if self.animator_manager: self.animator_manager.set_overall_enabled_state(False)
-            if self.screen_sampler_manager: self.screen_sampler_manager.update_ui_for_global_state(False, False)
-            if self.audio_visualizer_ui_manager: self.audio_visualizer_ui_manager.setEnabled(False)
-            if self.pad_grid_frame: self.pad_grid_frame.setEnabled(False)
-            if self.color_picker_manager: self.color_picker_manager.set_enabled(False)
-            if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(False)
-            if self.live_fx_group_box: self.live_fx_group_box.setEnabled(False) # Also disable FX panel in DOOM
-            if self.button_lazy_doom: self.button_lazy_doom.setEnabled(True)
-            # Disable menu actions during DOOM
-            actions_to_disable = ['new_sequence_action', 'save_sequence_as_action', 'undo_action', 'redo_action', 'copy_action', 'cut_action', 'paste_action', 'duplicate_action', 'delete_action', 'add_blank_global_action', 'eyedropper_action', 'play_pause_action']
-            for action_name in actions_to_disable:
-                if hasattr(self, action_name) and getattr(self, action_name): getattr(self, action_name).setEnabled(False)
-            return
-        # --- Normal Mode States ---
-        can_use_animator = is_connected and not is_sampler_active_now and not is_visualizer_active_now
-        can_paint_direct = is_connected and not is_sampler_active_now and not is_visualizer_active_now and not is_anim_playing_now
-        can_toggle_sampler = is_connected and not is_anim_playing_now and not is_visualizer_active_now
-        if self.animator_manager: self.animator_manager.set_overall_enabled_state(can_use_animator)
-        if self.screen_sampler_manager: self.screen_sampler_manager.update_ui_for_global_state(is_connected, can_toggle_sampler)
+        is_playing = self.is_animator_playing
+        is_sampling = self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False
+        is_visualizing = self.audio_visualizer_manager.is_capturing if self.audio_visualizer_manager else False
+        is_dooming = self.is_doom_mode_active
+        # Determine which master mode is active, in order of priority
+        # Default to True, then disable based on active mode
+        can_start_any_master_mode = is_connected and not is_playing and not is_sampling and not is_visualizing and not is_dooming
+        can_use_creative_tools = is_connected and not is_playing and not is_sampling and not is_visualizing and not is_dooming
+        # --- DOOM Mode has highest priority ---
+        if is_dooming:
+            can_use_creative_tools = False
+            can_start_any_master_mode = False
+        # --- Enable/Disable Creative Tools ---
+        if self.animator_manager:
+            # Animator is special: parts of it are disabled during its own playback
+            if is_playing:
+                self.animator_manager.set_interactive_state_for_playback(True)
+            else:
+                self.animator_manager.set_overall_enabled_state(can_use_creative_tools)
+        if self.pad_grid_frame: self.pad_grid_frame.setEnabled(can_use_creative_tools)
+        if self.color_picker_manager: self.color_picker_manager.setEnabled(can_use_creative_tools)
+        if self.static_layouts_manager: self.static_layouts_manager.setEnabled(can_use_creative_tools)
+        if self.live_fx_group_box: self.live_fx_group_box.setEnabled(is_connected and not is_sampling and not is_dooming)
+        # --- Enable/Disable Master Mode UI Buttons and Menu Actions ---
+        # Sampler
+        if self.screen_sampler_manager:
+            self.screen_sampler_manager.get_ui_widget().setEnabled(is_connected)
+            self.screen_sampler_manager.update_start_button_state(is_sampling or can_start_any_master_mode)
+        if hasattr(self, 'toggle_sampler_action'):
+            self.toggle_sampler_action.setEnabled(is_sampling or can_start_any_master_mode)
+        if hasattr(self, 'configure_sampler_action'):
+            # Configuration is allowed while sampling is active.
+            self.configure_sampler_action.setEnabled(is_connected and not is_dooming)
+        # Visualizer
         if self.audio_visualizer_ui_manager:
             self.audio_visualizer_ui_manager.setEnabled(is_connected)
-            # Add more specific logic for visualizer's internal buttons if needed
-        if self.pad_grid_frame: self.pad_grid_frame.setEnabled(can_paint_direct)
-        if self.color_picker_manager: self.color_picker_manager.set_enabled(can_paint_direct)
-        if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(can_paint_direct)
-        if self.live_fx_group_box: self.live_fx_group_box.setEnabled(is_connected) # Enable the whole box if connected
-        # Enable/Disable menu actions based on context
-        if hasattr(self, 'undo_action'):
-            # --- MODIFIED: Check if the list is not empty ---
-            can_undo = bool(self.animator_manager.active_sequence_model._undo_stack) if self.animator_manager and self.animator_manager.active_sequence_model else False
-            self.undo_action.setEnabled(can_undo)
-        if hasattr(self, 'redo_action'):
-            # --- MODIFIED: Check if the list is not empty ---
-            can_redo = bool(self.animator_manager.active_sequence_model._redo_stack) if self.animator_manager and self.animator_manager.active_sequence_model else False
-            self.redo_action.setEnabled(can_redo)
+            self.audio_visualizer_ui_manager.start_stop_button.setEnabled(is_visualizing or can_start_any_master_mode)
+        if hasattr(self, 'toggle_viz_action'):
+            self.toggle_viz_action.setEnabled(is_visualizing or can_start_any_master_mode)
+        if hasattr(self, 'configure_viz_action'):
+            # Configuration is allowed while visualizing is active.
+            self.configure_viz_action.setEnabled(is_connected and not is_dooming)
+        # DOOM
+        if self.button_lazy_doom: self.button_lazy_doom.setEnabled(is_dooming or can_start_any_master_mode)
+        if hasattr(self, 'launch_doom_action'):
+            self.launch_doom_action.setEnabled(is_dooming or can_start_any_master_mode)
+            self.launch_doom_action.setText("⏪ Exit LazyDOOM" if is_dooming else "👹 Launch LazyDOOM")
+        # Animator Play
         if hasattr(self, 'play_pause_action'):
-            self.play_pause_action.setEnabled(can_use_animator)
-        # Add other action enable/disable logic here as needed
+            # Can only play if no other master mode is running
+            self.play_pause_action.setEnabled(is_playing or can_start_any_master_mode)
 
 # q main window init here
     def __init__(self):
@@ -2023,6 +2037,9 @@ class MainWindow(QMainWindow):
         os.makedirs(self.user_oled_text_items_path, exist_ok=True);
         self.user_oled_anim_items_path = os.path.join(self.user_oled_presets_base_path, USER_OLED_ANIM_ITEMS_SUBDIR);
         os.makedirs(self.user_oled_anim_items_path, exist_ok=True);
+    # --- define and create the GIF export path ---
+        self.gif_exports_path = os.path.join(self.user_documents_presets_path, "GIF Exports")
+        os.makedirs(self.gif_exports_path, exist_ok=True)
         # --- Scan for assets ---
         self.available_app_fonts_cache: list[str] = self._scan_available_app_fonts() if hasattr(self, '_scan_available_app_fonts') else [];
         self.active_graphic_item_relative_path: str | None = None;
@@ -2218,7 +2235,8 @@ class MainWindow(QMainWindow):
                 if current_edit_index >= 0:
                     current_frame_colors = self.animator_manager.active_sequence_model.get_frame_colors(current_edit_index)
                     if current_frame_colors:
-                        self.apply_colors_to_main_pad_grid(current_frame_colors, update_hw=True, is_sampler_output=False)
+                        self.apply_colors_to_main_pad_grid(
+                            current_frame_colors, update_hw=True, bypass_global_brightness=False)
                     else:
                         self.akai_controller.clear_all_pads()
                 else:
@@ -2269,7 +2287,8 @@ class MainWindow(QMainWindow):
     def _open_oled_customizer_dialog(self):
         self._scan_available_oled_items()
         dialog = OLEDCustomizerDialog(
-            current_active_graphic_path=self.active_graphic_item_relative_path,  # <<< CHANGED KEYWORD
+            oled_display_manager_ref=self.oled_display_manager,  # <<< ADD THIS LINE
+            current_active_graphic_path=self.active_graphic_item_relative_path,
             current_global_scroll_delay_ms=self.oled_global_scroll_delay_ms,
             available_oled_items=self.available_oled_items_cache,
             user_oled_presets_base_path=self.user_oled_presets_base_path,
@@ -2971,14 +2990,18 @@ class MainWindow(QMainWindow):
         elif mouse_button == Qt.MouseButton.RightButton:
             self._apply_secondary_color_to_pad(row, col, update_model=True)
 
-    def apply_colors_to_main_pad_grid(self, final_colors_hex: list | None, update_hw: bool = True):
+    def apply_colors_to_main_pad_grid(self, final_colors_hex: list | None, update_hw: bool = True, bypass_global_brightness: bool = False):
         """
         The definitive method for updating the grid. It takes a list of FINAL
         display colors and applies them to both the UI grid and the hardware.
+        Args:
+            final_colors_hex: A list of 64 hex color strings.
+            update_hw: If True, sends the colors to the hardware.
+            bypass_global_brightness: If True, ignores the main brightness knob. Used for
+                                        sampler/visualizer output which have their own brightness.
         """
         if not hasattr(self, 'pad_grid_frame') or not self.pad_grid_frame:
             return
-        # Ensure we have a valid list of 64 colors to work with
         colors_to_apply = final_colors_hex if (final_colors_hex and isinstance(final_colors_hex, list) and len(final_colors_hex) == 64) else [QColor("black").name()] * 64
         # 1. Update the GUI grid with the final display colors
         for i, hex_str in enumerate(colors_to_apply):
@@ -2994,12 +3017,10 @@ class MainWindow(QMainWindow):
         for i, hex_str in enumerate(colors_to_apply):
             r, c = divmod(i, 16)
             current_color = QColor(hex_str)
-            hw_batch.append((r, c, current_color.red(), current_color.green(), current_color.blue()))
+            hw_batch.append((i, current_color.red(), current_color.green(), current_color.blue()))
         if hw_batch:
-            # We no longer need the sampler bypass logic here, as the brightness
-            # from the FX is now baked into the `final_colors_hex` list. The hardware
-            # brightness knob will now correctly affect ALL outputs uniformly.
-            self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=False)
+            # Use the bypass flag to control hardware brightness application
+            self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=bypass_global_brightness)
 
     def _on_animator_selection_changed(self, selected_indices: list):
         """
@@ -3279,6 +3300,7 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(clear_pads_action)
         # --- Animation Menu ---
         anim_menu = menu_bar.addMenu("🎬 &Animation")
+        # Note: self.play_pause_action is created in _create_edit_actions
         if hasattr(self, 'play_pause_action'): anim_menu.addAction(self.play_pause_action)
         anim_menu.addSeparator()
         if hasattr(self, 'cut_action'): anim_menu.addAction(self.cut_action)
@@ -3300,32 +3322,31 @@ class MainWindow(QMainWindow):
         tools_menu.addSeparator()
         # Screen Sampler Sub-Menu
         sampler_menu = tools_menu.addMenu("🖥️ Screen Sampler")
-        toggle_sampler_action = QAction("▶️ Start/Stop Sampling", self)
-        toggle_sampler_action.setShortcut(Qt.Key.Key_B)
-        toggle_sampler_action.triggered.connect(self._on_request_toggle_screen_sampler)
-        sampler_menu.addAction(toggle_sampler_action)
-        configure_sampler_action = QAction("⚙️ Configure Sampler...", self)
+        self.toggle_sampler_action = QAction("▶️ Start/Stop Sampling", self)
+        self.toggle_sampler_action.triggered.connect(self._on_request_toggle_screen_sampler)
+        sampler_menu.addAction(self.toggle_sampler_action)
+        self.configure_sampler_action = QAction("⚙️ Configure Sampler...", self)
         if self.screen_sampler_manager:
-            configure_sampler_action.triggered.connect(self.screen_sampler_manager.open_config_dialog)
-        sampler_menu.addAction(configure_sampler_action)
+            self.configure_sampler_action.triggered.connect(self.screen_sampler_manager.open_config_dialog)
+        sampler_menu.addAction(self.configure_sampler_action)
         # Audio Visualizer Sub-Menu
         visualizer_menu = tools_menu.addMenu("🎵 Audio Visualizer")
-        toggle_viz_action = QAction("▶️ Enable/Disable Visualizer", self)
-        if self.audio_visualizer_ui_manager:
-            toggle_viz_action.triggered.connect(self.audio_visualizer_ui_manager.toggle_visualization)
-        visualizer_menu.addAction(toggle_viz_action)
-        configure_viz_action = QAction("⚙️ Visualizer Settings...", self)
-        configure_viz_action.triggered.connect(self._open_visualizer_settings_dialog)
-        visualizer_menu.addAction(configure_viz_action)
+        self.toggle_viz_action = QAction("▶️ Enable/Disable Visualizer", self)
+        # <<< THE FIX for the menu item not working >>>
+        self.toggle_viz_action.triggered.connect(lambda: self._handle_visualizer_toggle_request(not self.is_visualizer_active))
+        visualizer_menu.addAction(self.toggle_viz_action)
+        self.configure_viz_action = QAction("⚙️ Visualizer Settings...", self)
+        self.configure_viz_action.triggered.connect(self._open_visualizer_settings_dialog)
+        visualizer_menu.addAction(self.configure_viz_action)
         # OLED Sub-Menu
         oled_menu = tools_menu.addMenu("👁️ OLED Display")
         customize_oled_action = QAction("✏️ Customize OLED...", self)
         customize_oled_action.triggered.connect(self._open_oled_customizer_dialog)
         oled_menu.addAction(customize_oled_action)
         tools_menu.addSeparator()
-        launch_doom_action = QAction("👹 Launch LazyDOOM", self)
-        launch_doom_action.triggered.connect(self._toggle_doom_mode)
-        tools_menu.addAction(launch_doom_action)
+        self.launch_doom_action = QAction("👹 Launch LazyDOOM", self)
+        self.launch_doom_action.triggered.connect(self._toggle_doom_mode)
+        tools_menu.addAction(self.launch_doom_action)
         # --- Help Menu ---
         help_menu = menu_bar.addMenu("❓ &Help")
         app_guide_action = QAction("🚀 App Guide && Hotkeys", self)
@@ -3338,6 +3359,43 @@ class MainWindow(QMainWindow):
         about_action = QAction("ℹ️ About PixelForge...", self)
         about_action.triggered.connect(self._show_about_dialog)
         help_menu.addAction(about_action)
+
+    def _handle_export_pad_animation_as_gif(self):
+        """
+        Orchestrates the process of exporting the current pad animation to a GIF.
+        Shows the options dialog, then a file save dialog, and finally calls the
+        rendering method in the animator manager.
+        """
+        if not self.animator_manager or not self.animator_manager.active_sequence_model:
+            QMessageBox.warning(self, "Export Error", "No active animation sequence to export.")
+            return
+        if not self.animator_manager.active_sequence_model.frames:
+            QMessageBox.warning(self, "Export Error", "The current sequence has no frames to export.")
+            return
+        # 1. Get the current animation speed to use as a default for the dialog
+        initial_delay = self.animator_manager.active_sequence_model.frame_delay_ms
+        # 2. Show the options dialog to the user
+        options, ok = GifExportDialog.get_options(self, initial_delay)
+        if not ok:
+            self.status_bar.showMessage("GIF export cancelled.", 2000)
+            return
+        # 3. Show the file save dialog
+        # Suggest a filename based on the sequence name
+        sequence_name = self.animator_manager.active_sequence_model.name
+        safe_filename = "".join(
+            c for c in sequence_name if c.isalnum() or c in (' ', '_', '-')).rstrip()
+        suggested_path = os.path.join(self.gif_exports_path, f"{safe_filename}.gif") # <<< USES NEW PATH
+        export_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Pad Animation as GIF",
+            suggested_path, # <<< USES NEW PATH
+            "GIF Files (*.gif)"
+        )
+        if not export_path:
+            self.status_bar.showMessage("GIF export cancelled.", 2000)
+            return
+        # 4. Call the rendering method in the animator manager
+        self.animator_manager.export_current_sequence_as_gif(export_path, options)
 
     def _handle_load_sequence_from_dialog(self):
         """Opens a file dialog to load a sequence and then triggers the load process."""
@@ -3362,11 +3420,6 @@ class MainWindow(QMainWindow):
             "<p>This application transforms the Akai Fire controller into a versatile tool for pixel art, animation, and real-time visualizations.</p>"
             "<p>For more information, visit the project on GitHub.</p>"
         )
-
-    def _handle_export_pad_animation_as_gif(self):
-        """Placeholder for the GIF export functionality."""
-        # We will implement the dialog and rendering logic for this in the next phase.
-        QMessageBox.information(self, "Feature Not Implemented", "Exporting Pad Animations to GIF is coming soon!")
 
     def _cycle_oled_nav_target(self, direction: int):
         """Cycles the OLED navigation focus and shows a temporary cue."""
