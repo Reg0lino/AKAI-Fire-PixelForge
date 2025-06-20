@@ -165,22 +165,26 @@ class InteractivePadGridFrame(QFrame):
         button = self._pad_buttons.get((row, col))
         if button:
             current_color = QColor(r_val, g_val, b_val)
+            # --- Unified styling logic for all colors, including black ---
             style_parts = ["border-radius:2px;"]
-            is_off = (r_val == 0 and g_val == 0 and b_val == 0)
-            if is_off:
-                style_parts.append("background-color: #1C1C1C; border: 1px solid #404040; color: transparent;")
-                hover_border_color = "#666666"
-            else:
-                style_parts.append(f"background-color: {current_color.name()};")
-                border_color_dark = current_color.darker(110).name()
-                border_color_light = current_color.lighter(110).name()
-                style_parts.append(f"border: 1px solid qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {border_color_dark}, stop:1 {border_color_light});")
-                luminance = 0.299 * r_val + 0.587 * g_val + 0.114 * b_val
-                text_color = "#E0E0E0" if luminance < 128 else "#1C1C1C"
-                style_parts.append(f"color: {text_color};")
-                hover_border_color = text_color
+            # Set the background color directly from the provided RGB values.
+            # This ensures #000000 is rendered as true black.
+            style_parts.append(f"background-color: {current_color.name()};")
+            # Create a subtle border gradient based on the color.
+            # For black, this creates a border that is just barely visible against the background.
+            border_color_dark = current_color.darker(110).name()
+            border_color_light = current_color.lighter(110).name()
+            style_parts.append(
+                f"border: 1px solid qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {border_color_dark}, stop:1 {border_color_light});")
+            # Determine the best text color (for potential future use, e.g., pad numbers)
+            luminance = 0.299 * r_val + 0.587 * g_val + 0.114 * b_val
+            text_color = "#E0E0E0" if luminance < 128 else "#1C1C1C"
+            style_parts.append(f"color: {text_color};")
+            # Set the hover color to be high-contrast
+            hover_border_color = text_color
+            # Assemble the final stylesheet
             final_style = f"QPushButton#PadButton {{{';'.join(style_parts)}}}" \
-                            f"QPushButton#PadButton:hover {{border: 1px solid {hover_border_color};}}"
+                f"QPushButton#PadButton:hover {{border: 1px solid {hover_border_color};}}"
             button.setStyleSheet(final_style)
 
     def get_current_grid_colors_hex(self) -> list[str]:

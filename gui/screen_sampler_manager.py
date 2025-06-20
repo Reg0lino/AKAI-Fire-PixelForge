@@ -230,6 +230,15 @@ class ScreenSamplerManager(QObject):
         self.sampler_adjustments_changed.emit(
             self.current_sampler_params['adjustments'].copy())
 
+    def open_config_dialog(self):
+        """
+        Public slot to allow external widgets (like the main menu bar)
+        to trigger the opening of the configuration dialog.
+        """
+        # The manager knows about its own UI widget and can "click" the button.
+        if self.ui_widget and hasattr(self.ui_widget, 'config_button'):
+            self.ui_widget.config_button.click()
+
     def set_overall_enabled_state(self, enabled_from_main_window: bool, device_connected: bool):
         if not GUI_IMPORTS_OK: return
         sampler_core_can_be_active = enabled_from_main_window and device_connected

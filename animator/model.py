@@ -219,11 +219,11 @@ class SequenceModel(QObject):
         return new_index
 
     def add_blank_frame(self, at_index: int = None) -> int:
-        # print("DEBUG Model.add_blank_frame: Called") # ADD THIS
         self._push_undo_state()
-        new_frame = AnimationFrame() # Default constructor creates a blank frame
+        new_frame = AnimationFrame()
         result_index = self._add_frame_internal(new_frame, at_index)
-        self._mark_modified()
+        # --- FIX: Do not mark as modified here. Let user actions do it. ---
+        # self._mark_modified() # This line is now removed.
         return result_index
 
     def duplicate_frames_at_indices(self, indices_to_duplicate: list[int]) -> list[int]:

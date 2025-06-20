@@ -57,8 +57,7 @@ class ScreenSamplerUIManager(QGroupBox):
         main_layout = QVBoxLayout(self)
         # --- Top Controls (Always Visible when group is enabled) ---
         top_controls_layout = QHBoxLayout()
-
-        # MODIFIED: Shortened button text and set preferred size policy <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        # Shortened button text and set preferred size policy <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         self.enable_sampling_button = QPushButton("Screen Sampling")
         self.enable_sampling_button.setObjectName("SamplingToggleButton")
         self.enable_sampling_button.setCheckable(True)
@@ -67,23 +66,19 @@ class ScreenSamplerUIManager(QGroupBox):
         self.enable_sampling_button.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         top_controls_layout.addWidget(self.enable_sampling_button)
-
-        # MODIFIED: Shortened button text and set preferred size policy
+        # Shortened button text and set preferred size policy
         self.configure_preview_button = QPushButton("Configure...")
         self.configure_preview_button.setToolTip(
             "Open visual region selector and color adjustments window.")
         self.configure_preview_button.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         top_controls_layout.addWidget(self.configure_preview_button)
-
         main_layout.addLayout(top_controls_layout)
-
         # --- Settings Container (Can be toggled by enable_sampling_button) ---
         self.settings_container_widget = QWidget()
         settings_layout = QVBoxLayout(self.settings_container_widget)
         settings_layout.setContentsMargins(0, 8, 0, 0)
         settings_layout.setSpacing(8)
-
         # Monitor Selection
         monitor_layout = QHBoxLayout()
         monitor_layout.addWidget(QLabel("Target Monitor:"))
@@ -95,7 +90,6 @@ class ScreenSamplerUIManager(QGroupBox):
         self.monitor_combo.addItem("Populating monitors...")
         monitor_layout.addWidget(self.monitor_combo, 1)
         settings_layout.addLayout(monitor_layout)
-
         # Sampling Speed/Frequency
         settings_layout.addWidget(QLabel("Sampling Speed:"))
         freq_display_layout = QHBoxLayout()
@@ -115,7 +109,6 @@ class ScreenSamplerUIManager(QGroupBox):
         self._update_frequency_display_label(DEFAULT_SAMPLING_FPS)
         freq_display_layout.addWidget(self.frequency_display_label)
         settings_layout.addLayout(freq_display_layout)
-
         # Sampler Recording Controls
         recording_controls_layout = QHBoxLayout()
         recording_controls_layout.setSpacing(6)
@@ -125,15 +118,12 @@ class ScreenSamplerUIManager(QGroupBox):
         self.record_button.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         recording_controls_layout.addWidget(self.record_button)
-
         self.set_max_frames_button = QPushButton(f"{ICON_SETTINGS} Max")
         self.set_max_frames_button.setToolTip(
             "Set maximum number of frames for sampler recording.")
         self.set_max_frames_button.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        # REMOVED: setFixedWidth call
         recording_controls_layout.addWidget(self.set_max_frames_button)
-
         self.recording_status_label = QLabel("Idle.")
         self.recording_status_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -142,7 +132,6 @@ class ScreenSamplerUIManager(QGroupBox):
         self.recording_status_label.setToolTip(
             "Status of the sampler recording.")
         recording_controls_layout.addWidget(self.recording_status_label, 1)
-
         settings_layout.addLayout(recording_controls_layout)
         main_layout.addWidget(self.settings_container_widget)
         # REMOVED: addStretch(1) to make the widget vertically compact
@@ -161,20 +150,24 @@ class ScreenSamplerUIManager(QGroupBox):
             self.record_button.clicked.connect(self.record_button_clicked)
         if self.set_max_frames_button:
             self.set_max_frames_button.clicked.connect(self.set_max_frames_button_clicked)
+
 # FPS to ms and vice versa
     def _fps_to_ms(self, fps: int) -> int:
         if fps <= 0: return 1000 # Default to 1 FPS if input is invalid
         return int(1000.0 / fps)
+
 # Convert milliseconds to FPS
     def _ms_to_fps(self, ms: int) -> int:
         if ms <= 0: return MIN_SAMPLING_FPS # Avoid division by zero, default to min FPS
         fps = round(1000.0 / ms)
         return max(MIN_SAMPLING_FPS, min(MAX_SAMPLING_FPS, fps)) # Clamp to slider range
+
 # Update the frequency display label
     def _update_frequency_display_label(self, fps_value: int):
         if self.frequency_display_label:
             ms = self._fps_to_ms(fps_value)
             self.frequency_display_label.setText(f"{fps_value} FPS ({ms}ms)")
+
 # --- Slot for the enable button toggle ---
     def _on_enable_button_toggled(self, checked: bool):
         self.set_controls_interaction_enabled(checked) # Enable/disable child settings
@@ -187,15 +180,18 @@ class ScreenSamplerUIManager(QGroupBox):
         else:
             self.status_message_requested.emit("Ambient sampling toggled OFF.", 2000)       
         self._emit_sampling_control_changed() # Emit current state regardless
+
 # --- Slot for the frequency slider change ---
     def _on_frequency_slider_changed(self, fps_value: int):
         self._update_frequency_display_label(fps_value)
         if self.enable_sampling_button and self.enable_sampling_button.isChecked():
             self._emit_sampling_control_changed()
+
 # --- Slot for other settings changes ---
     def _on_setting_changed(self): # For monitor_combo or other general settings
         if self.enable_sampling_button and self.enable_sampling_button.isChecked():
             self._emit_sampling_control_changed()
+
 # --- Emit sampling control changed signal ---
     def _emit_sampling_control_changed(self):
         if not (self.enable_sampling_button and self.monitor_combo and self.frequency_slider):
@@ -215,7 +211,8 @@ class ScreenSamplerUIManager(QGroupBox):
             "frequency_ms": self._fps_to_ms(self.frequency_slider.value())
         }
         self.sampling_control_changed.emit(is_enabled_toggle, base_params)
-    # --- Methods called by ScreenSamplerManager ---
+
+# --- Methods called by ScreenSamplerManager ---
     def populate_monitors_combo_external(self, monitors_data: list[dict]):
         if not self.monitor_combo: return
         # Clear the combo box and repopulate it with the provided monitor data
@@ -236,9 +233,9 @@ class ScreenSamplerUIManager(QGroupBox):
             if self.configure_preview_button:
                 self.configure_preview_button.setEnabled(self.isEnabled()) # Preview button tied to groupbox state
             if self.monitor_combo.count() > 0:
-
-                 pass
+                pass
         self.monitor_combo.blockSignals(False)
+
 # --- Set the selected monitor in the combo box ---
     def set_selected_monitor_ui(self, monitor_id_to_select: int):
         """Selects a monitor in the combo box by its mss ID."""
@@ -250,6 +247,7 @@ class ScreenSamplerUIManager(QGroupBox):
         # If not found, select first one if available, or do nothing
         if self.monitor_combo.count() > 0:
             self.monitor_combo.setCurrentIndex(0)
+
 # --- Set the sampling frequency slider and label from a millisecond value ---
     def set_sampling_frequency_ui(self, frequency_ms: int):
         """Sets the sampling frequency slider and label from a millisecond value."""
@@ -259,6 +257,7 @@ class ScreenSamplerUIManager(QGroupBox):
             self.frequency_slider.setValue(fps)
             self.frequency_slider.blockSignals(False)
             self._update_frequency_display_label(fps) # Update the FPS/ms label
+
 # --- Set the recording status text ---
     def update_record_button_ui(self, is_recording: bool, can_record: bool):
         """Updates the Record button's text, icon, and enabled state."""
@@ -272,6 +271,7 @@ class ScreenSamplerUIManager(QGroupBox):
             parent_controls_enabled = self.settings_container_widget.isEnabled() if self.settings_container_widget else False
             self.record_button.setEnabled(parent_controls_enabled and can_record)
             self.record_button.setToolTip("Start recording screen sampler. (Sampler must be active)")
+
 # --- Set the recording status label text ---
     def set_recording_status_text(self, text: str):
         """Sets the text of the recording status label."""
@@ -324,6 +324,7 @@ class ScreenSamplerUIManager(QGroupBox):
             self.monitor_combo.itemText(0) == "Populating monitors...":
             # If group is enabled and monitors haven't been populated, request it.
             self.request_monitor_list_population.emit()
+
 # --- Force disable sampling UI from external source ---
     def force_disable_sampling_ui(self):
         """Called by ScreenSamplerManager if sampling needs to be stopped externally."""

@@ -17,7 +17,6 @@ except ImportError:
         def get_resource_path(relative_path):
             return relative_path
 
-
 class AudioVisualizerUIManager(QGroupBox):
     device_selection_changed = pyqtSignal(int)
     mode_selection_changed = pyqtSignal(str)
@@ -35,15 +34,12 @@ class AudioVisualizerUIManager(QGroupBox):
         self.is_active = False  # Internal state to track if visualizer is running
         self._init_ui()
 
-
-
     def _init_ui(self):
         # The main layout for the groupbox will be a QGridLayout
         grid_layout = QGridLayout(self)
         grid_layout.setSpacing(8)
         # Allow the controls column to expand
         grid_layout.setColumnStretch(1, 1)
-
         # --- Row 0: Audio Source ---
         source_label = QLabel("🎧 Source:")
         source_label.setAlignment(
@@ -55,10 +51,8 @@ class AudioVisualizerUIManager(QGroupBox):
             "Select the audio loopback device to visualize.")
         self.audio_source_combo.currentIndexChanged.connect(
             self._on_device_selection_changed)
-
         grid_layout.addWidget(source_label, 0, 0)
         grid_layout.addWidget(self.audio_source_combo, 0, 1)
-
         # --- Row 1: Mode ---
         mode_label = QLabel("✨ Mode:")
         mode_label.setAlignment(
@@ -70,10 +64,8 @@ class AudioVisualizerUIManager(QGroupBox):
             "Select the visualization style.")
         self.visualization_mode_combo.currentIndexChanged.connect(
             self._on_mode_selection_changed)
-
         grid_layout.addWidget(mode_label, 1, 0)
         grid_layout.addWidget(self.visualization_mode_combo, 1, 1)
-
         # --- Row 2: Action Buttons ---
         # Use a nested QHBoxLayout to group buttons and align them to the right
         action_button_layout = QHBoxLayout()
@@ -81,7 +73,6 @@ class AudioVisualizerUIManager(QGroupBox):
             0, 4, 0, 0)  # A little top margin for spacing
         action_button_layout.setSpacing(10)
         action_button_layout.addStretch(1)  # Pushes buttons to the right
-
         self.setup_button = QPushButton(" Setup...")
         try:
             icon_path = get_resource_path(os.path.join(
@@ -94,7 +85,6 @@ class AudioVisualizerUIManager(QGroupBox):
             "Open detailed settings for the current visualizer mode.")
         self.setup_button.clicked.connect(self.configure_button_clicked.emit)
         action_button_layout.addWidget(self.setup_button)
-
         self.start_stop_button = QPushButton()
         self.start_stop_button.setObjectName("VisualizerToggleButton")
         self.start_stop_button.setCheckable(True)
@@ -102,18 +92,14 @@ class AudioVisualizerUIManager(QGroupBox):
         self.start_stop_button.setMinimumWidth(140)
         self.update_start_stop_button_appearance(False)
         action_button_layout.addWidget(self.start_stop_button)
-
         # Add the button layout to the grid, spanning column 1
         grid_layout.addLayout(action_button_layout, 2, 1)
-
         # Populate modes
         self.populate_visualization_modes()
-
 
     def populate_audio_devices(self, devices_list: list, default_index_to_select: int | None):
         self.audio_source_combo.blockSignals(True)
         self.audio_source_combo.clear()
-
         found_selection = False
         if devices_list:
             for device in devices_list:
@@ -127,10 +113,8 @@ class AudioVisualizerUIManager(QGroupBox):
         else:
             self.audio_source_combo.addItem("No loopback devices found")
             self.audio_source_combo.setEnabled(False)
-
         if not found_selection and self.audio_source_combo.count() > 0:
             self.audio_source_combo.setCurrentIndex(0)
-
         self.audio_source_combo.blockSignals(False)
         self._on_device_selection_changed(
             self.audio_source_combo.currentIndex())
@@ -176,7 +160,6 @@ class AudioVisualizerUIManager(QGroupBox):
             self.start_stop_button.setToolTip("Start the audio visualizer.")
             self.start_stop_button.setProperty(
                 "active", False)  # For QSS styling
-
         # Refresh style to apply property changes
         self.start_stop_button.style().unpolish(self.start_stop_button)
         self.start_stop_button.style().polish(self.start_stop_button)
@@ -189,3 +172,12 @@ class AudioVisualizerUIManager(QGroupBox):
         """
         self.audio_source_combo.setEnabled(enabled)
         self.visualization_mode_combo.setEnabled(enabled)
+
+    def toggle_visualization(self):
+        """
+        Public slot to allow external widgets (like the main menu bar)
+        to toggle the visualizer's enabled state.
+        """
+        # This method programmatically "clicks" the internal enable/disable button.
+        if self.enable_button:
+            self.enable_button.click()
