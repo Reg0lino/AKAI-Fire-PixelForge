@@ -63,17 +63,19 @@ try:
 except ImportError as e:
     print(f"Warning (ScreenSamplerManager): Could not import feature components: {e}. Using placeholders.")
     FEATURES_IMPORTS_OK = False
-    class ScreenSamplerCore: # ... (minimal placeholder) ...
-        DEFAULT_ADJUSTMENTS = {'brightness': 1.0, 'contrast': 1.0, 'saturation': 1.0, 'hue_shift': 0} # Ensure defaults exist
+    class ScreenSamplerCore:
+        DEFAULT_ADJUSTMENTS = {'brightness': 1.0, 'contrast': 1.0, 'saturation': 1.75, 'hue_shift': 0} # Ensure defaults exist
         NUM_GRID_ROWS = 4; NUM_GRID_COLS = 16
         @staticmethod
         def get_available_monitors(sct_instance): return []
-    class ScreenSamplerThread(QObject): # ... (minimal placeholder) ...
+    class ScreenSamplerThread(QObject): 
         pad_colors_sampled = pyqtSignal(list); processed_image_ready = pyqtSignal(object); error_occurred = pyqtSignal(str)
         def __init__(self, parent=None): super().__init__(parent); 
         def start_sampling(self, **kwargs): pass
         def stop_sampling(self, **kwargs): pass; 
         def isRunning(self): return False
+
+
 
 # --- Constants ---
 SAMPLER_PREFS_FILENAME = "sampler_user_prefs.json"
@@ -151,6 +153,15 @@ class ScreenSamplerManager(QObject):
         self.sampling_thread.pad_colors_sampled.connect(self._handle_thread_pad_colors_sampled)
         self.sampling_thread.processed_image_ready.connect(self._handle_thread_processed_image_ready)
         self.sampling_thread.error_occurred.connect(self._handle_thread_error_occurred)
+
+    def get_current_adjustments(self) -> dict:
+        """
+        Safely returns a copy of the current sampler's adjustment parameters.
+        This allows other parts of the UI, like MainWindow, to sync with the sampler's state.
+        """
+        # The 'adjustments' are stored within the larger 'current_sampler_params' dictionary.
+        # We provide a fallback to the defaults from ScreenSamplerCore just in case.
+        return self.current_sampler_params.get('adjustments', ScreenSamplerCore.DEFAULT_ADJUSTMENTS).copy()
 
     def update_sampler_adjustment(self, adjustment_key: str, new_value: float):
         """

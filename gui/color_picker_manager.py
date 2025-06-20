@@ -13,7 +13,7 @@ from .sv_picker import SVPicker
 from .hue_slider import HueSlider
 
 # --- Constants ---
-MAX_SAVED_COLORS = 24 # 3 rows of 8 --- MY_COLORS "My Colors"
+MAX_SAVED_COLORS = 16 # 2 rows of 8 --- MY_COLORS "My Colors"
 CONFIG_FILE_NAME = "fire_controller_config.json"
 CONFIG_KEY_SAVED_COLORS = "color_picker_swatches"
 

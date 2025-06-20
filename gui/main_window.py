@@ -924,422 +924,91 @@ class MainWindow(QMainWindow):
     def _connect_signals(self):
         # AkaiFireController raw pad/button events
         if self.akai_controller and hasattr(self.akai_controller, 'fire_button_event'):
-            try:
-                self.akai_controller.fire_button_event.disconnect(
-                    self._handle_fire_pad_event_INTERNAL)
-            except TypeError:
-                pass
-            self.akai_controller.fire_button_event.connect(
-                self._handle_fire_pad_event_INTERNAL)
+            self.akai_controller.fire_button_event.connect(self._handle_fire_pad_event_INTERNAL)
         # InteractivePadGridFrame signals
         if self.pad_grid_frame:
-            try:
-                self.pad_grid_frame.pad_action_requested.disconnect(
-                    self._handle_grid_pad_action)
-            except TypeError:
-                pass
-            self.pad_grid_frame.pad_action_requested.connect(
-                self._handle_grid_pad_action)
-            try:
-                self.pad_grid_frame.pad_context_menu_requested_from_button.disconnect(
-                    self.show_pad_context_menu)
-            except TypeError:
-                pass
-            self.pad_grid_frame.pad_context_menu_requested_from_button.connect(
-                self.show_pad_context_menu)
-            try:
-                self.pad_grid_frame.pad_single_left_click_action_requested.disconnect(
-                    self._handle_grid_pad_single_left_click)
-            except TypeError:
-                pass
-            self.pad_grid_frame.pad_single_left_click_action_requested.connect(
-                self._handle_grid_pad_single_left_click)
+            self.pad_grid_frame.pad_action_requested.connect(self._handle_grid_pad_action)
+            self.pad_grid_frame.pad_context_menu_requested_from_button.connect(self.show_pad_context_menu)
+            self.pad_grid_frame.pad_single_left_click_action_requested.connect(self._handle_grid_pad_single_left_click)
             if self.animator_manager:
-                try:
-                    self.pad_grid_frame.paint_stroke_started.disconnect(
-                        self.animator_manager.on_paint_stroke_started)
-                except TypeError:
-                    pass
-                self.pad_grid_frame.paint_stroke_started.connect(
-                    self.animator_manager.on_paint_stroke_started)
-                try:
-                    self.pad_grid_frame.paint_stroke_ended.disconnect(
-                        self.animator_manager.on_paint_stroke_ended)
-                except TypeError:
-                    pass
-                self.pad_grid_frame.paint_stroke_ended.connect(
-                    self.animator_manager.on_paint_stroke_ended)
+                self.pad_grid_frame.paint_stroke_started.connect(self.animator_manager.on_paint_stroke_started)
+                self.pad_grid_frame.paint_stroke_ended.connect(self.animator_manager.on_paint_stroke_ended)
         # Color Picker Manager signals
         if self.color_picker_manager:
-            try:
-                self.color_picker_manager.primary_color_changed.disconnect(
-                    self._handle_primary_color_changed)
-            except TypeError:
-                pass
-            self.color_picker_manager.primary_color_changed.connect(
-                self._handle_primary_color_changed)
-            try:
-                self.color_picker_manager.secondary_color_changed.disconnect(
-                    self._handle_secondary_color_changed)
-            except TypeError:
-                pass
-            self.color_picker_manager.secondary_color_changed.connect(
-                self._handle_secondary_color_changed)
-            try:
-                self.color_picker_manager.status_message_requested.disconnect(
-                    self.status_bar.showMessage)
-            except TypeError:
-                pass
-            self.color_picker_manager.status_message_requested.connect(
-                self.status_bar.showMessage)
+            self.color_picker_manager.primary_color_changed.connect(self._handle_primary_color_changed)
+            self.color_picker_manager.secondary_color_changed.connect(self._handle_secondary_color_changed)
+            self.color_picker_manager.status_message_requested.connect(self.status_bar.showMessage)
             if hasattr(self.color_picker_manager, 'request_clear_all_pads'):
-                try:
-                    self.color_picker_manager.request_clear_all_pads.disconnect(
-                        self.clear_all_hardware_and_gui_pads)
-                except TypeError:
-                    pass
-                self.color_picker_manager.request_clear_all_pads.connect(
-                    self.clear_all_hardware_and_gui_pads)
+                self.color_picker_manager.request_clear_all_pads.connect(self.clear_all_hardware_and_gui_pads)
             if hasattr(self.color_picker_manager, 'eyedropper_button_toggled'):
-                try:
-                    self.color_picker_manager.eyedropper_button_toggled.disconnect(
-                        self._on_picker_eyedropper_button_toggled)
-                except TypeError:
-                    pass
-                self.color_picker_manager.eyedropper_button_toggled.connect(
-                    self._on_picker_eyedropper_button_toggled)
+                self.color_picker_manager.eyedropper_button_toggled.connect(self._on_picker_eyedropper_button_toggled)
         # Static Layouts Manager signals
         if self.static_layouts_manager:
-            try:
-                self.static_layouts_manager.apply_layout_data_requested.disconnect(
-                    self._handle_apply_static_layout_data)
-            except TypeError:
-                pass
-            self.static_layouts_manager.apply_layout_data_requested.connect(
-                self._handle_apply_static_layout_data)
-            try:
-                self.static_layouts_manager.request_current_grid_colors.disconnect(
-                    self._provide_grid_colors_for_static_save)
-            except TypeError:
-                pass
-            self.static_layouts_manager.request_current_grid_colors.connect(
-                self._provide_grid_colors_for_static_save)
-            try:
-                self.static_layouts_manager.status_message_requested.disconnect(
-                    self.status_bar.showMessage)
-            except TypeError:
-                pass
-            self.static_layouts_manager.status_message_requested.connect(
-                self.status_bar.showMessage)
+            self.static_layouts_manager.apply_layout_data_requested.connect(self._handle_apply_static_layout_data)
+            self.static_layouts_manager.request_current_grid_colors.connect(self._provide_grid_colors_for_static_save)
+            self.static_layouts_manager.status_message_requested.connect(self.status_bar.showMessage)
         # Screen Sampler Manager signals
         if self.screen_sampler_manager:
-            try:
-                self.screen_sampler_manager.sampled_colors_for_display.disconnect()
-            except TypeError:
-                pass
-            self.screen_sampler_manager.sampled_colors_for_display.connect(lambda colors: self.apply_colors_to_main_pad_grid(
-                [QColor(r, g, b).name() for r, g, b in colors], update_hw=True, is_sampler_output=True))
-            try:
-                self.screen_sampler_manager.sampler_status_update.disconnect(
-                    self.status_bar.showMessage)
-            except TypeError:
-                pass
-            self.screen_sampler_manager.sampler_status_update.connect(
-                self.status_bar.showMessage)
-            try:
-                self.screen_sampler_manager.sampling_activity_changed.disconnect(
-                    self._on_sampler_activity_changed)
-            except TypeError:
-                pass
-            self.screen_sampler_manager.sampling_activity_changed.connect(
-                self._on_sampler_activity_changed)
-            try:
-                self.screen_sampler_manager.sampling_activity_changed.disconnect(
-                    self._on_sampler_activity_changed_for_knobs)
-            except TypeError:
-                pass
-            self.screen_sampler_manager.sampling_activity_changed.connect(
-                self._on_sampler_activity_changed_for_knobs)
-            try:
-                self.screen_sampler_manager.new_sequence_from_recording_ready.disconnect(
-                    self._handle_load_sequence_request)
-            except TypeError:
-                pass
-            self.screen_sampler_manager.new_sequence_from_recording_ready.connect(
-                self._handle_load_sequence_request)
-            try:
-                self.screen_sampler_manager.sampler_monitor_changed.disconnect(
-                    self._on_sampler_monitor_cycled_for_oled)
-            except TypeError:
-                pass
-            self.screen_sampler_manager.sampler_monitor_changed.connect(
-                self._on_sampler_monitor_cycled_for_oled)
-            try:
-                self.screen_sampler_manager.sampler_adjustments_changed.disconnect(
-                    self._on_sampler_adjustments_updated_for_knobs)
-            except TypeError:
-                pass
-            self.screen_sampler_manager.sampler_adjustments_changed.connect(
-                self._on_sampler_adjustments_updated_for_knobs)
+            self.screen_sampler_manager.sampled_colors_for_display.connect(lambda colors: self.apply_colors_to_main_pad_grid([QColor(r, g, b).name() for r, g, b in colors], update_hw=True))
+            self.screen_sampler_manager.sampler_status_update.connect(self.status_bar.showMessage)
+            self.screen_sampler_manager.sampling_activity_changed.connect(self._on_sampler_activity_changed)
+            self.screen_sampler_manager.sampling_activity_changed.connect(self._on_sampler_activity_changed_for_knobs)
+            self.screen_sampler_manager.new_sequence_from_recording_ready.connect(self._handle_load_sequence_request)
+            self.screen_sampler_manager.sampler_monitor_changed.connect(self._on_sampler_monitor_cycled_for_oled)
+            self.screen_sampler_manager.sampler_adjustments_changed.connect(self._on_sampler_adjustments_updated_for_knobs)
         # AnimatorManagerWidget Signals
         if self.animator_manager:
-            # Disconnect any previous connections to be safe
-            try:
-                self.animator_manager.active_frame_data_for_display.disconnect()
-            except TypeError:
-                pass # No connections to disconnect
-            # --- MODIFIED: Connect to the new handler that applies the FX filter ---
-            self.animator_manager.active_frame_data_for_display.connect(
-                self._handle_animator_frame_for_display_with_fx)
-            try:
-                self.animator_manager.playback_status_update.disconnect(
-                    self.status_bar.showMessage)
-            except TypeError:
-                pass
-            self.animator_manager.playback_status_update.connect(
-                self.status_bar.showMessage)
-            try:
-                self.animator_manager.sequence_modified_status_changed.disconnect(
-                    self._update_oled_and_title_on_sequence_change)
-            except TypeError:
-                pass
-            self.animator_manager.sequence_modified_status_changed.connect(
-                self._update_oled_and_title_on_sequence_change)
-            try:
-                self.animator_manager.animator_playback_active_status_changed.disconnect(
-                    self._update_fire_transport_leds)
-            except TypeError:
-                pass
-            self.animator_manager.animator_playback_active_status_changed.connect(
-                self._update_fire_transport_leds)
-            try:
-                self.animator_manager.animator_playback_active_status_changed.disconnect(
-                    self._on_animator_playback_status_changed_for_knobs)
-            except TypeError:
-                pass
-            self.animator_manager.animator_playback_active_status_changed.connect(
-                self._on_animator_playback_status_changed_for_knobs)
-            try:
-                self.animator_manager.undo_redo_state_changed.disconnect(
-                    self._on_animator_undo_redo_state_changed)
-            except TypeError:
-                pass
-            self.animator_manager.undo_redo_state_changed.connect(
-                self._on_animator_undo_redo_state_changed)
-            try:
-                self.animator_manager.clipboard_state_changed.disconnect(
-                    self._on_animator_clipboard_state_changed)
-            except TypeError:
-                pass
-            self.animator_manager.clipboard_state_changed.connect(
-                self._on_animator_clipboard_state_changed)
-            try:
-                self.animator_manager.request_sampler_disable.disconnect(
-                    self._handle_request_sampler_disable)
-            except TypeError:
-                pass
-            self.animator_manager.request_sampler_disable.connect(
-                self._handle_request_sampler_disable)
-            try:
-                self.animator_manager.request_load_sequence_with_prompt.disconnect(
-                    self._handle_animator_request_load_prompt)
-            except TypeError:
-                pass
-            self.animator_manager.request_load_sequence_with_prompt.connect(
-                self._handle_animator_request_load_prompt)
+            self.animator_manager.selection_changed.connect(self._on_animator_selection_changed)
+            self.animator_manager.active_frame_data_for_display.connect(self._handle_animator_frame_for_display_with_fx)
+            self.animator_manager.playback_status_update.connect(self.status_bar.showMessage)
+            self.animator_manager.sequence_modified_status_changed.connect(self._update_oled_and_title_on_sequence_change)
+            self.animator_manager.animator_playback_active_status_changed.connect(self._update_fire_transport_leds)
+            self.animator_manager.animator_playback_active_status_changed.connect(self._on_animator_playback_status_changed_for_knobs)
+            self.animator_manager.undo_redo_state_changed.connect(self._on_animator_undo_redo_state_changed)
+            self.animator_manager.clipboard_state_changed.connect(self._on_animator_clipboard_state_changed)
+            self.animator_manager.request_sampler_disable.connect(self._handle_request_sampler_disable)
+            self.animator_manager.request_load_sequence_with_prompt.connect(self._handle_animator_request_load_prompt)
         # HardwareInputManager Signals
         if self.hardware_input_manager:
-            if hasattr(self.hardware_input_manager, 'physical_encoder_rotated'):
-                try:
-                    self.hardware_input_manager.physical_encoder_rotated.disconnect(
-                        self._on_physical_encoder_rotated)
-                except TypeError:
-                    pass
-                self.hardware_input_manager.physical_encoder_rotated.connect(
-                    self._on_physical_encoder_rotated)
+            self.hardware_input_manager.physical_encoder_rotated.connect(self._on_physical_encoder_rotated)
             if self.animator_manager:
-                try:
-                    self.hardware_input_manager.request_animator_play_pause.disconnect(
-                        self.animator_manager.action_play_pause_toggle)
-                except TypeError:
-                    pass
-                self.hardware_input_manager.request_animator_play_pause.connect(
-                    self.animator_manager.action_play_pause_toggle)
-                try:
-                    self.hardware_input_manager.request_animator_stop.disconnect(
-                        self._handle_hardware_animator_stop_request)
-                except TypeError:
-                    pass
-                self.hardware_input_manager.request_animator_stop.connect(
-                    self._handle_hardware_animator_stop_request)
-            try:
-                self.hardware_input_manager.grid_left_pressed.disconnect(
-                    self._handle_grid_left_pressed)
-            except TypeError:
-                pass
-            self.hardware_input_manager.grid_left_pressed.connect(
-                self._handle_grid_left_pressed)
-            try:
-                self.hardware_input_manager.grid_right_pressed.disconnect(
-                    self._handle_grid_right_pressed)
-            except TypeError:
-                pass
-            self.hardware_input_manager.grid_right_pressed.connect(
-                self._handle_grid_right_pressed)
-            try:
-                self.hardware_input_manager.select_encoder_turned.disconnect(
-                    self._handle_select_encoder_turned)
-            except TypeError:
-                pass
-            self.hardware_input_manager.select_encoder_turned.connect(
-                self._handle_select_encoder_turned)
-            try:
-                self.hardware_input_manager.select_encoder_pressed.disconnect(
-                    self._handle_select_encoder_pressed)
-            except TypeError:
-                pass
-            self.hardware_input_manager.select_encoder_pressed.connect(
-                self._handle_select_encoder_pressed)
-            try:
-                self.hardware_input_manager.request_toggle_screen_sampler.disconnect(
-                    self._on_request_toggle_screen_sampler)
-            except TypeError:
-                pass
-            self.hardware_input_manager.request_toggle_screen_sampler.connect(
-                self._on_request_toggle_screen_sampler)
-            try:
-                self.hardware_input_manager.request_cycle_sampler_monitor.disconnect(
-                    self._on_request_cycle_sampler_monitor)
-            except TypeError:
-                pass
-            self.hardware_input_manager.request_cycle_sampler_monitor.connect(
-                self._on_request_cycle_sampler_monitor)
+                self.hardware_input_manager.request_animator_play_pause.connect(self.animator_manager.action_play_pause_toggle)
+                self.hardware_input_manager.request_animator_stop.connect(self._handle_hardware_animator_stop_request)
+            self.hardware_input_manager.grid_left_pressed.connect(self._handle_grid_left_pressed)
+            self.hardware_input_manager.grid_right_pressed.connect(self._handle_grid_right_pressed)
+            self.hardware_input_manager.select_encoder_pressed.connect(self._handle_select_encoder_pressed)
+            self.hardware_input_manager.request_toggle_screen_sampler.connect(self._on_request_toggle_screen_sampler)
+            self.hardware_input_manager.request_cycle_sampler_monitor.connect(self._on_request_cycle_sampler_monitor)
             if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_next'):
-                try:
-                    self.hardware_input_manager.request_cycle_active_oled_graphic_next.disconnect(
-                        self._handle_cycle_active_oled_next_request)
-                except TypeError:
-                    pass
-                self.hardware_input_manager.request_cycle_active_oled_graphic_next.connect(
-                    self._handle_cycle_active_oled_next_request)
+                self.hardware_input_manager.request_cycle_active_oled_graphic_next.connect(self._handle_cycle_active_oled_next_request)
             if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_prev'):
-                try:
-                    self.hardware_input_manager.request_cycle_active_oled_graphic_prev.disconnect(
-                        self._handle_cycle_active_oled_prev_request)
-                except TypeError:
-                    pass
-                self.hardware_input_manager.request_cycle_active_oled_graphic_prev.connect(
-                    self._handle_cycle_active_oled_prev_request)
+                self.hardware_input_manager.request_cycle_active_oled_graphic_prev.connect(self._handle_cycle_active_oled_prev_request)
             if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
-                try:
-                    self.hardware_input_manager.oled_browser_activate_pressed.disconnect(
-                        self._handle_oled_browser_activate)
-                except TypeError:
-                    pass
-                self.hardware_input_manager.oled_browser_activate_pressed.connect(
-                    self._handle_oled_browser_activate)
+                self.hardware_input_manager.oled_browser_activate_pressed.connect(self._handle_oled_browser_activate)
         # OLEDDisplayManager Signals
         if self.oled_display_manager:
             if self.akai_controller:
-                try:
-                    self.oled_display_manager.request_send_bitmap_to_fire.disconnect(
-                        self.akai_controller.oled_send_full_bitmap)
-                except TypeError:
-                    pass
-                self.oled_display_manager.request_send_bitmap_to_fire.connect(
-                    self.akai_controller.oled_send_full_bitmap)
+                self.oled_display_manager.request_send_bitmap_to_fire.connect(self.akai_controller.oled_send_full_bitmap)
             if self.oled_display_mirror_widget:
-                try:
-                    self.oled_display_manager.request_send_bitmap_to_fire.disconnect(
-                        self._update_oled_mirror)
-                except TypeError:
-                    pass
-                self.oled_display_manager.request_send_bitmap_to_fire.connect(
-                    self._update_oled_mirror)
+                self.oled_display_manager.request_send_bitmap_to_fire.connect(self._update_oled_mirror)
             if hasattr(self.oled_display_manager, 'active_graphic_pause_state_changed'):
-                try:
-                    self.oled_display_manager.active_graphic_pause_state_changed.disconnect(
-                        self._update_oled_play_pause_button_ui)
-                except TypeError:
-                    pass
-                self.oled_display_manager.active_graphic_pause_state_changed.connect(
-                    self._update_oled_play_pause_button_ui)
+                self.oled_display_manager.active_graphic_pause_state_changed.connect(self._update_oled_play_pause_button_ui)
         # Audio Visualizer Manager/UI Manager Signals
         if self.audio_visualizer_manager:
-            try:
-                self.audio_visualizer_manager.pad_data_ready.disconnect(
-                    self._handle_visualizer_pad_data)
-            except TypeError:
-                pass
-            self.audio_visualizer_manager.pad_data_ready.connect(
-                self._handle_visualizer_pad_data)
-            try:
-                self.audio_visualizer_manager.pad_data_ready.disconnect(
-                    self._update_gui_pads_from_visualizer)
-            except TypeError:
-                pass
-            self.audio_visualizer_manager.pad_data_ready.connect(
-                self._update_gui_pads_from_visualizer)
-            try:
-                self.audio_visualizer_manager.available_devices_updated.disconnect(
-                    self._on_visualizer_available_devices_updated)
-            except TypeError:
-                pass
-            self.audio_visualizer_manager.available_devices_updated.connect(
-                self._on_visualizer_available_devices_updated)
-            try:
-                self.audio_visualizer_manager.capture_error.disconnect(
-                    self._handle_visualizer_capture_error)
-            except TypeError:
-                pass
-            self.audio_visualizer_manager.capture_error.connect(
-                self._handle_visualizer_capture_error)
+            self.audio_visualizer_manager.pad_data_ready.connect(self._handle_visualizer_pad_data)
+            self.audio_visualizer_manager.pad_data_ready.connect(self._update_gui_pads_from_visualizer)
+            self.audio_visualizer_manager.available_devices_updated.connect(self._on_visualizer_available_devices_updated)
+            self.audio_visualizer_manager.capture_error.connect(self._handle_visualizer_capture_error)
             if hasattr(self.audio_visualizer_manager, 'capture_started_signal'):
-                try:
-                    self.audio_visualizer_manager.capture_started_signal.disconnect(
-                        self._on_avm_capture_started)
-                except TypeError:
-                    pass
-                self.audio_visualizer_manager.capture_started_signal.connect(
-                    self._on_avm_capture_started)
+                self.audio_visualizer_manager.capture_started_signal.connect(self._on_avm_capture_started)
             if hasattr(self.audio_visualizer_manager, 'capture_stopped_signal'):
-                try:
-                    self.audio_visualizer_manager.capture_stopped_signal.disconnect(
-                        self._on_avm_capture_stopped)
-                except TypeError:
-                    pass
-                self.audio_visualizer_manager.capture_stopped_signal.connect(
-                    self._on_avm_capture_stopped)
+                self.audio_visualizer_manager.capture_stopped_signal.connect(self._on_avm_capture_stopped)
         if self.audio_visualizer_ui_manager:
-            try:
-                self.audio_visualizer_ui_manager.enable_visualizer_toggled.disconnect(
-                    self._handle_visualizer_toggle_request)
-            except TypeError:
-                pass
-            self.audio_visualizer_ui_manager.enable_visualizer_toggled.connect(
-                self._handle_visualizer_toggle_request)
+            self.audio_visualizer_ui_manager.enable_visualizer_toggled.connect(self._handle_visualizer_toggle_request)
             if self.audio_visualizer_manager:
-                try:
-                    self.audio_visualizer_ui_manager.device_selection_changed.disconnect(
-                        self.audio_visualizer_manager.set_selected_device_index)
-                except TypeError:
-                    pass
-                self.audio_visualizer_ui_manager.device_selection_changed.connect(
-                    self.audio_visualizer_manager.set_selected_device_index)
-                try:
-                    self.audio_visualizer_ui_manager.mode_selection_changed.disconnect(
-                        self.audio_visualizer_manager.update_visualization_mode)
-                except TypeError:
-                    pass
-                self.audio_visualizer_ui_manager.mode_selection_changed.connect(
-                    self.audio_visualizer_manager.update_visualization_mode)
-            try:
-                self.audio_visualizer_ui_manager.configure_button_clicked.disconnect(
-                    self._open_visualizer_settings_dialog)
-            except TypeError:
-                pass
-            self.audio_visualizer_ui_manager.configure_button_clicked.connect(
-                self._open_visualizer_settings_dialog)
+                self.audio_visualizer_ui_manager.device_selection_changed.connect(self.audio_visualizer_manager.set_selected_device_index)
+                self.audio_visualizer_ui_manager.mode_selection_changed.connect(self.audio_visualizer_manager.update_visualization_mode)
+            self.audio_visualizer_ui_manager.configure_button_clicked.connect(self._open_visualizer_settings_dialog)
 
     def _handle_primary_color_changed(self, color: QColor):
         """Handles updates to the primary color from the ColorPickerManager."""
@@ -1910,7 +1579,6 @@ class MainWindow(QMainWindow):
                 closest_discrete_idx = i
         return closest_discrete_idx
 
-
     def populate_midi_ports(self):
         """Populates the MIDI output port selection QComboBox."""
         if self.port_combo_direct_ref is None:
@@ -2015,50 +1683,97 @@ class MainWindow(QMainWindow):
             self.screen_sampler_manager.update_ui_for_global_state(is_out_conn, is_out_conn)
         QTimer.singleShot(0, self._update_global_ui_interaction_states)
 
-
     def _update_contextual_knob_configs(self):
         """
-        Updates knob ranges and labels. Knobs 1-4 are now always mapped to FX.
-        Only Knob 5 (Speed/Select) is contextual.
+        Updates knob ranges, values, and labels based on the current application context
+        (i.e., Sampler active vs. FX Panel active, and Animator playing vs. idle).
         """
+        sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
         animator_is_playing = self.is_animator_playing
-        labels = ["Bright", "Sat", "Cont", "Hue", ""] # Default labels
+        # Use full-word labels for the top strip knobs
+        labels = ["Brightness", "Saturation", "Contrast", "Hue", ""]
+        # Get references to all the functional QDial widgets
         dials = [self.knob_volume_top_right, self.knob_pan_top_right,
-                self.knob_filter_top_right, self.knob_resonance_top_right, self.knob_select_top_right]
+                 self.knob_filter_top_right, self.knob_resonance_top_right, self.knob_select_top_right]
+        # Block signals to prevent feedback loops during programmatic value changes
         for dial in dials:
-            if dial: dial.blockSignals(True)
-        # Knobs 1-4 ALWAYS map to the FX sliders' ranges now.
-        if self.knob_volume_top_right: self.knob_volume_top_right.setRange(self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
-        if self.knob_pan_top_right: self.knob_pan_top_right.setRange(self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
-        if self.knob_filter_top_right: self.knob_filter_top_right.setRange(self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
-        if self.knob_resonance_top_right: self.knob_resonance_top_right.setRange(self.FX_HUE_MIN, self.FX_HUE_MAX)
-        
-        # Sync their values from the UI sliders
-        if self.fx_brightness_slider: self.knob_volume_top_right.setValue(self.fx_brightness_slider.value())
-        if self.fx_saturation_slider: self.knob_pan_top_right.setValue(self.fx_saturation_slider.value())
-        if self.fx_contrast_slider: self.knob_filter_top_right.setValue(self.fx_contrast_slider.value())
-        if self.fx_hue_slider: self.knob_resonance_top_right.setValue(self.fx_hue_slider.value())
-        # CONTEXTUAL PART: Knob 5 (Select/Speed)
+            if dial:
+                dial.blockSignals(True)
+
+        if sampler_is_active:
+            # --- CONFIGURE KNOBS FOR SAMPLER MODE ---
+            self.knob_volume_top_right.setRange(
+                self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX)
+            self.knob_pan_top_right.setRange(
+                self.SAMPLER_SATURATION_KNOB_MIN, self.SAMPLER_SATURATION_KNOB_MAX)
+            self.knob_filter_top_right.setRange(
+                self.SAMPLER_CONTRAST_KNOB_MIN, self.SAMPLER_CONTRAST_KNOB_MAX)
+            self.knob_resonance_top_right.setRange(
+                self.SAMPLER_HUE_KNOB_MIN, self.SAMPLER_HUE_KNOB_MAX)
+            # Snap knob values to the sampler's current settings
+            sampler_adjustments = self.screen_sampler_manager.get_current_adjustments()
+            self.knob_volume_top_right.setValue(
+                int(sampler_adjustments.get('brightness', 1.0) * 100))
+            self.knob_pan_top_right.setValue(
+                int(sampler_adjustments.get('saturation', 1.0) * 100))
+            self.knob_filter_top_right.setValue(
+                int(sampler_adjustments.get('contrast', 1.0) * 100))
+            self.knob_resonance_top_right.setValue(
+                int(sampler_adjustments.get('hue_shift', 0)))
+        else:
+            # --- CONFIGURE KNOBS FOR FX PANEL MODE (DEFAULT) ---
+            self.knob_volume_top_right.setRange(
+                self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
+            self.knob_pan_top_right.setRange(
+                self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
+            self.knob_filter_top_right.setRange(
+                self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
+            self.knob_resonance_top_right.setRange(
+                self.FX_HUE_MIN, self.FX_HUE_MAX)
+            # Snap knob values to the FX sliders' current values
+            if self.fx_brightness_slider:
+                self.knob_volume_top_right.setValue(
+                    self.fx_brightness_slider.value())
+            if self.fx_saturation_slider:
+                self.knob_pan_top_right.setValue(
+                    self.fx_saturation_slider.value())
+            if self.fx_contrast_slider:
+                self.knob_filter_top_right.setValue(
+                    self.fx_contrast_slider.value())
+            if self.fx_hue_slider:
+                self.knob_resonance_top_right.setValue(
+                    self.fx_hue_slider.value())
+
+        # --- CONFIGURE KNOB 5 (Select/Speed) ---
         if animator_is_playing:
             labels[4] = "Speed"
             if self.knob_select_top_right:
-                self.knob_select_top_right.setRange(MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL, MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL)
+                # Set range for speed control
+                self.knob_select_top_right.setRange(
+                    MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL, MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL)
+                # Snap knob value to the current animation speed
                 if self.animator_manager:
                     current_fps = self.animator_manager.get_current_sequence_fps()
-                    self.knob_select_top_right.setValue(self._fps_to_slider_raw_value_for_knob(current_fps))
+                    raw_val = self._fps_to_slider_raw_value_for_knob(
+                        current_fps)
+                    self.knob_select_top_right.setValue(raw_val)
         else:
             labels[4] = "Select"
-            # Set range for item navigation (or leave it to be set by the nav logic)
-            if self.knob_select_top_right:
-                # The range for selection will be set dynamically when navigation is active.
-                # For now, we can just ensure it's not in speed mode.
-                pass
+            # In select mode, the visual position is not managed, so we don't set its value.
+            # We just need to ensure the range is appropriate for the target list.
+            if self.knob_select_top_right and self.current_oled_nav_target_widget:
+                nav_count = self.current_oled_nav_target_widget.get_navigation_item_count()
+                self.knob_select_top_right.setRange(0, max(0, nav_count - 1))
+
+        # Update labels and visuals
         if hasattr(self, 'knob_label_overlay') and self.knob_label_overlay:
             self.knob_label_overlay.set_labels(labels)
-        
         self._update_all_knob_tooltips()
+        # Unblock signals now that configuration is complete
         for dial in dials:
-            if dial: dial.blockSignals(False)
+            if dial:
+                dial.blockSignals(False)
+        # Force a repaint of the visual knobs
         self._update_all_knob_visuals()
 
 
@@ -2073,156 +1788,128 @@ class MainWindow(QMainWindow):
             getattr(self, "knob_resonance_top_right_stack", None),
             getattr(self, "SelectKnobTopRight_stack", None),
         ]
-        # Knob 1
-        if knob_stacks[0]:
-            if sampler_is_active:
-                knob_stacks[0].setToolTip(
-                    f"Sampler: Brightness ({self.knob_volume_top_right.value() / 100.0:.2f}x)")
-            else:
-                knob_stacks[0].setToolTip(
-                    f"Global Pad Brightness ({self.knob_volume_top_right.value()}%)")
-        # Knob 2
-        if knob_stacks[1]:
-            if sampler_is_active:
-                knob_stacks[1].setToolTip(
-                    f"Sampler: Saturation ({self.knob_pan_top_right.value() / 100.0:.2f}x)")
-            else:
-                knob_stacks[1].setToolTip("Unassigned")
-        # Knob 3
-        if knob_stacks[2]:
-            if sampler_is_active:
-                knob_stacks[2].setToolTip(
-                    f"Sampler: Contrast ({self.knob_filter_top_right.value() / 100.0:.2f}x)")
-            else:
-                knob_stacks[2].setToolTip("Unassigned")
-        # Knob 4
-        if knob_stacks[3]:
-            if animator_is_playing:
-                fps = self._slider_raw_value_to_fps_for_knob(
-                    self.knob_resonance_top_right.value())
-                knob_stacks[3].setToolTip(f"Anim Speed: {fps:.1f} FPS")
-            elif sampler_is_active:
-                knob_stacks[3].setToolTip(
-                    f"Sampler: Hue Shift ({self.knob_resonance_top_right.value():+d})")
-            else:
-                knob_stacks[3].setToolTip("Unassigned")
-        # Knob 5
+        if sampler_is_active:
+            # Tooltips for Sampler Mode
+            adj = self.screen_sampler_manager.get_current_adjustments()
+            if knob_stacks[0]: knob_stacks[0].setToolTip(f"Sampler Brightness ({adj.get('brightness', 1.0):.2f}x)")
+            if knob_stacks[1]: knob_stacks[1].setToolTip(f"Sampler Saturation ({adj.get('saturation', 1.0):.2f}x)")
+            if knob_stacks[2]: knob_stacks[2].setToolTip(f"Sampler Contrast ({adj.get('contrast', 1.0):.2f}x)")
+            # --- FIX: Cast the hue_shift float to an int before formatting ---
+            if knob_stacks[3]:
+                hue_val = int(adj.get('hue_shift', 0))
+                knob_stacks[3].setToolTip(f"Sampler Hue Shift ({hue_val:+d}°)")
+        else:
+            # Tooltips for FX Panel Mode
+            if knob_stacks[0] and self.fx_brightness_slider:
+                knob_stacks[0].setToolTip(f"FX Brightness ({(1 + self.fx_brightness_slider.value()/100.0):.2f}x)")
+            if knob_stacks[1] and self.fx_saturation_slider:
+                knob_stacks[1].setToolTip(f"FX Saturation ({(1 + self.fx_saturation_slider.value()/100.0):.2f}x)")
+            if knob_stacks[2] and self.fx_contrast_slider:
+                knob_stacks[2].setToolTip(f"FX Contrast ({(1 + self.fx_contrast_slider.value()/100.0):.2f}x)")
+            if knob_stacks[3] and self.fx_hue_slider:
+                knob_stacks[3].setToolTip(f"FX Hue ({self.fx_hue_slider.value():+d}°)")
+        # Tooltip for Knob 5 (Select/Speed)
         if knob_stacks[4]:
-            knob_stacks[4].setToolTip("Select Item / Press to Apply (Mind the UI if there are unsaved changes in animator)")
+            if animator_is_playing:
+                fps = self._slider_raw_value_to_fps_for_knob(self.knob_select_top_right.value())
+                knob_stacks[4].setToolTip(f"Anim Speed: {fps:.1f} FPS")
+            else:
+                knob_stacks[4].setToolTip("Select Item / Press to Apply")
 
 
     def _apply_live_fx_filter(self, colors_hex: list[str], fx_params: dict) -> list[str]:
         """
-        Applies non-destructive FX. Corrected to handle colorsys return value properly.
+        Applies non-destructive FX by calling the central color utility function.
         """
+        from managers.color_fx_utils import apply_fx_filter
         if not fx_params or not self.enable_fx_checkbox.isChecked():
             return colors_hex
-        brightness_adj = fx_params.get('brightness', 0)
-        saturation_adj = fx_params.get('saturation', 0)
-        contrast_adj = fx_params.get('contrast', 0)
-        hue_shift = fx_params.get('hue_shift', 0.0)
-        brightness_factor = 1.0 + (brightness_adj / 100.0)
-        saturation_factor = 1.0 + (saturation_adj / 100.0)
-        contrast_factor = 1.0 + (contrast_adj / 100.0)
-        modified_colors_hex = []
-        for hex_str in colors_hex:
-            if not hex_str:
-                modified_colors_hex.append("#000000")
-                continue
-            
-            try:
-                color = QColor(hex_str)
-                r, g, b, a_val = color.redF(), color.greenF(), color.blueF(), color.alphaF()
-                # 1. Apply Brightness and Contrast in RGB space
-                r, g, b = r * brightness_factor, g * brightness_factor, b * brightness_factor
-                if contrast_factor != 1.0:
-                    r = 0.5 + contrast_factor * (r - 0.5)
-                    g = 0.5 + contrast_factor * (g - 0.5)
-                    b = 0.5 + contrast_factor * (b - 0.5)
-                # CLAMP before HSV conversion
-                r, g, b = max(0.0, min(1.0, r)), max(0.0, min(1.0, g)), max(0.0, min(1.0, b))
-                # 2. Convert to HSV.
-                # --- THIS IS THE FIX: colorsys.rgb_to_hsv returns 3 values, not 4 ---
-                h, s, v = colorsys.rgb_to_hsv(r, g, b)
-                # 3. Apply Saturation and Hue
-                s *= saturation_factor
-                s = max(0.0, min(1.0, s))
-                if hue_shift != 0:
-                    h += (hue_shift / 360.0)
-                    if h >= 1.0: h -= 1.0
-                    elif h < 0.0: h += 1.0
-                
-                # 4. Convert back and finalize
-                final_r, final_g, final_b = colorsys.hsv_to_rgb(h, s, v)
-                final_color = QColor.fromRgbF(final_r, final_g, final_b, a_val)
-                modified_colors_hex.append(final_color.name())
-            except Exception as e:
-                print(f"FX Filter Error: {e}")
-                modified_colors_hex.append(hex_str)
-        return modified_colors_hex
+        return apply_fx_filter(colors_hex, fx_params)
 
     def _handle_animator_frame_for_display_with_fx(self, colors_hex_list: list | None):
         """
-        Receives frame data from the animator, applies Live FX if enabled,
-        and then passes it to the final display method.
+        Receives PURE source color data from the animator. Caches these pure colors,
+        applies the Live FX filter if enabled, and then passes the FINAL colors
+        to the grid display method.
         """
-        final_colors = colors_hex_list
-        if self.enable_fx_checkbox and self.enable_fx_checkbox.isChecked() and colors_hex_list:
-            # Gather current FX parameters directly from the sliders
+        # 1. Update the cache with the pure source colors.
+        # Ensure we always have a valid list of 64 colors.
+        self._current_source_colors_cache = colors_hex_list if (colors_hex_list and isinstance(colors_hex_list, list) and len(colors_hex_list) == 64) else [QColor("black").name()] * 64
+        # 2. Determine the final colors to be displayed.
+        final_colors_for_display = self._current_source_colors_cache
+        if self.enable_fx_checkbox and self.enable_fx_checkbox.isChecked():
             fx_params = {
                 'brightness': self.fx_brightness_slider.value(),
                 'saturation': self.fx_saturation_slider.value(),
                 'contrast': self.fx_contrast_slider.value(),
                 'hue_shift': self.fx_hue_slider.value()
             }
-            final_colors = self._apply_live_fx_filter(
-                colors_hex_list, fx_params)
-        self._on_animator_frame_data_for_display(final_colors)
-
+            final_colors_for_display = self._apply_live_fx_filter(self._current_source_colors_cache, fx_params)
+            
+        # 3. Apply the final (potentially filtered) colors to the grid and hardware.
+        self.apply_colors_to_main_pad_grid(final_colors_for_display, update_hw=True)
 
     def _connect_fx_signals(self):
         """Connects signals for the Color Grading / FX panel widgets."""
         if self.enable_fx_checkbox:
             self.enable_fx_checkbox.toggled.connect(self._on_enable_fx_toggled)
-            
-        # Connect the new master reset button to its handler
         if hasattr(self, 'fx_master_reset_button') and self.fx_master_reset_button:
-            self.fx_master_reset_button.clicked.connect(self._on_reset_all_fx_clicked)
-            
+            self.fx_master_reset_button.clicked.connect(
+                self._on_reset_all_fx_clicked)
+        # --- FIX: Connect the 'Apply to Selected Frames' button ---
+        if self.apply_fx_button:
+            self.apply_fx_button.clicked.connect(
+                self._on_apply_fx_to_frames_clicked)
         # Connect ALL FX sliders to the single, universal handler
-        if self.fx_brightness_slider: self.fx_brightness_slider.valueChanged.connect(lambda v: self._on_fx_slider_changed('brightness', v))
-        if self.fx_saturation_slider: self.fx_saturation_slider.valueChanged.connect(lambda v: self._on_fx_slider_changed('saturation', v))
-        if self.fx_contrast_slider: self.fx_contrast_slider.valueChanged.connect(lambda v: self._on_fx_slider_changed('contrast', v))
-        if self.fx_hue_slider: self.fx_hue_slider.valueChanged.connect(lambda v: self._on_fx_slider_changed('hue', v))
-        
+        if self.fx_brightness_slider:
+            self.fx_brightness_slider.valueChanged.connect(
+                lambda v: self._on_fx_slider_changed('brightness', v))
+        if self.fx_saturation_slider:
+            self.fx_saturation_slider.valueChanged.connect(
+                lambda v: self._on_fx_slider_changed('saturation', v))
+        if self.fx_contrast_slider:
+            self.fx_contrast_slider.valueChanged.connect(
+                lambda v: self._on_fx_slider_changed('contrast', v))
+        if self.fx_hue_slider:
+            self.fx_hue_slider.valueChanged.connect(
+                lambda v: self._on_fx_slider_changed('hue', v))
         # Connect the Speed Knob (Select Knob)
         if self.knob_select_top_right:
-            self.knob_select_top_right.valueChanged.connect(self._on_animator_speed_knob_changed)
+            self.knob_select_top_right.valueChanged.connect(
+                self._on_animator_speed_knob_changed)
 
     def _on_enable_fx_toggled(self, checked: bool):
         """Handles enabling/disabling the Live FX controls and refreshes the grid."""
-        # Enable/disable all controls within the FX panel based on the checkbox state.
-        # This makes it clear that the entire panel is a single unit.
-        if self.fx_brightness_slider: self.fx_brightness_slider.setEnabled(checked)
-        if self.fx_saturation_slider: self.fx_saturation_slider.setEnabled(checked)
-        if self.fx_contrast_slider: self.fx_contrast_slider.setEnabled(checked)
-        if self.fx_hue_slider: self.fx_hue_slider.setEnabled(checked)
-        
+        if self.fx_brightness_slider:
+            self.fx_brightness_slider.setEnabled(checked)
+        if self.fx_saturation_slider:
+            self.fx_saturation_slider.setEnabled(checked)
+        if self.fx_contrast_slider:
+            self.fx_contrast_slider.setEnabled(checked)
+        if self.fx_hue_slider:
+            self.fx_hue_slider.setEnabled(checked)
         if hasattr(self, 'fx_master_reset_button') and self.fx_master_reset_button:
             self.fx_master_reset_button.setEnabled(checked)
-            
-        if self.apply_fx_button:
-            # The apply button is only enabled if FX are on AND a frame is selected.
-            num_selected = 0
-            if self.animator_manager and self.animator_manager.sequence_timeline_widget:
-                num_selected = len(self.animator_manager.sequence_timeline_widget.get_selected_item_indices())
-            self.apply_fx_button.setEnabled(checked and num_selected > 0)
-        # Trigger a refresh of the current frame to apply/remove the effect.
-        # We now directly call the re-rendering logic instead of the slider handler.
-        if self.pad_grid_frame:
-            current_colors = self.pad_grid_frame.get_current_grid_colors_hex()
-            # This master method will check the checkbox state internally and apply the filter if needed.
-            self.apply_colors_to_main_pad_grid(current_colors, update_hw=True)
+        # Re-evaluate the "Apply" button's state whenever the checkbox changes
+        selected_indices = []
+        if self.animator_manager and self.animator_manager.sequence_timeline_widget:
+            selected_indices = self.animator_manager.sequence_timeline_widget.get_selected_item_indices()
+        self._on_animator_selection_changed(selected_indices)
+        # --- THIS IS THE FIX ---
+        # Always re-apply colors to the grid to reflect the new checkbox state.
+        # If checked, the filter will be applied. If unchecked, the pure source colors will be shown.
+        final_colors_for_display = self._current_source_colors_cache
+        if checked:
+            fx_params = {
+                'brightness': self.fx_brightness_slider.value(),
+                'saturation': self.fx_saturation_slider.value(),
+                'contrast': self.fx_contrast_slider.value(),
+                'hue_shift': self.fx_hue_slider.value()
+            }
+            final_colors_for_display = self._apply_live_fx_filter(
+                self._current_source_colors_cache, fx_params)
+        self.apply_colors_to_main_pad_grid(
+            final_colors_for_display, update_hw=True)
 
     def _on_reset_all_fx_clicked(self):
         """Sets all FX sliders back to their default 'neutral' values."""
@@ -2238,11 +1925,10 @@ class MainWindow(QMainWindow):
 
     def _on_fx_slider_changed(self, fx_type: str, value: int):
         """
-        Handles any change in any FX slider. This is the master handler for all FX UI updates.
-        It updates labels, syncs the functional QDial, syncs the visual knob,
-        and re-applies the filter to the current grid view.
+        Handles any change in any FX slider. Reads from the source color cache,
+        re-applies the filter, and updates the grid with the new display colors.
         """
-        # --- 1. Update UI Labels based on which slider sent the signal ---
+        # --- 1. Update UI Labels and sync hardware knobs (no change here) ---
         if fx_type == 'brightness' and self.fx_brightness_slider_label:
             val_factor = 1.0 + (value / 100.0)
             self.fx_brightness_slider_label.setText(f"{val_factor:.2f}x")
@@ -2254,28 +1940,55 @@ class MainWindow(QMainWindow):
             self.fx_contrast_slider_label.setText(f"{val_factor:.2f}x")
         elif fx_type == 'hue' and self.fx_hue_slider_label:
             self.fx_hue_slider_label.setText(f"{value:+d}°")
-
-        # --- 2. Sync the corresponding functional QDial to the slider's new value ---
-        # This is the crucial step to fix the knob sync issue.
         target_qdial: QDial | None = None
         if fx_type == 'brightness': target_qdial = self.knob_volume_top_right
         elif fx_type == 'saturation': target_qdial = self.knob_pan_top_right
         elif fx_type == 'contrast': target_qdial = self.knob_filter_top_right
         elif fx_type == 'hue': target_qdial = self.knob_resonance_top_right
-        
         if target_qdial:
-            target_qdial.blockSignals(True)  # Prevent feedback loop from the knob's own valueChanged signal
+            target_qdial.blockSignals(True)
             target_qdial.setValue(value)
             target_qdial.blockSignals(False)
-
-        # --- 3. Sync All Visual Knobs ---
-        # We call the master visual update which reads from the now-synced QDials.
         self._update_all_knob_visuals()
+        # --- 2. Re-render the Pad Grid using the source cache ---
+        # Get the latest pure colors from our cache
+        source_colors = self._current_source_colors_cache
+        # Determine final colors (apply filter if enabled)
+        final_colors_for_display = source_colors
+        if self.enable_fx_checkbox and self.enable_fx_checkbox.isChecked():
+            fx_params = {
+                'brightness': self.fx_brightness_slider.value(),
+                'saturation': self.fx_saturation_slider.value(),
+                'contrast': self.fx_contrast_slider.value(),
+                'hue_shift': self.fx_hue_slider.value()
+            }
+            final_colors_for_display = self._apply_live_fx_filter(source_colors, fx_params)
+        # 3. Apply the final colors to the grid and hardware
+        self.apply_colors_to_main_pad_grid(final_colors_for_display, update_hw=True)
 
-        # --- 4. Re-render the Pad Grid with the new FX ---
-        # This method will get the latest values from the sliders and apply the filter.
-        current_colors = self.pad_grid_frame.get_current_grid_colors_hex()
-        self.apply_colors_to_main_pad_grid(current_colors, update_hw=True)
+    def _on_apply_fx_to_frames_clicked(self):
+        """
+        Handles the click of the 'Apply to Selected Frames' button.
+        Confirms the action with the user and then delegates to the animator manager.
+        """
+        if not self.animator_manager:
+            return
+        reply = QMessageBox.question(self, "Apply FX to Frames",
+                                    "This will permanently modify the selected frames with the current color grading settings.\n\n"
+                                    "This action can be undone with Ctrl+Z.\n\n"
+                                    "Do you want to continue?",
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                    QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            # Gather current FX parameters
+            fx_params = {
+                'brightness': self.fx_brightness_slider.value(),
+                'saturation': self.fx_saturation_slider.value(),
+                'contrast': self.fx_contrast_slider.value(),
+                'hue_shift': self.fx_hue_slider.value()
+            }
+            # Tell the animator manager to perform the action
+            self.animator_manager.apply_fx_to_selected_frames(fx_params)
 
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
@@ -2342,6 +2055,8 @@ class MainWindow(QMainWindow):
         self.primary_qcolor = QColor("#04FF00");
         self.secondary_qcolor = QColor("black");
         self.is_eyedropper_mode_active: bool = False;
+        self._current_source_colors_cache: list[str] = [
+            QColor("black").name()] * 64
         self._has_played_initial_builtin_oled_animation: bool = False;
         self.is_animator_playing: bool = False;
         self.is_visualizer_active: bool = False;
@@ -2851,25 +2566,33 @@ class MainWindow(QMainWindow):
         """
         Handles the apply_layout_data_requested signal from StaticLayoutsManager.
         Applies the given color data to the main pad grid and hardware.
-        Also updates the current animator frame if an animator sequence is active.
         """
         if not self.akai_controller or not self.akai_controller.is_connected():
-            self.status_bar.showMessage("Connect to Akai Fire first to apply layout.", 2500)
+            self.status_bar.showMessage(
+                "Connect to Akai Fire first to apply layout.", 2500)
             return
-        # Stop any ongoing processes like sampler or animator playback
+
         if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
             self.screen_sampler_manager.stop_sampling_thread()
-            self.status_bar.showMessage("Sampler stopped by applying static layout.", 2000)       
+            self.status_bar.showMessage(
+                "Sampler stopped by applying static layout.", 2000)
         if self.animator_manager and self.animator_manager.active_sequence_model and \
-            self.animator_manager.active_sequence_model.get_is_playing():
-            self.animator_manager.action_stop() # Stop animator playback
-            self.status_bar.showMessage("Animation stopped by applying static layout.", 2000)
-        self.apply_colors_to_main_pad_grid(colors_hex, update_hw=True, is_sampler_output=False)        
+                self.animator_manager.active_sequence_model.get_is_playing():
+            self.animator_manager.action_stop()
+            self.status_bar.showMessage(
+                "Animation stopped by applying static layout.", 2000)
+
+        # --- FIX: Removed the 'is_sampler_output' argument ---
+        self.apply_colors_to_main_pad_grid(colors_hex, update_hw=True)
+        # --- End FIX ---
+
         if self.animator_manager and self.animator_manager.active_sequence_model:
-            self.animator_manager.active_sequence_model.update_all_pads_in_current_edit_frame(colors_hex)
-            self.status_bar.showMessage("Static layout applied to pads and current animator frame.", 2500)
+            self.animator_manager.active_sequence_model.update_all_pads_in_current_edit_frame(
+                colors_hex)
+            self.status_bar.showMessage(
+                "Static layout applied to pads and current animator frame.", 2500)
         else:
-            self.status_bar.showMessage("Static layout applied to pads.", 2500)    
+            self.status_bar.showMessage("Static layout applied to pads.", 2500)
 
     def _update_knob_tooltip_and_status(self, knob_stack_widget: QWidget | None, tooltip_text: str, status_message: str | None = None):
         """Helper to update a knob's tooltip and optionally post a status bar message."""
@@ -2879,37 +2602,45 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(status_message, 4000) # Show for 4 seconds
 
     def _on_physical_encoder_rotated(self, encoder_id: int, delta: int):
-        """Routes physical knob turns to the correct handler based on context."""
-        # --- NEW: Speed control logic for Knob 5 ---
-        if encoder_id == 5: # This is the SELECT knob
+        """
+        Routes physical knob turns to the correct handler based on context.
+        This is the master router for all physical knob rotation events.
+        """
+        # --- ROUTER LOGIC FOR KNOB 5 (Select/Speed) ---
+        if encoder_id == 5:
             if self.is_animator_playing:
                 self._handle_speed_knob_change(delta)
             else:
                 self._handle_select_encoder_turned(delta)
             return # End execution here for knob 5
-        # Logic for Knobs 1-4
-        if self.is_visualizer_active:
-            return # Ignore knobs 1-4 if visualizer is active
-        # Find the correct QDial widget for knobs 1-4
-        target_knob: QDial | None = None
-        if encoder_id == 1: target_knob = self.knob_volume_top_right
-        elif encoder_id == 2: target_knob = self.knob_pan_top_right
-        elif encoder_id == 3: target_knob = self.knob_filter_top_right
-        elif encoder_id == 4: target_knob = self.knob_resonance_top_right
+        # --- ROUTER LOGIC FOR KNOBS 1-4 ---
+        sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
         
+        target_knob: QDial | None = None
+        step_size = 1 # Default step size for FX panel
+        if encoder_id == 1:
+            target_knob = self.knob_volume_top_right
+            if sampler_is_active: step_size = self.SAMPLER_FACTOR_KNOB_STEP
+        elif encoder_id == 2:
+            target_knob = self.knob_pan_top_right
+            if sampler_is_active: step_size = self.SAMPLER_FACTOR_KNOB_STEP
+        elif encoder_id == 3:
+            target_knob = self.knob_filter_top_right
+            if sampler_is_active: step_size = self.SAMPLER_FACTOR_KNOB_STEP
+        elif encoder_id == 4:
+            target_knob = self.knob_resonance_top_right
+            if sampler_is_active: step_size = self.SAMPLER_HUE_KNOB_STEP
         if not target_knob:
             return
-        # Calculate the step based on context
-        step: int = 1 # Default step
-        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
-            step = self.SAMPLER_FACTOR_KNOB_STEP if encoder_id in [1, 2, 3] else self.SAMPLER_HUE_KNOB_STEP
-        elif self.is_animator_playing:
-            step = self.GLOBAL_BRIGHTNESS_KNOB_STEP if encoder_id == 1 else 2 # A good step for -100 to 100 range
+        # Calculate the new value using the correct step size
         current_gui_value = target_knob.value()
-        new_gui_value = current_gui_value + (delta * step)
+        new_gui_value = current_gui_value + (delta * step_size)
+        
+        # Clamp the value and set it. This will trigger the _handle_knobX_change methods.
         new_gui_value = max(target_knob.minimum(), min(new_gui_value, target_knob.maximum()))
         if new_gui_value != current_gui_value:
             target_knob.setValue(new_gui_value)
+
 
     def _handle_speed_knob_change(self, delta: int):
         """Handles turns of the Speed knob (Knob 5) during animation playback."""
@@ -3001,24 +2732,30 @@ class MainWindow(QMainWindow):
             self._stop_action_issued_for_oled = True
             self.animator_manager.action_stop()
 
+    def clear_main_pad_grid_ui(self, update_hw=True):
+        if not hasattr(self, 'pad_grid_frame') or not self.pad_grid_frame:
+            return
+        self.apply_colors_to_main_pad_grid(
+            [QColor("black").name()] * 64, 
+            update_hw=update_hw
+        )
+
     def clear_all_hardware_and_gui_pads(self):
         """
         Clears all hardware pads to black and also clears the current
         GUI pad grid representation (e.g., current animator frame).
-        Stops active sampler or animator playback.
         """
         if not self.akai_controller or not self.akai_controller.is_connected():
             self.status_bar.showMessage("Connect to Akai Fire first to clear pads.", 2500)
-            return        
-        # Stop any ongoing processes that might interfere or immediately repaint
+            return
         if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
             self.screen_sampler_manager.stop_sampling_thread()
-            self.status_bar.showMessage("Sampler stopped by Clear Pads action.", 2000)        
+            self.status_bar.showMessage("Sampler stopped by Clear Pads action.", 2000)
         if self.animator_manager and self.animator_manager.active_sequence_model and \
             self.animator_manager.active_sequence_model.get_is_playing():
-            self.animator_manager.action_stop() # Stop animator playback
+            self.animator_manager.action_stop()
             self.status_bar.showMessage("Animation stopped by Clear Pads action.", 2000)
-        self.clear_main_pad_grid_ui(update_hw=True, is_sampler_output=False) 
+        self.clear_main_pad_grid_ui(update_hw=True)
         if self.animator_manager and self.animator_manager.active_sequence_model:
             self.animator_manager.active_sequence_model.clear_pads_in_current_edit_frame()
         self.status_bar.showMessage("All pads and current GUI view cleared to black.", 2500)
@@ -3348,64 +3085,52 @@ class MainWindow(QMainWindow):
         elif mouse_button == Qt.MouseButton.RightButton:
             self._apply_secondary_color_to_pad(row, col, update_model=True)
 
-    def apply_colors_to_main_pad_grid(self, colors_hex: list | None, update_hw: bool = True, is_sampler_output: bool = False):
+
+    def apply_colors_to_main_pad_grid(self, final_colors_hex: list | None, update_hw: bool = True):
         """
-        Applies colors to the GUI grid and optionally to the hardware.
-        This is now the central point for applying the Live FX filter.
+        The definitive method for updating the grid. It takes a list of FINAL
+        display colors and applies them to both the UI grid and the hardware.
         """
         if not hasattr(self, 'pad_grid_frame') or not self.pad_grid_frame:
             return
             
         # Ensure we have a valid list of 64 colors to work with
-        base_colors = colors_hex if (colors_hex and isinstance(colors_hex, list) and len(colors_hex) == 64) else [QColor("black").name()] * 64
-        # Update the GUI grid with the PURE, original colors
-        for i, hex_str in enumerate(base_colors):
+        colors_to_apply = final_colors_hex if (final_colors_hex and isinstance(final_colors_hex, list) and len(final_colors_hex) == 64) else [QColor("black").name()] * 64
+
+        # 1. Update the GUI grid with the final display colors
+        for i, hex_str in enumerate(colors_to_apply):
             r, c = divmod(i, 16)
             current_color = QColor(hex_str if (hex_str and isinstance(hex_str, str)) else "#000000")
             if not current_color.isValid():
                 current_color = QColor("black")
             self.pad_grid_frame.update_pad_gui_color(r, c, current_color.red(), current_color.green(), current_color.blue())
-        if not update_hw:
+
+        # 2. Update the hardware (if requested)
+        if not (update_hw and self.akai_controller and self.akai_controller.is_connected()):
             return
-        # --- UNIVERSAL FX FILTER ---
-        # Before sending to hardware, check if the FX filter should be applied.
-        final_colors_for_hw = base_colors
-        if self.enable_fx_checkbox and self.enable_fx_checkbox.isChecked():
-            fx_params = {
-                'brightness': self.fx_brightness_slider.value(),
-                'saturation': self.fx_saturation_slider.value(),
-                'contrast': self.fx_contrast_slider.value(),
-                'hue_shift': self.fx_hue_slider.value()
-            }
-            final_colors_for_hw = self._apply_live_fx_filter(base_colors, fx_params)
-        
-        # Prepare batch for hardware update with the final colors
+
         hw_batch = []
-        for i, hex_str in enumerate(final_colors_for_hw):
+        for i, hex_str in enumerate(colors_to_apply):
             r, c = divmod(i, 16)
             current_color = QColor(hex_str)
             hw_batch.append((r, c, current_color.red(), current_color.green(), current_color.blue()))
             
-        if self.akai_controller and self.akai_controller.is_connected() and hw_batch:
-            # The Sampler output bypasses this new FX brightness, but not other effects.
-            # We must handle brightness separately.
-            if is_sampler_output:
-                # For sampler, we don't use the FX brightness. The brightness is baked in.
-                # The FX filter brightness will be 1.0x, but other effects can apply.
-                self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=True)
-            else:
-                # For animator/static, the hardware handles the final brightness application.
-                self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=False)
+        if hw_batch:
+            # We no longer need the sampler bypass logic here, as the brightness
+            # from the FX is now baked into the `final_colors_hex` list. The hardware
+            # brightness knob will now correctly affect ALL outputs uniformly.
+            self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=False)
 
-    def clear_main_pad_grid_ui(self, update_hw=True, is_sampler_output: bool = False):
-        if not hasattr(self, 'pad_grid_frame') or not self.pad_grid_frame:
-            # print("MW WARNING: clear_main_pad_grid_ui - pad_grid_frame is None.") # Optional
-            return
-        self.apply_colors_to_main_pad_grid(
-            [QColor("black").name()] * 64, 
-            update_hw=update_hw,
-            is_sampler_output=is_sampler_output # Propagate flag
-        )
+    def _on_animator_selection_changed(self, selected_indices: list):
+        """
+        Handles the selection_changed signal from the AnimatorManagerWidget.
+        Updates the enabled state of the 'Apply to Selected Frames' button.
+        """
+        if self.apply_fx_button:
+            can_apply = len(
+                selected_indices) > 0 and self.enable_fx_checkbox.isChecked()
+            self.apply_fx_button.setEnabled(can_apply)
+
 
     def _handle_grid_pad_single_left_click(self, row: int, col: int): # Primarily for eyedropper
         if self.is_eyedropper_mode_active: self._pick_color_from_pad(row, col)
@@ -3506,24 +3231,54 @@ class MainWindow(QMainWindow):
             self.screen_sampler_manager.update_sampler_adjustment('hue_shift', float(gui_knob_value))
 
     def _handle_knob1_change(self, value: int):
-        """Handles Knob 1 (Brightness) by updating the UI slider ONLY if FX are enabled."""
-        if self.fx_brightness_slider and self.enable_fx_checkbox.isChecked():
+        """Handles Knob 1 (Brightness) for either the Sampler or the main FX panel."""
+        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            self._on_sampler_brightness_knob_changed(value)
+        elif self.fx_brightness_slider:
             self.fx_brightness_slider.setValue(value)
 
     def _handle_knob2_change(self, value: int):
-        """Handles Knob 2 (Saturation) by updating the UI slider ONLY if FX are enabled."""
-        if self.fx_saturation_slider and self.enable_fx_checkbox.isChecked():
+        """Handles Knob 2 (Saturation) for either the Sampler or the main FX panel."""
+        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            self._on_sampler_saturation_knob_changed(value)
+        elif self.fx_saturation_slider:
             self.fx_saturation_slider.setValue(value)
 
     def _handle_knob3_change(self, value: int):
-        """Handles Knob 3 (Contrast) by updating the UI slider ONLY if FX are enabled."""
-        if self.fx_contrast_slider and self.enable_fx_checkbox.isChecked():
+        """Handles Knob 3 (Contrast) for either the Sampler or the main FX panel."""
+        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            self._on_sampler_contrast_knob_changed(value)
+        elif self.fx_contrast_slider:
             self.fx_contrast_slider.setValue(value)
 
     def _handle_knob4_change(self, value: int):
-        """Handles Knob 4 (Hue) by updating the UI slider ONLY if FX are enabled."""
-        if self.fx_hue_slider and self.enable_fx_checkbox.isChecked():
+        """Handles Knob 4 (Hue) for either the Sampler or the main FX panel."""
+        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            self._on_sampler_hue_knob_changed(value)
+        elif self.fx_hue_slider:
             self.fx_hue_slider.setValue(value)
+
+    def _handle_speed_knob_change(self, delta: int):
+        """
+        Handles turns of the Speed knob (Knob 5) during animation playback.
+        This method programmatically changes the real speed slider in the AnimatorManagerWidget.
+        """
+        if not (self.animator_manager and self.animator_manager.sequence_controls_widget):
+            return
+        
+        # Get the actual speed slider from the animator's controls widget
+        speed_slider = self.animator_manager.sequence_controls_widget.speed_slider
+        if not speed_slider:
+            return
+            
+        current_val = speed_slider.value()
+        new_val = current_val + (delta * self.ANIMATOR_SPEED_KNOB_STEP)
+        
+        # Clamp the new value to the slider's min/max range
+        clamped_val = max(speed_slider.minimum(), min(new_val, speed_slider.maximum()))
+        
+        # Set the value on the real slider. Its own signal will handle all other updates.
+        speed_slider.setValue(clamped_val)
 
     def _create_edit_actions(self):
         """Creates global QActions for menu items and keyboard shortcuts."""

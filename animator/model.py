@@ -418,6 +418,31 @@ class SequenceModel(QObject):
     def get_current_edit_frame_index(self) -> int:
         return self._current_edit_frame_index
 
+    def apply_fx_to_frames(self, indices: list, fx_params: dict):
+        """
+        Permanently applies color grading FX to the specified frames by calling
+        the central color utility function. This is an undoable action.
+        """
+        # --- FIX: Import from the new location in the 'managers' package ---
+        from managers.color_fx_utils import apply_fx_filter
+        if not indices:
+            return
+        # 1. Save the state of the entire sequence BEFORE making changes.
+        self._push_undo_state()
+        # 2. Apply the filter to each selected frame
+        for index in indices:
+            if 0 <= index < len(self.frames):
+                frame = self.frames[index]
+                original_colors = frame.get_all_colors()
+                # Call the central utility function
+                modified_colors = apply_fx_filter(original_colors, fx_params)
+                # Update the frame's data with the new colors
+                frame.colors = modified_colors
+        # 3. Emit a signal to tell the UI that the frames have fundamentally changed.
+        self.frames_changed.emit()
+        # Ensure the sequence is marked as needing a save.
+        self._mark_modified()
+
 
     def update_pad_in_current_edit_frame(self, pad_index_0_63: int, color_hex: str) -> bool:
         current_frame_obj = self.get_current_edit_frame_object()

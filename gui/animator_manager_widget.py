@@ -36,6 +36,7 @@ DEFAULT_FALLBACK_DELAY_AMW = int(1000.0 / DEFAULT_FALLBACK_FPS_AMW)
 
 class AnimatorManagerWidget(QWidget):
     # Signals to MainWindow
+    selection_changed = pyqtSignal(list)
     active_frame_data_for_display = pyqtSignal(list) # list of hex color strings for the grid
     playback_status_update = pyqtSignal(str, int)    # message, duration_ms (0 for persistent)
     sequence_modified_status_changed = pyqtSignal(bool, str) # is_modified, sequence_name
@@ -295,6 +296,8 @@ class AnimatorManagerWidget(QWidget):
         Handles the new signal from the timeline. Updates the model's edit index
         and then tells the timeline delegate to repaint borders, avoiding a full refresh.
         """
+        self.selection_changed.emit(
+            selected_indices)  # Inform MainWindow of the change
         if not self.active_sequence_model:
             return
 
@@ -613,6 +616,110 @@ class AnimatorManagerWidget(QWidget):
             self.action_stop()
         else:
             self.action_play()
+
+
+    def _on_apply_fx_to_frames_clicked(self):
+        """
+        Handles the click of the 'Apply to Selected Frames' button.
+        """
+        if not self.animator_manager:
+            return
+        reply = QMessageBox.question(self, "Apply FX to Frames",
+                                    "This will permanently modify the selected frames with the current color grading settings.\n\n"
+                                    "This action can be undone with Ctrl+Z.\n\n"
+                                    "Do you want to continue?",
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                    QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            # Gather current FX parameters
+            fx_params = {
+                'brightness': self.fx_brightness_slider.value(),
+                'saturation': self.fx_saturation_slider.value(),
+                'contrast': self.fx_contrast_slider.value(),
+                'hue_shift': self.fx_hue_slider.value()
+            }
+            # Tell the animator manager to perform the action
+            self.animator_manager.apply_fx_to_selected_frames(fx_params)
+
+    def apply_fx_to_selected_frames(self, fx_params: dict):
+        """
+        Applies the given FX parameters permanently to the currently selected frames in the model.
+        """
+        if not self.active_sequence_model or not self.sequence_timeline_widget:
+            return
+
+        selected_indices = self.sequence_timeline_widget.get_selected_item_indices()
+        if not selected_indices:
+            self.playback_status_update.emit(
+                "No frames selected to apply FX.", 2000)
+            return
+
+        # Delegate the core logic to the model
+        self.active_sequence_model.apply_fx_to_frames(
+            selected_indices, fx_params)
+        self.playback_status_update.emit(
+            f"FX applied to {len(selected_indices)} frames.", 2000)
+
+
+
+    def apply_fx_to_frames(self, indices: list, fx_params: dict):
+        """
+        Permanently applies color grading FX to the specified frames.
+        This is an undoable action.
+        """
+        if not indices:
+            return
+        # 1. Save the state of the entire sequence BEFORE making changes.
+        self._push_undo_state()
+        # 2. Apply the filter to each selected frame
+        for index in indices:
+            if 0 <= index < len(self.frames):
+                frame = self.frames[index]
+                original_colors = frame.get_all_colors()
+                # We need a filter function here. Let's assume it exists in a utils module for now.
+                # from utils import color_utils
+                # modified_colors = color_utils.apply_fx_filter(original_colors, fx_params)
+                # For now, let's put the logic directly here.
+                # This logic is duplicated from MainWindow._apply_live_fx_filter
+                brightness_adj = fx_params.get('brightness', 0)
+                saturation_adj = fx_params.get('saturation', 0)
+                contrast_adj = fx_params.get('contrast', 0)
+                hue_shift = fx_params.get('hue_shift', 0.0)
+                brightness_factor = 1.0 + (brightness_adj / 100.0)
+                saturation_factor = 1.0 + (saturation_adj / 100.0)
+                contrast_factor = 1.0 + (contrast_adj / 100.0)
+                modified_colors = []
+                for hex_str in original_colors:
+                    try:
+                        import colorsys  # Local import
+                        color = QColor(hex_str)
+                        r, g, b, a_val = color.redF(), color.greenF(), color.blueF(), color.alphaF()
+                        r, g, b = r * brightness_factor, g * brightness_factor, b * brightness_factor
+                        if contrast_factor != 1.0:
+                            r, g, b = 0.5 + contrast_factor * \
+                                (r - 0.5), 0.5 + contrast_factor * \
+                                (g - 0.5), 0.5 + contrast_factor * (b - 0.5)
+                        r, g, b = max(0.0, min(1.0, r)), max(
+                            0.0, min(1.0, g)), max(0.0, min(1.0, b))
+                        h, s, v = colorsys.rgb_to_hsv(r, g, b)
+                        s *= saturation_factor
+                        s = max(0.0, min(1.0, s))
+                        if hue_shift != 0:
+                            h = (h + (hue_shift / 360.0)) % 1.0
+                        final_r, final_g, final_b = colorsys.hsv_to_rgb(
+                            h, s, v)
+                        final_color = QColor.fromRgbF(
+                            final_r, final_g, final_b, a_val)
+                        modified_colors.append(final_color.name())
+                    except Exception:
+                        modified_colors.append(hex_str)
+                # Update the frame's data with the new colors
+                frame.colors = modified_colors
+        # 3. Emit a signal to tell the UI that the frames have fundamentally changed.
+        self.frames_changed.emit()
+        # Ensure the sequence is marked as needing a save.
+        self._mark_modified()
+
 
     def get_current_grid_colors_from_main_window(self) -> list[str]:
         print("WARN AnimatorManager: get_current_grid_colors_from_main_window needs implementation or alternative.")
