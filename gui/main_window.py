@@ -7,11 +7,12 @@ import json
 import os
 import re
 import time
-
+import colorsys
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QGroupBox, QLabel, QPushButton, QComboBox, QSizePolicy, QSpacerItem,
-    QStatusBar, QMenu, QMessageBox, QDial, QFrame, QDialog, QScrollArea
+    QStatusBar, QMenu, QMessageBox, QDial, QFrame, QDialog, QScrollArea,
+    QCheckBox, QSlider
 )
 USER_PRESETS_APP_FOLDER_NAME = "Akai Fire RGB Controller User Presets"
 from PyQt6.QtCore import Qt, QTimer, QSize, pyqtSignal, QPoint, QEvent, QPointF, QRectF
@@ -230,6 +231,8 @@ USER_OLED_PRESETS_DIR_NAME = "OLEDCustomPresets"
 USER_OLED_TEXT_ITEMS_SUBDIR = "TextItems"
 USER_OLED_ANIM_ITEMS_SUBDIR = "ImageAnimations"
 
+
+
 # --- Path Helper Functions (Module Level - Keep as they are) ---
 from .visualizer_settings_dialog import VisualizerSettingsDialog  # Add this import at the top, adjust path as needed
 
@@ -293,6 +296,12 @@ def get_user_config_file_path(filename: str) -> str:
 
 class MainWindow(QMainWindow):
     OLED_NAVIGATION_FOCUS_OPTIONS = ["animator", "static_layouts"]
+    
+    FX_ADJUSTMENT_MIN, FX_ADJUSTMENT_MAX = -100, 100  # For Brightness, Sat, Contrast sliders
+    FX_ADJUSTMENT_DEFAULT = 0                         # The "center" or "neutral" position (maps to 1.0x factor)
+    FX_HUE_MIN, FX_HUE_MAX = -180, 180                # Hue is already bipolar
+    FX_HUE_DEFAULT = 0
+    
     SAMPLER_BRIGHTNESS_KNOB_MIN, SAMPLER_BRIGHTNESS_KNOB_MAX = 0, 400
     SAMPLER_SATURATION_KNOB_MIN, SAMPLER_SATURATION_KNOB_MAX = 0, 400
     SAMPLER_CONTRAST_KNOB_MIN, SAMPLER_CONTRAST_KNOB_MAX = 0, 400
@@ -479,6 +488,9 @@ class MainWindow(QMainWindow):
             self.oled_display_manager.set_active_graphic(active_graphic_data)
         else:
             self.oled_display_manager.set_active_graphic(None)
+
+
+
 
     def _on_builtin_oled_startup_animation_finished(self):
         pass
@@ -727,7 +739,10 @@ class MainWindow(QMainWindow):
         return input_connection_group
 
     def _populate_right_panel(self):
-        from PyQt6.QtWidgets import QSlider, QGridLayout, QScrollArea
+        """
+        Populates the right-hand panel with MIDI connection controls, the
+        Color Grading / FX panel, Color Picker, and other managers.
+        """
         if self.right_panel_layout_v is None:
             print("MW CRITICAL ERROR: _populate_right_panel - self.right_panel_layout_v is None!")
             return
@@ -735,48 +750,76 @@ class MainWindow(QMainWindow):
         connection_group = QGroupBox("🔌 MIDI Output")
         connection_layout = QHBoxLayout(connection_group)
         self.port_combo_direct_ref = QComboBox()
-        self.port_combo_direct_ref.setPlaceholderText("Select MIDI Output")
         self.port_combo_direct_ref.currentIndexChanged.connect(self._on_port_combo_changed)
         self.connect_button_direct_ref = QPushButton("Connect")
         self.connect_button_direct_ref.clicked.connect(self.toggle_connection)
-        self.connect_button_direct_ref.setEnabled(False)
         connection_layout.addWidget(QLabel("Port:"))
         connection_layout.addWidget(self.port_combo_direct_ref, 1)
         connection_layout.addWidget(self.connect_button_direct_ref)
         self.right_panel_layout_v.addWidget(connection_group)
-        self.global_controls_group_box = QGroupBox("🔆 Global Controls")
-        global_controls_layout = QGridLayout(self.global_controls_group_box)
-        # Row 0: Brightness Slider and Label
-        self.brightness_slider_label = QLabel("Brightness:")
-        self.global_brightness_slider = QSlider(Qt.Orientation.Horizontal)
-        self.global_brightness_slider.setRange(0, 100)
-        self.global_brightness_slider.setValue(int(self.global_pad_brightness * 100))
-        self.global_brightness_slider.valueChanged.connect(self._on_global_brightness_slider_changed)
-        self.brightness_value_label = QLabel(f"{self.global_brightness_slider.value()}%")
-        self.brightness_value_label.setMinimumWidth(40) # Reserve space
-        global_controls_layout.addWidget(self.brightness_slider_label, 0, 0)
-        global_controls_layout.addWidget(self.global_brightness_slider, 0, 1)
-        global_controls_layout.addWidget(self.brightness_value_label, 0, 2)
-        # Row 1: App Guide Button, aligned to the right
-        if self.app_guide_button:
-            # Add button to row 1, spanning all 3 columns, with alignment set to right.
-            global_controls_layout.addWidget(self.app_guide_button, 1, 0, 1, 3, Qt.AlignmentFlag.AlignRight)
-        # Set the middle column (with the slider) to take all the stretch
-        global_controls_layout.setColumnStretch(1, 1)
+        # --- Live FX Group Box (NEW COMPACT 2x2 LAYOUT) ---
+        self.live_fx_group_box = QGroupBox("🎨 Color Grading / FX")
+        fx_grid_layout = QGridLayout(self.live_fx_group_box)
+        fx_grid_layout.setVerticalSpacing(8)
+        fx_grid_layout.setHorizontalSpacing(8) # A little spacing between elements
+        # Row 0: Enable Checkbox and Master Reset Button
+        self.enable_fx_checkbox = QCheckBox("Enable Color FX")
+        self.enable_fx_checkbox.setToolTip("Toggle real-time color effects for all pad outputs.")
+        self.fx_master_reset_button = QPushButton("⟳")
+        self.fx_master_reset_button.setToolTip("Reset all four FX sliders to their default values.")
+        self.fx_master_reset_button.setObjectName("ResetButton") # For styling
+        self.fx_master_reset_button.setFixedSize(50, 22) # Make it compact
+        fx_grid_layout.addWidget(self.enable_fx_checkbox, 0, 0, 1, 4) # Span a few columns
+        fx_grid_layout.addWidget(self.fx_master_reset_button, 0, 4, 1, 2, Qt.AlignmentFlag.AlignRight) # Align to the far right
+        # --- Row 1: Brightness and Saturation ---
+        # Brightness
+        fx_grid_layout.addWidget(QLabel("Bright:"), 1, 0, Qt.AlignmentFlag.AlignRight)
+        self.fx_brightness_slider = QSlider(Qt.Orientation.Horizontal)
+        self.fx_brightness_slider.setRange(self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
+        self.fx_brightness_slider.setValue(self.FX_ADJUSTMENT_DEFAULT)
+        self.fx_brightness_slider_label = QLabel("1.00x")
+        fx_grid_layout.addWidget(self.fx_brightness_slider, 1, 1)
+        fx_grid_layout.addWidget(self.fx_brightness_slider_label, 1, 2)
         
-        self.right_panel_layout_v.addWidget(self.global_controls_group_box)
-        # --- Color Picker and other widgets (no changes here) ---
-        if self.color_picker_manager:
-            self.right_panel_layout_v.addWidget(self.color_picker_manager)
-        
+        # Saturation
+        fx_grid_layout.addWidget(QLabel("Sat:"), 1, 3, Qt.AlignmentFlag.AlignRight)
+        self.fx_saturation_slider = QSlider(Qt.Orientation.Horizontal)
+        self.fx_saturation_slider.setRange(self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
+        self.fx_saturation_slider.setValue(self.FX_ADJUSTMENT_DEFAULT)
+        self.fx_saturation_slider_label = QLabel("1.00x")
+        fx_grid_layout.addWidget(self.fx_saturation_slider, 1, 4)
+        fx_grid_layout.addWidget(self.fx_saturation_slider_label, 1, 5)
+        # --- Row 2: Contrast and Hue Shift ---
+        # Contrast
+        fx_grid_layout.addWidget(QLabel("Cont:"), 2, 0, Qt.AlignmentFlag.AlignRight)
+        self.fx_contrast_slider = QSlider(Qt.Orientation.Horizontal)
+        self.fx_contrast_slider.setRange(self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
+        self.fx_contrast_slider.setValue(self.FX_ADJUSTMENT_DEFAULT)
+        self.fx_contrast_slider_label = QLabel("1.00x")
+        fx_grid_layout.addWidget(self.fx_contrast_slider, 2, 1)
+        fx_grid_layout.addWidget(self.fx_contrast_slider_label, 2, 2)
+        # Hue
+        fx_grid_layout.addWidget(QLabel("Hue:"), 2, 3, Qt.AlignmentFlag.AlignRight)
+        self.fx_hue_slider = QSlider(Qt.Orientation.Horizontal)
+        self.fx_hue_slider.setRange(self.FX_HUE_MIN, self.FX_HUE_MAX)
+        self.fx_hue_slider.setValue(self.FX_HUE_DEFAULT)
+        self.fx_hue_slider_label = QLabel("+0°")
+        fx_grid_layout.addWidget(self.fx_hue_slider, 2, 4)
+        fx_grid_layout.addWidget(self.fx_hue_slider_label, 2, 5)
+        # --- Row 3: Apply Button ---
+        self.apply_fx_button = QPushButton("Apply to Selected Frames")
+        self.apply_fx_button.setEnabled(False)
+        self.apply_fx_button.setToolTip("Permanently apply the current FX to the selected frames in the timeline.")
+        fx_grid_layout.addWidget(self.apply_fx_button, 3, 0, 1, 6, Qt.AlignmentFlag.AlignCenter)
+        # --- CRITICAL: Set column stretches to make the sliders expand ---
+        fx_grid_layout.setColumnStretch(1, 1)
+        fx_grid_layout.setColumnStretch(4, 1)
+        self.right_panel_layout_v.addWidget(self.live_fx_group_box)
+        # Add remaining widgets
+        if self.color_picker_manager: self.right_panel_layout_v.addWidget(self.color_picker_manager)
         if self.static_layouts_manager: self.right_panel_layout_v.addWidget(self.static_layouts_manager)
-        
-        if self.audio_visualizer_ui_manager:
-            self.audio_visualizer_ui_manager.setTitle("🎵 Audio Visualizer")
-            self.right_panel_layout_v.addWidget(self.audio_visualizer_ui_manager)
-        
+        if self.audio_visualizer_ui_manager: self.right_panel_layout_v.addWidget(self.audio_visualizer_ui_manager)
         self.right_panel_layout_v.addStretch(1)
-        
 
     def _populate_left_panel(self):
         """Populates the left panel with the hardware top strip, pad grid, animator UI, and new control deck."""
@@ -843,17 +886,28 @@ class MainWindow(QMainWindow):
         self.left_panel_layout.addWidget(self.bottom_control_deck_container, 0)
 
 # --- GROUP 3: OTHER INITIALIZATION & CONFIGURATION HELPERS ---
+# In class MainWindow:
+# REPLACE the entire _setup_global_brightness_knob method with this new version.
+
     def _setup_global_brightness_knob(self):
-        """Configures Knob 1's initial state for global brightness."""
-        if self.knob_volume_top_right:
-            knob_stack = getattr(self, "knob_volume_top_right_stack", None)
-            # Set tooltip on the container
-            self._update_knob_tooltip_and_status(knob_stack, f"Global Pad Brightness ({int(self.global_pad_brightness * 100)}%)")
-            # Set properties on the functional dial
-            self.knob_volume_top_right.setRange(0, 100)
-            self.knob_volume_top_right.setValue(int(self.global_pad_brightness * 100))
-        else:
-            print("MW WARNING: knob_volume_top_right not found during _setup_global_brightness_knob.")
+        """Initializes the text for all FX value labels based on their default slider positions."""
+        # This method is called once at startup. The _on_fx_slider_changed handler
+        # will keep the labels updated after this initial setup.
+        if self.fx_brightness_slider and self.fx_brightness_slider_label:
+            val = 1.0 + (self.fx_brightness_slider.value() / 100.0)
+            self.fx_brightness_slider_label.setText(f"{val:.2f}x")
+
+        if self.fx_saturation_slider and self.fx_saturation_slider_label:
+            val = 1.0 + (self.fx_saturation_slider.value() / 100.0)
+            self.fx_saturation_slider_label.setText(f"{val:.2f}x")
+
+        if self.fx_contrast_slider and self.fx_contrast_slider_label:
+            val = 1.0 + (self.fx_contrast_slider.value() / 100.0)
+            self.fx_contrast_slider_label.setText(f"{val:.2f}x")
+
+        if self.fx_hue_slider and self.fx_hue_slider_label:
+            self.fx_hue_slider_label.setText(
+                f"{self.fx_hue_slider.value():+d}°")
 
     def _update_current_oled_nav_target_widget(self):
         if self.current_oled_nav_target_name == "animator":
@@ -1029,13 +1083,14 @@ class MainWindow(QMainWindow):
                 self._on_sampler_adjustments_updated_for_knobs)
         # AnimatorManagerWidget Signals
         if self.animator_manager:
+            # Disconnect any previous connections to be safe
             try:
-                self.animator_manager.active_frame_data_for_display.disconnect(
-                    self._on_animator_frame_data_for_display)
+                self.animator_manager.active_frame_data_for_display.disconnect()
             except TypeError:
-                pass
+                pass # No connections to disconnect
+            # --- MODIFIED: Connect to the new handler that applies the FX filter ---
             self.animator_manager.active_frame_data_for_display.connect(
-                self._on_animator_frame_data_for_display)
+                self._handle_animator_frame_for_display_with_fx)
             try:
                 self.animator_manager.playback_status_update.disconnect(
                     self.status_bar.showMessage)
@@ -1962,75 +2017,50 @@ class MainWindow(QMainWindow):
 
 
     def _update_contextual_knob_configs(self):
-        """Updates knob ranges, labels (via overlay), and tooltips based on context."""
-        sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
+        """
+        Updates knob ranges and labels. Knobs 1-4 are now always mapped to FX.
+        Only Knob 5 (Speed/Select) is contextual.
+        """
         animator_is_playing = self.is_animator_playing
-        labels = ["", "", "", "", ""]
+        labels = ["Bright", "Sat", "Cont", "Hue", ""] # Default labels
         dials = [self.knob_volume_top_right, self.knob_pan_top_right,
                 self.knob_filter_top_right, self.knob_resonance_top_right, self.knob_select_top_right]
         for dial in dials:
-            if dial:
-                dial.blockSignals(True)
-        # --- Configure each knob based on context ---
-        # Knob 1 (Brightness)
-        if self.knob_volume_top_right:
-            if sampler_is_active:
-                self.knob_volume_top_right.setRange(
-                    self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX)
-                labels[0] = "Brightness"
-            else:
-                self.knob_volume_top_right.setRange(0, 100)
-                self.knob_volume_top_right.setValue(
-                    int(self.global_pad_brightness * 100))
-                labels[0] = "Global Brightness"
-        # Knob 2 (Saturation / Unassigned)
-        if self.knob_pan_top_right:
-            if sampler_is_active:
-                self.knob_pan_top_right.setRange(
-                    self.SAMPLER_SATURATION_KNOB_MIN, self.SAMPLER_SATURATION_KNOB_MAX)
-                labels[1] = "Saturation"
-            else:
-                self.knob_pan_top_right.setRange(0, 127)
-                self.knob_pan_top_right.setValue(64)
-                labels[1] = ""
-        # Knob 3 (Contrast / Unassigned)
-        if self.knob_filter_top_right:
-            if sampler_is_active:
-                self.knob_filter_top_right.setRange(
-                    self.SAMPLER_CONTRAST_KNOB_MIN, self.SAMPLER_CONTRAST_KNOB_MAX)
-                labels[2] = "Contrast"
-            else:
-                self.knob_filter_top_right.setRange(0, 127)
-                self.knob_filter_top_right.setValue(64)
-                labels[2] = ""
-        # Knob 4 (Hue / Speed / Unassigned)
-        if self.knob_resonance_top_right:
-            if animator_is_playing and self.animator_manager:
-                current_fps = self.animator_manager.get_current_sequence_fps()
-                knob_raw_value = self._fps_to_slider_raw_value_for_knob(
-                    current_fps)
-                self.knob_resonance_top_right.setRange(
-                    MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL, MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL)
-                self.knob_resonance_top_right.setValue(knob_raw_value)
-                labels[3] = "Speed"
-            elif sampler_is_active:
-                self.knob_resonance_top_right.setRange(
-                    self.SAMPLER_HUE_KNOB_MIN, self.SAMPLER_HUE_KNOB_MAX)
-                labels[3] = "Hue"
-            else:
-                self.knob_resonance_top_right.setRange(0, 127)
-                self.knob_resonance_top_right.setValue(64)
-                labels[3] = ""
-        # Knob 5 (Select)
-        labels[4] = "Select"
-        # --- Apply the labels and tooltips ---
+            if dial: dial.blockSignals(True)
+        # Knobs 1-4 ALWAYS map to the FX sliders' ranges now.
+        if self.knob_volume_top_right: self.knob_volume_top_right.setRange(self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
+        if self.knob_pan_top_right: self.knob_pan_top_right.setRange(self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
+        if self.knob_filter_top_right: self.knob_filter_top_right.setRange(self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX)
+        if self.knob_resonance_top_right: self.knob_resonance_top_right.setRange(self.FX_HUE_MIN, self.FX_HUE_MAX)
+        
+        # Sync their values from the UI sliders
+        if self.fx_brightness_slider: self.knob_volume_top_right.setValue(self.fx_brightness_slider.value())
+        if self.fx_saturation_slider: self.knob_pan_top_right.setValue(self.fx_saturation_slider.value())
+        if self.fx_contrast_slider: self.knob_filter_top_right.setValue(self.fx_contrast_slider.value())
+        if self.fx_hue_slider: self.knob_resonance_top_right.setValue(self.fx_hue_slider.value())
+        # CONTEXTUAL PART: Knob 5 (Select/Speed)
+        if animator_is_playing:
+            labels[4] = "Speed"
+            if self.knob_select_top_right:
+                self.knob_select_top_right.setRange(MW_ANIMATOR_FPS_KNOB_MIN_SLIDER_VAL, MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL)
+                if self.animator_manager:
+                    current_fps = self.animator_manager.get_current_sequence_fps()
+                    self.knob_select_top_right.setValue(self._fps_to_slider_raw_value_for_knob(current_fps))
+        else:
+            labels[4] = "Select"
+            # Set range for item navigation (or leave it to be set by the nav logic)
+            if self.knob_select_top_right:
+                # The range for selection will be set dynamically when navigation is active.
+                # For now, we can just ensure it's not in speed mode.
+                pass
         if hasattr(self, 'knob_label_overlay') and self.knob_label_overlay:
             self.knob_label_overlay.set_labels(labels)
+        
         self._update_all_knob_tooltips()
         for dial in dials:
-            if dial:
-                dial.blockSignals(False)
+            if dial: dial.blockSignals(False)
         self._update_all_knob_visuals()
+
 
     def _update_all_knob_tooltips(self):
         """Sets the tooltip for all 5 knobs based on the current context."""
@@ -2081,16 +2111,185 @@ class MainWindow(QMainWindow):
             knob_stacks[4].setToolTip("Select Item / Press to Apply (Mind the UI if there are unsaved changes in animator)")
 
 
+    def _apply_live_fx_filter(self, colors_hex: list[str], fx_params: dict) -> list[str]:
+        """
+        Applies non-destructive FX. Corrected to handle colorsys return value properly.
+        """
+        if not fx_params or not self.enable_fx_checkbox.isChecked():
+            return colors_hex
+        brightness_adj = fx_params.get('brightness', 0)
+        saturation_adj = fx_params.get('saturation', 0)
+        contrast_adj = fx_params.get('contrast', 0)
+        hue_shift = fx_params.get('hue_shift', 0.0)
+        brightness_factor = 1.0 + (brightness_adj / 100.0)
+        saturation_factor = 1.0 + (saturation_adj / 100.0)
+        contrast_factor = 1.0 + (contrast_adj / 100.0)
+        modified_colors_hex = []
+        for hex_str in colors_hex:
+            if not hex_str:
+                modified_colors_hex.append("#000000")
+                continue
+            
+            try:
+                color = QColor(hex_str)
+                r, g, b, a_val = color.redF(), color.greenF(), color.blueF(), color.alphaF()
+                # 1. Apply Brightness and Contrast in RGB space
+                r, g, b = r * brightness_factor, g * brightness_factor, b * brightness_factor
+                if contrast_factor != 1.0:
+                    r = 0.5 + contrast_factor * (r - 0.5)
+                    g = 0.5 + contrast_factor * (g - 0.5)
+                    b = 0.5 + contrast_factor * (b - 0.5)
+                # CLAMP before HSV conversion
+                r, g, b = max(0.0, min(1.0, r)), max(0.0, min(1.0, g)), max(0.0, min(1.0, b))
+                # 2. Convert to HSV.
+                # --- THIS IS THE FIX: colorsys.rgb_to_hsv returns 3 values, not 4 ---
+                h, s, v = colorsys.rgb_to_hsv(r, g, b)
+                # 3. Apply Saturation and Hue
+                s *= saturation_factor
+                s = max(0.0, min(1.0, s))
+                if hue_shift != 0:
+                    h += (hue_shift / 360.0)
+                    if h >= 1.0: h -= 1.0
+                    elif h < 0.0: h += 1.0
+                
+                # 4. Convert back and finalize
+                final_r, final_g, final_b = colorsys.hsv_to_rgb(h, s, v)
+                final_color = QColor.fromRgbF(final_r, final_g, final_b, a_val)
+                modified_colors_hex.append(final_color.name())
+            except Exception as e:
+                print(f"FX Filter Error: {e}")
+                modified_colors_hex.append(hex_str)
+        return modified_colors_hex
+
+    def _handle_animator_frame_for_display_with_fx(self, colors_hex_list: list | None):
+        """
+        Receives frame data from the animator, applies Live FX if enabled,
+        and then passes it to the final display method.
+        """
+        final_colors = colors_hex_list
+        if self.enable_fx_checkbox and self.enable_fx_checkbox.isChecked() and colors_hex_list:
+            # Gather current FX parameters directly from the sliders
+            fx_params = {
+                'brightness': self.fx_brightness_slider.value(),
+                'saturation': self.fx_saturation_slider.value(),
+                'contrast': self.fx_contrast_slider.value(),
+                'hue_shift': self.fx_hue_slider.value()
+            }
+            final_colors = self._apply_live_fx_filter(
+                colors_hex_list, fx_params)
+        self._on_animator_frame_data_for_display(final_colors)
+
+
+    def _connect_fx_signals(self):
+        """Connects signals for the Color Grading / FX panel widgets."""
+        if self.enable_fx_checkbox:
+            self.enable_fx_checkbox.toggled.connect(self._on_enable_fx_toggled)
+            
+        # Connect the new master reset button to its handler
+        if hasattr(self, 'fx_master_reset_button') and self.fx_master_reset_button:
+            self.fx_master_reset_button.clicked.connect(self._on_reset_all_fx_clicked)
+            
+        # Connect ALL FX sliders to the single, universal handler
+        if self.fx_brightness_slider: self.fx_brightness_slider.valueChanged.connect(lambda v: self._on_fx_slider_changed('brightness', v))
+        if self.fx_saturation_slider: self.fx_saturation_slider.valueChanged.connect(lambda v: self._on_fx_slider_changed('saturation', v))
+        if self.fx_contrast_slider: self.fx_contrast_slider.valueChanged.connect(lambda v: self._on_fx_slider_changed('contrast', v))
+        if self.fx_hue_slider: self.fx_hue_slider.valueChanged.connect(lambda v: self._on_fx_slider_changed('hue', v))
+        
+        # Connect the Speed Knob (Select Knob)
+        if self.knob_select_top_right:
+            self.knob_select_top_right.valueChanged.connect(self._on_animator_speed_knob_changed)
+
+    def _on_enable_fx_toggled(self, checked: bool):
+        """Handles enabling/disabling the Live FX controls and refreshes the grid."""
+        # Enable/disable all controls within the FX panel based on the checkbox state.
+        # This makes it clear that the entire panel is a single unit.
+        if self.fx_brightness_slider: self.fx_brightness_slider.setEnabled(checked)
+        if self.fx_saturation_slider: self.fx_saturation_slider.setEnabled(checked)
+        if self.fx_contrast_slider: self.fx_contrast_slider.setEnabled(checked)
+        if self.fx_hue_slider: self.fx_hue_slider.setEnabled(checked)
+        
+        if hasattr(self, 'fx_master_reset_button') and self.fx_master_reset_button:
+            self.fx_master_reset_button.setEnabled(checked)
+            
+        if self.apply_fx_button:
+            # The apply button is only enabled if FX are on AND a frame is selected.
+            num_selected = 0
+            if self.animator_manager and self.animator_manager.sequence_timeline_widget:
+                num_selected = len(self.animator_manager.sequence_timeline_widget.get_selected_item_indices())
+            self.apply_fx_button.setEnabled(checked and num_selected > 0)
+        # Trigger a refresh of the current frame to apply/remove the effect.
+        # We now directly call the re-rendering logic instead of the slider handler.
+        if self.pad_grid_frame:
+            current_colors = self.pad_grid_frame.get_current_grid_colors_hex()
+            # This master method will check the checkbox state internally and apply the filter if needed.
+            self.apply_colors_to_main_pad_grid(current_colors, update_hw=True)
+
+    def _on_reset_all_fx_clicked(self):
+        """Sets all FX sliders back to their default 'neutral' values."""
+        if self.fx_brightness_slider:
+            self.fx_brightness_slider.setValue(self.FX_ADJUSTMENT_DEFAULT)
+        if self.fx_saturation_slider:
+            self.fx_saturation_slider.setValue(self.FX_ADJUSTMENT_DEFAULT)
+        if self.fx_contrast_slider:
+            self.fx_contrast_slider.setValue(self.FX_ADJUSTMENT_DEFAULT)
+        if self.fx_hue_slider:
+            self.fx_hue_slider.setValue(self.FX_HUE_DEFAULT)
+        # The valueChanged signals from the sliders will automatically trigger a UI update.
+
+    def _on_fx_slider_changed(self, fx_type: str, value: int):
+        """
+        Handles any change in any FX slider. This is the master handler for all FX UI updates.
+        It updates labels, syncs the functional QDial, syncs the visual knob,
+        and re-applies the filter to the current grid view.
+        """
+        # --- 1. Update UI Labels based on which slider sent the signal ---
+        if fx_type == 'brightness' and self.fx_brightness_slider_label:
+            val_factor = 1.0 + (value / 100.0)
+            self.fx_brightness_slider_label.setText(f"{val_factor:.2f}x")
+        elif fx_type == 'saturation' and self.fx_saturation_slider_label:
+            val_factor = 1.0 + (value / 100.0)
+            self.fx_saturation_slider_label.setText(f"{val_factor:.2f}x")
+        elif fx_type == 'contrast' and self.fx_contrast_slider_label:
+            val_factor = 1.0 + (value / 100.0)
+            self.fx_contrast_slider_label.setText(f"{val_factor:.2f}x")
+        elif fx_type == 'hue' and self.fx_hue_slider_label:
+            self.fx_hue_slider_label.setText(f"{value:+d}°")
+
+        # --- 2. Sync the corresponding functional QDial to the slider's new value ---
+        # This is the crucial step to fix the knob sync issue.
+        target_qdial: QDial | None = None
+        if fx_type == 'brightness': target_qdial = self.knob_volume_top_right
+        elif fx_type == 'saturation': target_qdial = self.knob_pan_top_right
+        elif fx_type == 'contrast': target_qdial = self.knob_filter_top_right
+        elif fx_type == 'hue': target_qdial = self.knob_resonance_top_right
+        
+        if target_qdial:
+            target_qdial.blockSignals(True)  # Prevent feedback loop from the knob's own valueChanged signal
+            target_qdial.setValue(value)
+            target_qdial.blockSignals(False)
+
+        # --- 3. Sync All Visual Knobs ---
+        # We call the master visual update which reads from the now-synced QDials.
+        self._update_all_knob_visuals()
+
+        # --- 4. Re-render the Pad Grid with the new FX ---
+        # This method will get the latest values from the sliders and apply the filter.
+        current_colors = self.pad_grid_frame.get_current_grid_colors_hex()
+        self.apply_colors_to_main_pad_grid(current_colors, update_hw=True)
+
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
         is_visualizer_active_now = self.audio_visualizer_manager.is_capturing if self.audio_visualizer_manager else False
         is_sampler_active_now = self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False
         is_anim_playing_now = self.animator_manager.active_sequence_model.get_is_playing() if self.animator_manager and self.animator_manager.active_sequence_model else False
         is_doom_active_now = self.is_doom_mode_active
-        can_use_global_controls = is_connected and not is_visualizer_active_now and not is_sampler_active_now and not is_doom_active_now
-        can_use_hardware_knobs = is_connected and not is_visualizer_active_now and not is_doom_active_now
-        if hasattr(self, 'global_controls_group_box'):
-            self.global_controls_group_box.setEnabled(can_use_global_controls)
+        # --- REMOVED: This line caused the crash as the widget no longer exists ---
+        # can_use_global_controls = is_connected and not is_visualizer_active_now and not is_sampler_active_now and not is_doom_active_now
+        # if hasattr(self, 'global_controls_group_box'):
+        #     self.global_controls_group_box.setEnabled(can_use_global_controls)
+        # The new Live FX panel's enabled state will be controlled by its own checkbox,
+        # so we don't need a master toggle for it here.
+        # The Brightness slider within it will have its own logic for when it's active.
         # --- DOOM Mode takes precedence ---
         if is_doom_active_now:
             if self.animator_manager: self.animator_manager.set_overall_enabled_state(False)
@@ -2099,9 +2298,9 @@ class MainWindow(QMainWindow):
             if self.pad_grid_frame: self.pad_grid_frame.setEnabled(False)
             if self.color_picker_manager: self.color_picker_manager.set_enabled(False)
             if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(False)
+            if self.live_fx_group_box: self.live_fx_group_box.setEnabled(False) # Also disable FX panel in DOOM
             if self.button_lazy_doom: self.button_lazy_doom.setEnabled(True)
-            if self.app_guide_button: self.app_guide_button.setEnabled(False)
-            if hasattr(self, 'global_controls_group_box'): self.global_controls_group_box.setEnabled(False)
+            # Disable menu actions during DOOM
             actions_to_disable = ['new_sequence_action', 'save_sequence_as_action', 'undo_action', 'redo_action', 'copy_action', 'cut_action', 'paste_action', 'duplicate_action', 'delete_action', 'add_blank_global_action', 'eyedropper_action', 'play_pause_action']
             for action_name in actions_to_disable:
                 if hasattr(self, action_name) and getattr(self, action_name): getattr(self, action_name).setEnabled(False)
@@ -2110,22 +2309,27 @@ class MainWindow(QMainWindow):
         can_use_animator = is_connected and not is_sampler_active_now and not is_visualizer_active_now
         can_paint_direct = is_connected and not is_sampler_active_now and not is_visualizer_active_now and not is_anim_playing_now
         can_toggle_sampler = is_connected and not is_anim_playing_now and not is_visualizer_active_now
-        
         if self.animator_manager: self.animator_manager.set_overall_enabled_state(can_use_animator)
         if self.screen_sampler_manager: self.screen_sampler_manager.update_ui_for_global_state(is_connected, can_toggle_sampler)
         if self.audio_visualizer_ui_manager:
             self.audio_visualizer_ui_manager.setEnabled(is_connected)
-            if self.audio_visualizer_ui_manager.start_stop_button: self.audio_visualizer_ui_manager.start_stop_button.setEnabled(is_connected)
-            if self.audio_visualizer_ui_manager.setup_button: self.audio_visualizer_ui_manager.setup_button.setEnabled(is_connected)
-            can_change_disruptive_settings = not is_visualizer_active_now
-            if hasattr(self.audio_visualizer_ui_manager, 'set_interactive_elements_enabled'): self.audio_visualizer_ui_manager.set_interactive_elements_enabled(can_change_disruptive_settings)
+            # Add more specific logic for visualizer's internal buttons if needed
         if self.pad_grid_frame: self.pad_grid_frame.setEnabled(can_paint_direct)
         if self.color_picker_manager: self.color_picker_manager.set_enabled(can_paint_direct)
-        if hasattr(self, 'eyedropper_action') and self.eyedropper_action: self.eyedropper_action.setEnabled(can_paint_direct)
         if self.static_layouts_manager: self.static_layouts_manager.set_enabled_state(can_paint_direct)
-        if self.oled_play_pause_icon_label: self.oled_play_pause_icon_label.setEnabled(is_connected)
-        if self.button_lazy_doom: self.button_lazy_doom.setEnabled(is_connected and not is_visualizer_active_now and not is_sampler_active_now and not is_anim_playing_now)
-        if self.app_guide_button: self.app_guide_button.setEnabled(True)
+        if self.live_fx_group_box: self.live_fx_group_box.setEnabled(is_connected) # Enable the whole box if connected
+        # Enable/Disable menu actions based on context
+        if hasattr(self, 'undo_action'):
+            # --- MODIFIED: Check if the list is not empty ---
+            can_undo = bool(self.animator_manager.active_sequence_model._undo_stack) if self.animator_manager and self.animator_manager.active_sequence_model else False
+            self.undo_action.setEnabled(can_undo)
+        if hasattr(self, 'redo_action'):
+            # --- MODIFIED: Check if the list is not empty ---
+            can_redo = bool(self.animator_manager.active_sequence_model._redo_stack) if self.animator_manager and self.animator_manager.active_sequence_model else False
+            self.redo_action.setEnabled(can_redo)
+        if hasattr(self, 'play_pause_action'):
+            self.play_pause_action.setEnabled(can_use_animator)
+        # Add other action enable/disable logic here as needed
 
 # q main window init here
 
@@ -2135,7 +2339,6 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
         
         # --- Assign core attributes ---
-        self.global_pad_brightness: float = 1.0;
         self.primary_qcolor = QColor("#04FF00");
         self.secondary_qcolor = QColor("black");
         self.is_eyedropper_mode_active: bool = False;
@@ -2157,16 +2360,28 @@ class MainWindow(QMainWindow):
         self._oled_nav_debounce_timer.setInterval(300);
 
         # --- Initialize all UI element attributes to None ---
-        self.central_widget_main: QWidget | None = None; self.main_app_layout: QHBoxLayout | None = None;
-        self.left_panel_widget: QWidget | None = None; self.left_panel_layout: QVBoxLayout | None = None;
-        self.right_panel_widget: QWidget | None = None; self.right_panel_layout_v: QVBoxLayout | None = None;
-        self.top_strip_group: QGroupBox | None = None; self.global_controls_group_box: QGroupBox | None = None;
-        self.knob_volume_top_right: QDial | None = None; self.knob_pan_top_right: QDial | None = None;
-        self.knob_filter_top_right: QDial | None = None; self.knob_resonance_top_right: QDial | None = None;
+        self.central_widget_main: QWidget | None = None; 
+        self.main_app_layout: QHBoxLayout | None = None;
+        self.left_panel_widget: QWidget | None = None; 
+        self.left_panel_layout: QVBoxLayout | None = None;
+        self.right_panel_widget: QWidget | None = None; 
+        self.right_panel_layout_v: QVBoxLayout | None = None;
+        self.top_strip_group: QGroupBox | None = None; 
+        self.global_controls_group_box: QGroupBox | None = None;
+        self.knob_volume_top_right: QDial | None = None; 
+        self.knob_pan_top_right: QDial | None = None;
+        self.knob_filter_top_right: QDial | None = None; 
+        self.knob_resonance_top_right: QDial | None = None;
         self.knob_select_top_right: QDial | None = None;
-        
-        # --- ADDED: Attribute for the new persistent container ---
-        self.bottom_control_deck_container: QWidget | None = None
+        self.bottom_control_deck_container: QWidget | None = None;
+                # --- ADD these new attributes for the Live FX panel ---
+        self.live_fx_group_box: QGroupBox | None = None
+        self.enable_fx_checkbox: QCheckBox | None = None # Assuming QCheckBox
+        self.fx_brightness_slider: QSlider | None = None
+        self.fx_saturation_slider: QSlider | None = None
+        self.fx_contrast_slider: QSlider | None = None
+        self.fx_hue_slider: QSlider | None = None
+        self.apply_fx_button: QPushButton | None = None
 
         # --- Set up paths ---
         if hasattr(self, '_get_presets_base_dir_path'): self.bundled_presets_base_path = self._get_presets_base_dir_path();
@@ -2235,6 +2450,7 @@ class MainWindow(QMainWindow):
         
         # --- Final Setup Calls ---
         self._connect_signals() if hasattr(self, '_connect_signals') else None;
+        self._connect_fx_signals() if hasattr(self, '_connect_fx_signals') else None
         self._create_edit_actions() if hasattr(self, '_create_edit_actions') else None;
         self._setup_global_brightness_knob() if hasattr(self, '_setup_global_brightness_knob') else None;
         self._update_current_oled_nav_target_widget() if hasattr(self, '_update_current_oled_nav_target_widget') else None;
@@ -2247,6 +2463,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(50, self._update_contextual_knob_configs) if hasattr(self, '_update_contextual_knob_configs') else None;
         QTimer.singleShot(100, self._position_oled_toggle_icon) if hasattr(
             self, '_position_oled_toggle_icon') else None
+        self._create_menu_bar() if hasattr(self, '_create_menu_bar') else None
         QTimer.singleShot(0, self._update_global_ui_interaction_states) if hasattr(self, '_update_global_ui_interaction_states') else None;
 
     def eventFilter(self, obj, event: QEvent):
@@ -2662,31 +2879,51 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(status_message, 4000) # Show for 4 seconds
 
     def _on_physical_encoder_rotated(self, encoder_id: int, delta: int):
+        """Routes physical knob turns to the correct handler based on context."""
+        # --- NEW: Speed control logic for Knob 5 ---
+        if encoder_id == 5: # This is the SELECT knob
+            if self.is_animator_playing:
+                self._handle_speed_knob_change(delta)
+            else:
+                self._handle_select_encoder_turned(delta)
+            return # End execution here for knob 5
+        # Logic for Knobs 1-4
         if self.is_visualizer_active:
-            return
+            return # Ignore knobs 1-4 if visualizer is active
+        # Find the correct QDial widget for knobs 1-4
         target_knob: QDial | None = None
         if encoder_id == 1: target_knob = self.knob_volume_top_right
         elif encoder_id == 2: target_knob = self.knob_pan_top_right
         elif encoder_id == 3: target_knob = self.knob_filter_top_right
         elif encoder_id == 4: target_knob = self.knob_resonance_top_right
+        
         if not target_knob:
             return
-        step: int = 0
-        sampler_is_currently_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        animator_is_currently_playing = self.is_animator_playing
-        if encoder_id == 1:
-            step = self.SAMPLER_FACTOR_KNOB_STEP if sampler_is_currently_active else self.GLOBAL_BRIGHTNESS_KNOB_STEP
-        elif encoder_id in [2, 3] and sampler_is_currently_active:
-            step = self.SAMPLER_FACTOR_KNOB_STEP
-        elif encoder_id == 4:
-            if animator_is_currently_playing: step = self.ANIMATOR_SPEED_KNOB_STEP
-            elif sampler_is_currently_active: step = self.SAMPLER_HUE_KNOB_STEP
-        if step != 0:
-            current_gui_value = target_knob.value()
-            new_gui_value = current_gui_value + (delta * step)
-            new_gui_value = max(target_knob.minimum(), min(new_gui_value, target_knob.maximum()))
-            if new_gui_value != current_gui_value:
-                target_knob.setValue(new_gui_value)
+        # Calculate the step based on context
+        step: int = 1 # Default step
+        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            step = self.SAMPLER_FACTOR_KNOB_STEP if encoder_id in [1, 2, 3] else self.SAMPLER_HUE_KNOB_STEP
+        elif self.is_animator_playing:
+            step = self.GLOBAL_BRIGHTNESS_KNOB_STEP if encoder_id == 1 else 2 # A good step for -100 to 100 range
+        current_gui_value = target_knob.value()
+        new_gui_value = current_gui_value + (delta * step)
+        new_gui_value = max(target_knob.minimum(), min(new_gui_value, target_knob.maximum()))
+        if new_gui_value != current_gui_value:
+            target_knob.setValue(new_gui_value)
+
+    def _handle_speed_knob_change(self, delta: int):
+        """Handles turns of the Speed knob (Knob 5) during animation playback."""
+        if not self.knob_select_top_right:
+            return
+        
+        current_val = self.knob_select_top_right.value()
+        new_val = current_val + (delta * self.ANIMATOR_SPEED_KNOB_STEP)
+        
+        min_val = self.knob_select_top_right.minimum()
+        max_val = self.knob_select_top_right.maximum()
+        
+        clamped_val = max(min_val, min(new_val, max_val))
+        self.knob_select_top_right.setValue(clamped_val)
 
     def _update_all_knob_visuals(self):
         """Helper to force-update all visual knobs to match their functional counterparts' values."""
@@ -3113,35 +3350,52 @@ class MainWindow(QMainWindow):
 
     def apply_colors_to_main_pad_grid(self, colors_hex: list | None, update_hw: bool = True, is_sampler_output: bool = False):
         """
-        Applies a list of 64 hex color strings to the main GUI pad grid.
-        Optionally updates the hardware pads as well.
-        'is_sampler_output' flag is used by AkaiFireController to potentially bypass global brightness.
+        Applies colors to the GUI grid and optionally to the hardware.
+        This is now the central point for applying the Live FX filter.
         """
         if not hasattr(self, 'pad_grid_frame') or not self.pad_grid_frame:
-            # print("MW WARNING: apply_colors_to_main_pad_grid - pad_grid_frame is None.") # Optional
             return
-        if not colors_hex or not isinstance(colors_hex, list) or len(colors_hex) != 64:
-            # print(f"MW DEBUG: apply_colors_to_main_pad_grid called with invalid colors_hex, clearing grid. update_hw={update_hw}, is_sampler_output={is_sampler_output}") # Optional
-            self.clear_main_pad_grid_ui(update_hw=update_hw, is_sampler_output=is_sampler_output)
-            return           
-        hw_batch = []
-        for i, hex_str in enumerate(colors_hex):
-            r, c = divmod(i, 16) # Convert 1D index to 2D row/col          
-            # Ensure hex_str is valid, default to black if not
+            
+        # Ensure we have a valid list of 64 colors to work with
+        base_colors = colors_hex if (colors_hex and isinstance(colors_hex, list) and len(colors_hex) == 64) else [QColor("black").name()] * 64
+        # Update the GUI grid with the PURE, original colors
+        for i, hex_str in enumerate(base_colors):
+            r, c = divmod(i, 16)
             current_color = QColor(hex_str if (hex_str and isinstance(hex_str, str)) else "#000000")
             if not current_color.isValid():
-                current_color = QColor("black") # Fallback to black for invalid hex           
-            # Update GUI pad color
-            self.pad_grid_frame.update_pad_gui_color(r, c, current_color.red(), current_color.green(), current_color.blue())            
-            # Prepare batch for hardware update
-            if update_hw:
-                hw_batch.append((r, c, current_color.red(), current_color.green(), current_color.blue()))       
-        # Update hardware pads if requested and controller is connected
-        if update_hw and self.akai_controller and self.akai_controller.is_connected() and hw_batch:
-            # The 'is_sampler_output' flag tells the controller whether to apply global brightness
-            # (bypass_global_brightness = is_sampler_output)
-            self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=is_sampler_output)
-            # print(f"MW DEBUG: Sent {len(hw_batch)} pad colors to hardware. is_sampler_output={is_sampler_output}") # Optional
+                current_color = QColor("black")
+            self.pad_grid_frame.update_pad_gui_color(r, c, current_color.red(), current_color.green(), current_color.blue())
+        if not update_hw:
+            return
+        # --- UNIVERSAL FX FILTER ---
+        # Before sending to hardware, check if the FX filter should be applied.
+        final_colors_for_hw = base_colors
+        if self.enable_fx_checkbox and self.enable_fx_checkbox.isChecked():
+            fx_params = {
+                'brightness': self.fx_brightness_slider.value(),
+                'saturation': self.fx_saturation_slider.value(),
+                'contrast': self.fx_contrast_slider.value(),
+                'hue_shift': self.fx_hue_slider.value()
+            }
+            final_colors_for_hw = self._apply_live_fx_filter(base_colors, fx_params)
+        
+        # Prepare batch for hardware update with the final colors
+        hw_batch = []
+        for i, hex_str in enumerate(final_colors_for_hw):
+            r, c = divmod(i, 16)
+            current_color = QColor(hex_str)
+            hw_batch.append((r, c, current_color.red(), current_color.green(), current_color.blue()))
+            
+        if self.akai_controller and self.akai_controller.is_connected() and hw_batch:
+            # The Sampler output bypasses this new FX brightness, but not other effects.
+            # We must handle brightness separately.
+            if is_sampler_output:
+                # For sampler, we don't use the FX brightness. The brightness is baked in.
+                # The FX filter brightness will be 1.0x, but other effects can apply.
+                self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=True)
+            else:
+                # For animator/static, the hardware handles the final brightness application.
+                self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=False)
 
     def clear_main_pad_grid_ui(self, update_hw=True, is_sampler_output: bool = False):
         if not hasattr(self, 'pad_grid_frame') or not self.pad_grid_frame:
@@ -3206,6 +3460,8 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Pad ({row+1},{col+1}) set to Off.", 1500)
 
     def _on_animator_frame_data_for_display(self, colors_hex_list: list | None):
+        # This method is now just for displaying the final colors,
+        # whether they are original or filtered.
         if colors_hex_list and isinstance(colors_hex_list, list) and len(colors_hex_list) == 64:
             self.apply_colors_to_main_pad_grid(colors_hex_list, update_hw=True)
         else: 
@@ -3226,39 +3482,6 @@ class MainWindow(QMainWindow):
             self.redo_action.setEnabled(can_redo)
         self._update_global_ui_interaction_states()
 
-    def _on_global_brightness_slider_changed(self, value: int):
-        # Update the label next to the slider
-        if hasattr(self, 'brightness_value_label'):
-            self.brightness_value_label.setText(f"{value}%")
-        # Call the existing logic handler
-        self._on_global_brightness_knob_changed(value)
-
-    def _on_global_brightness_knob_changed(self, value: int):
-        self.global_pad_brightness = value / 100.0
-        # Sync the new GUI slider if its value is different
-        if hasattr(self, 'global_brightness_slider') and self.global_brightness_slider.value() != value:
-            self.global_brightness_slider.blockSignals(True)
-            self.global_brightness_slider.setValue(value)
-            self.global_brightness_slider.blockSignals(False)
-            if hasattr(self, 'brightness_value_label'):
-                self.brightness_value_label.setText(f"{value}%")
-
-        # Sync the visual knob indicator
-        visual_knob = getattr(self, "knob_volume_top_right_visual", None)
-        if visual_knob:
-            angle = -135 + (value / 100.0) * 270.0
-            visual_knob.set_indicator_angle(angle)
-
-        # Apply the change to the hardware
-        if self.akai_controller:
-            self.akai_controller.set_global_brightness_factor(self.global_pad_brightness)
-            
-        is_sampler_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        is_anim_playing = self.is_animator_playing
-        
-        if not is_sampler_active and not is_anim_playing and self.pad_grid_frame:
-            current_colors_hex = self.pad_grid_frame.get_current_grid_colors_hex()
-            self.apply_colors_to_main_pad_grid(current_colors_hex, update_hw=True, is_sampler_output=False)
 
     def _on_sampler_brightness_knob_changed(self, gui_knob_value: int):
         if self.screen_sampler_manager:
@@ -3283,52 +3506,24 @@ class MainWindow(QMainWindow):
             self.screen_sampler_manager.update_sampler_adjustment('hue_shift', float(gui_knob_value))
 
     def _handle_knob1_change(self, value: int):
-        sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        visual_knob = getattr(self, "knob_volume_top_right_visual", None)
-        if visual_knob and self.knob_volume_top_right:
-            angle = -135 + ((value - self.knob_volume_top_right.minimum()) / (self.knob_volume_top_right.maximum() - self.knob_volume_top_right.minimum())) * 270.0
-            visual_knob.set_indicator_angle(angle)
-        if sampler_is_active:
-            self._on_sampler_brightness_knob_changed(value)
-            self._show_knob_feedback_on_oled(f"Br: {value / 100.0:.2f}x")
-        else:
-            self._on_global_brightness_knob_changed(value)
-            self._show_knob_feedback_on_oled(f"GlbBr: {value}%")
-        self._update_all_knob_tooltips()
+        """Handles Knob 1 (Brightness) by updating the UI slider ONLY if FX are enabled."""
+        if self.fx_brightness_slider and self.enable_fx_checkbox.isChecked():
+            self.fx_brightness_slider.setValue(value)
 
     def _handle_knob2_change(self, value: int):
-        visual_knob = getattr(self, "knob_pan_top_right_visual", None)
-        if visual_knob and self.knob_pan_top_right:
-            angle = -135 + ((value - self.knob_pan_top_right.minimum()) / (self.knob_pan_top_right.maximum() - self.knob_pan_top_right.minimum())) * 270.0
-            visual_knob.set_indicator_angle(angle)
-        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
-            self._on_sampler_saturation_knob_changed(value)
-            self._show_knob_feedback_on_oled(f"Sat: {value / 100.0:.2f}x")
-        self._update_all_knob_tooltips()
+        """Handles Knob 2 (Saturation) by updating the UI slider ONLY if FX are enabled."""
+        if self.fx_saturation_slider and self.enable_fx_checkbox.isChecked():
+            self.fx_saturation_slider.setValue(value)
 
     def _handle_knob3_change(self, value: int):
-        visual_knob = getattr(self, "knob_filter_top_right_visual", None)
-        if visual_knob and self.knob_filter_top_right:
-            angle = -135 + ((value - self.knob_filter_top_right.minimum()) / (self.knob_filter_top_right.maximum() - self.knob_filter_top_right.minimum())) * 270.0
-            visual_knob.set_indicator_angle(angle)
-        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
-            self._on_sampler_contrast_knob_changed(value)
-            self._show_knob_feedback_on_oled(f"Con: {value / 100.0:.2f}x")
-        self._update_all_knob_tooltips()
+        """Handles Knob 3 (Contrast) by updating the UI slider ONLY if FX are enabled."""
+        if self.fx_contrast_slider and self.enable_fx_checkbox.isChecked():
+            self.fx_contrast_slider.setValue(value)
 
     def _handle_knob4_change(self, value: int):
-        sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        visual_knob = getattr(self, "knob_resonance_top_right_visual", None)
-        if visual_knob and self.knob_resonance_top_right:
-            angle = -135 + ((value - self.knob_resonance_top_right.minimum()) / (self.knob_resonance_top_right.maximum() - self.knob_resonance_top_right.minimum())) * 270.0
-            visual_knob.set_indicator_angle(angle)
-        if self.is_animator_playing:
-            self._on_animator_speed_knob_changed(value)
-        elif sampler_is_active:
-            self._on_sampler_hue_knob_changed(value)
-            self._show_knob_feedback_on_oled(f"Hue: {value:+d}")
-        self._update_all_knob_tooltips()
-
+        """Handles Knob 4 (Hue) by updating the UI slider ONLY if FX are enabled."""
+        if self.fx_hue_slider and self.enable_fx_checkbox.isChecked():
+            self.fx_hue_slider.setValue(value)
 
     def _create_edit_actions(self):
         """Creates global QActions for menu items and keyboard shortcuts."""
@@ -3339,30 +3534,25 @@ class MainWindow(QMainWindow):
             f"Undo last sequence edit ({QKeySequence(QKeySequence.StandardKey.Undo).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.undo_action.triggered.connect(self.action_animator_undo)
         self.addAction(self.undo_action)
-
         self.redo_action = QAction("↷ Redo Sequence Edit", self)
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         self.redo_action.setToolTip(
             f"Redo last undone sequence edit ({QKeySequence(QKeySequence.StandardKey.Redo).toString(QKeySequence.SequenceFormat.NativeText)})")
         self.redo_action.triggered.connect(self.action_animator_redo)
         self.addAction(self.redo_action)
-
         # Animator Frame Operations
         self.copy_action = QAction(ICON_COPY + " Copy Frame(s)", self)
         self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
         self.copy_action.triggered.connect(self.action_animator_copy_frames)
         self.addAction(self.copy_action)
-
         self.cut_action = QAction(ICON_CUT + " Cut Frame(s)", self)
         self.cut_action.setShortcut(QKeySequence.StandardKey.Cut)
         self.cut_action.triggered.connect(self.action_animator_cut_frames)
         self.addAction(self.cut_action)
-
         self.paste_action = QAction(ICON_DUPLICATE + " Paste Frame(s)", self)
         self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
         self.paste_action.triggered.connect(self.action_animator_paste_frames)
         self.addAction(self.paste_action)
-
         self.duplicate_action = QAction(
             ICON_DUPLICATE + " Duplicate Frame(s)", self)
         self.duplicate_action.setShortcut(QKeySequence(
@@ -3370,13 +3560,11 @@ class MainWindow(QMainWindow):
         self.duplicate_action.triggered.connect(
             self.action_animator_duplicate_frames)
         self.addAction(self.duplicate_action)
-
         self.delete_action = QAction(ICON_DELETE + " Delete Frame(s)", self)
         self.delete_action.setShortcut(QKeySequence.StandardKey.Delete)
         self.delete_action.triggered.connect(
             self.action_animator_delete_frames)
         self.addAction(self.delete_action)
-
         self.add_blank_global_action = QAction(
             ICON_ADD_BLANK + " Add Blank Frame", self)
         self.add_blank_global_action.setShortcut(QKeySequence(
@@ -3384,21 +3572,18 @@ class MainWindow(QMainWindow):
         self.add_blank_global_action.triggered.connect(
             self.action_animator_add_blank_frame)
         self.addAction(self.add_blank_global_action)
-
         # Sequence File Operations
         self.new_sequence_action = QAction("✨ New Sequence", self)
         self.new_sequence_action.setShortcut(QKeySequence.StandardKey.New)
         self.new_sequence_action.triggered.connect(
             lambda: self.action_animator_new_sequence(prompt_save=True))
         self.addAction(self.new_sequence_action)
-
         self.save_sequence_as_action = QAction("💾 Save Sequence As...", self)
         self.save_sequence_as_action.setShortcut(
             QKeySequence.StandardKey.SaveAs)
         self.save_sequence_as_action.triggered.connect(
             self.action_animator_save_sequence_as)
         self.addAction(self.save_sequence_as_action)
-
         # Eyedropper Toggle
         self.eyedropper_action = QAction("💧 Eyedropper Mode", self)
         self.eyedropper_action.setShortcut(
@@ -3407,7 +3592,6 @@ class MainWindow(QMainWindow):
         self.eyedropper_action.triggered.connect(
             self.toggle_eyedropper_mode)
         self.addAction(self.eyedropper_action)
-
         # Animator Play/Pause Global Shortcut
         self.play_pause_action = QAction("Play/Pause Sequence", self)
         self.play_pause_action.setShortcut(
@@ -3416,8 +3600,47 @@ class MainWindow(QMainWindow):
             self.action_animator_play_pause_toggle)
         self.addAction(self.play_pause_action)
 
-        # --- REMOVED this line to prevent premature UI state update ---
-        # self._update_global_ui_interaction_states()
+    def _create_menu_bar(self):
+        """Creates and populates the main application menu bar."""
+        menu_bar = self.menuBar()
+        # --- File Menu ---
+        file_menu = menu_bar.addMenu("&File")
+        if hasattr(self, 'new_sequence_action'):
+            file_menu.addAction(self.new_sequence_action)
+        if hasattr(self, 'save_sequence_as_action'):
+            file_menu.addAction(self.save_sequence_as_action)
+        file_menu.addSeparator()
+        quit_action = QAction("Quit", self)
+        quit_action.triggered.connect(self.close)
+        file_menu.addAction(quit_action)
+        # --- Edit Menu ---
+        edit_menu = menu_bar.addMenu("&Edit")
+        if hasattr(self, 'undo_action'):
+            edit_menu.addAction(self.undo_action)
+        if hasattr(self, 'redo_action'):
+            edit_menu.addAction(self.redo_action)
+        edit_menu.addSeparator()
+        if hasattr(self, 'cut_action'):
+            edit_menu.addAction(self.cut_action)
+        if hasattr(self, 'copy_action'):
+            edit_menu.addAction(self.copy_action)
+        if hasattr(self, 'paste_action'):
+            edit_menu.addAction(self.paste_action)
+        edit_menu.addSeparator()
+        if hasattr(self, 'duplicate_action'):
+            edit_menu.addAction(self.duplicate_action)
+        if hasattr(self, 'delete_action'):
+            edit_menu.addAction(self.delete_action)
+        # --- Tools Menu (for things like eyedropper) ---
+        tools_menu = menu_bar.addMenu("&Tools")
+        if hasattr(self, 'eyedropper_action'):
+            tools_menu.addAction(self.eyedropper_action)
+        # --- Help Menu ---
+        help_menu = menu_bar.addMenu("&Help")
+        if self.app_guide_button: # Re-use the button's action logic
+            app_guide_action = QAction("App Guide && Hotkeys", self)
+            app_guide_action.triggered.connect(self.app_guide_button.click)
+            help_menu.addAction(app_guide_action)
 
     def _cycle_oled_nav_target(self, direction: int):
         """Cycles the OLED navigation focus and shows a temporary cue."""

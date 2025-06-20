@@ -66,41 +66,40 @@ class AnimatorManagerWidget(QWidget):
         # Add any other top-level UI groups/widgets specific to animator interaction
         print(f"AnimatorManagerWidget interactive state set to: {enabled}")
 
-    def __init__(self,
-                user_sequences_base_path: str,
-                sampler_recordings_path: str,
-                prefab_sequences_base_path: str,
-                parent: QWidget | None = None):
+
+    def __init__(self, user_sequences_base_path, sampler_recordings_path, prefab_sequences_base_path, parent=None):
         super().__init__(parent)
-        self.user_sequences_path = user_sequences_base_path
+        self.setObjectName("AnimatorManager")
+
+        # Paths
+        self.user_sequences_base_path = user_sequences_base_path
         self.sampler_recordings_path = sampler_recordings_path
-        self.prefab_sequences_path = prefab_sequences_base_path
-        self.active_sequence_model = SequenceModel()
-        self._connect_signals_for_active_sequence_model()
-        self.playback_timer = QTimer(self)
-        self.playback_timer.timeout.connect(self.advance_and_play_next_frame)
-        self.frame_clipboard: list[AnimationFrame] = []
-        # UI Elements (will be initialized in _init_ui)
-        self.animator_studio_group_box: QGroupBox | None = None
-        self.sequence_selection_combo: QComboBox | None = None
-        self.load_sequence_button: QPushButton | None = None
-        self.new_sequence_button: QPushButton | None = None
-        self.save_sequence_as_button: QPushButton | None = None
-        self.delete_sequence_button: QPushButton | None = None
-        self.sequence_timeline_widget: SequenceTimelineWidget | None = None
-        self.sequence_controls_widget: SequenceControlsWidget | None = None
+        self.prefab_sequences_base_path = prefab_sequences_base_path
+        
+        # --- FIX: Renamed self.frame_clipboard to self._clipboard for consistency ---
+        self.active_sequence_model: SequenceModel | None = None
+        self._clipboard: list[AnimationFrame] = []
+        self._playback_timer = QTimer(self)
         self._last_emitted_is_modified: bool | None = None
         self._last_emitted_sequence_name: str | None = None
+
+        # UI Widget placeholders
+        self.animator_studio_group_box: QGroupBox | None = None
+        self.sequence_selection_combo: QComboBox | None = None
+        # ... (rest of UI placeholders) ...
+        self.sequence_timeline_widget: SequenceTimelineWidget | None = None
+        self.sequence_controls_widget: SequenceControlsWidget | None = None
+        
+        # Initialization logic
+        self.active_sequence_model = SequenceModel()
         self._init_ui()
         self._connect_ui_signals()
-        # Initial state updates
-        # Defer refresh_sequences_list_and_select to ensure UI elements it might affect are fully constructed.
-        QTimer.singleShot(0, self.refresh_sequences_list_and_select)
-        # _update_ui_for_current_sequence also calls _emit_state_updates.
-        # Call it once after _init_ui ensures UI elements are ready for state updates.
-        # _emit_state_updates will now be smarter.
-        # Ensure this is called after UI is built
-        QTimer.singleShot(0, self._update_ui_for_current_sequence)
+        self._connect_signals_for_active_sequence_model()
+        self._update_sequences_combobox()
+        self._update_ui_for_current_sequence()
+        self._update_animator_controls_enabled_state()
+
+
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -142,8 +141,10 @@ class AnimatorManagerWidget(QWidget):
         main_layout.addWidget(self.sequence_controls_widget)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
+
     def _connect_ui_signals(self):
-        # Animator Studio Buttons
+        """Connects all UI component signals to their handler slots."""
+        # Sequence Combobox / Management Buttons
         self.sequence_selection_combo.currentIndexChanged.connect(
             self._on_sequence_combo_changed)
         self.load_sequence_button.clicked.connect(
@@ -154,7 +155,8 @@ class AnimatorManagerWidget(QWidget):
             self.action_save_sequence_as)
         self.delete_sequence_button.clicked.connect(
             self._on_delete_selected_sequence_button_clicked)
-        # Controls Widget
+
+        # Controls Widget signals
         self.sequence_controls_widget.add_frame_requested.connect(
             self.action_add_frame)
         self.sequence_controls_widget.delete_selected_frame_requested.connect(
@@ -179,12 +181,12 @@ class AnimatorManagerWidget(QWidget):
         self.sequence_controls_widget.stop_requested.connect(self.action_stop)
         self.sequence_controls_widget.frame_delay_changed.connect(
             self.on_controls_frame_delay_changed)
-        # Timeline Widget
+
+        # Timeline Widget signals
+        self.sequence_timeline_widget.selection_changed.connect(
+            self._on_timeline_selection_changed)
         self.sequence_timeline_widget.add_frame_action_triggered.connect(
             self.on_timeline_add_frame_action)
-        self.sequence_timeline_widget.frame_selected.connect(
-            self.on_timeline_frame_selected)
-        # ... (rest of the timeline connections are unchanged)
         self.sequence_timeline_widget.copy_frames_action_triggered.connect(
             self.action_copy_frames)
         self.sequence_timeline_widget.cut_frames_action_triggered.connect(
@@ -202,43 +204,117 @@ class AnimatorManagerWidget(QWidget):
         self.sequence_timeline_widget.insert_blank_frame_after_action_triggered.connect(
             lambda index: self.action_add_frame("blank", at_index=index + 1))
 
-    def _connect_signals_for_active_sequence_model(self):
-        # Disconnect previous model's signals first if any
-        try: self.active_sequence_model.frames_changed.disconnect()
-        except TypeError: pass
-        try: self.active_sequence_model.frame_content_updated.disconnect()
-        except TypeError: pass
-        try: self.active_sequence_model.current_edit_frame_changed.disconnect()
-        except TypeError: pass
-        try: self.active_sequence_model.properties_changed.disconnect()
-        except TypeError: pass
-        try: self.active_sequence_model.playback_state_changed.disconnect()
-        except TypeError: pass
-        # Connect to new model's signals
-        self.active_sequence_model.frames_changed.connect(self._update_ui_for_current_sequence)
-        self.active_sequence_model.frame_content_updated.connect(self.on_model_frame_content_updated)
-        self.active_sequence_model.current_edit_frame_changed.connect(self.on_model_edit_frame_changed)
-        self.active_sequence_model.properties_changed.connect(self._update_ui_for_current_sequence_properties)
-        self.active_sequence_model.playback_state_changed.connect(self.on_model_playback_state_changed)
+
+    def _connect_signals(self):
+        """Connects all component signals to their handler slots."""
+        # Timeline Widget signals
+        self.sequence_timeline_widget.selection_changed.connect(
+            self._on_timeline_selection_changed)
+        self.sequence_timeline_widget.copy_frames_action_triggered.connect(
+            self.action_copy_frames)
+        self.sequence_timeline_widget.cut_frames_action_triggered.connect(
+            self.action_cut_frames)
+        self.sequence_timeline_widget.paste_frames_action_triggered.connect(
+            self.action_paste_frames)
+        self.sequence_timeline_widget.duplicate_selected_action_triggered.connect(
+            self.action_duplicate_selected_frames)
+        self.sequence_timeline_widget.delete_selected_action_triggered.connect(
+            self.action_delete_selected_frames)
+        self.sequence_timeline_widget.select_all_action_triggered.connect(
+            self.action_select_all_frames)
+        self.sequence_timeline_widget.add_frame_action_triggered.connect(
+            self.action_add_frame)
+        self.sequence_timeline_widget.insert_blank_frame_before_action_triggered.connect(
+            self._handle_insert_blank_frame_before_request)
+        self.sequence_timeline_widget.insert_blank_frame_after_action_triggered.connect(
+            self._handle_insert_blank_frame_after_request)
+
+        # Controls Widget signals
+        self.controls_widget.play_requested.connect(self.action_play)
+        self.controls_widget.stop_requested.connect(self.action_stop)
+        self.controls_widget.frame_delay_changed.connect(
+            self._on_frame_delay_changed)
+        self.controls_widget.add_frame_requested.connect(self.action_add_frame)
+        self.controls_widget.delete_selected_frame_requested.connect(
+            self.action_delete_selected_frames)
+        self.controls_widget.duplicate_selected_frame_requested.connect(
+            self.action_duplicate_selected_frames)
+        self.controls_widget.copy_frames_requested.connect(
+            self.action_copy_frames)
+        self.controls_widget.cut_frames_requested.connect(
+            self.action_cut_frames)
+        self.controls_widget.paste_frames_requested.connect(
+            self.action_paste_frames)
+        self.controls_widget.navigate_first_requested.connect(
+            self.action_navigate_first)
+        self.controls_widget.navigate_prev_requested.connect(
+            self.action_navigate_prev)
+        self.controls_widget.navigate_next_requested.connect(
+            self.action_navigate_next)
+        self.controls_widget.navigate_last_requested.connect(
+            self.action_navigate_last)
+
+        # Sequence Combobox / Management Buttons
+        self.sequence_selector_combo.currentIndexChanged.connect(
+            self._on_sequence_combo_selection_changed)
+        self.new_sequence_button.clicked.connect(
+            lambda: self.create_and_load_new_sequence(prompt_save=True))
+        self.save_as_button.clicked.connect(self.action_save_sequence_as)
+        self.delete_sequence_button.clicked.connect(
+            self._handle_delete_sequence_button_pressed)
+        self.load_button.clicked.connect(
+            lambda: self._handle_load_from_file_dialog(sequence_type='user'))
+
+        # Playback Timer
+        self._playback_timer.timeout.connect(self._on_playback_timer_tick)
+
+
 
     def _emit_state_updates(self):
-        """Emits signals to MainWindow to update its state based on current model,
-            but only emits sequence_modified_status_changed if there's an actual change
-            in the sequence's name or modified status since the last emission.
+        """Emits signals to MainWindow to update its state based on current model."""
+        if self.active_sequence_model:
+            current_is_modified = self.active_sequence_model.is_modified
+            current_sequence_name = self.active_sequence_model.name
+            if (current_is_modified != self._last_emitted_is_modified) or \
+               (current_sequence_name != self._last_emitted_sequence_name):
+                self.sequence_modified_status_changed.emit(current_is_modified, current_sequence_name)
+                self._last_emitted_is_modified = current_is_modified
+                self._last_emitted_sequence_name = current_sequence_name
+            
+            self.undo_redo_state_changed.emit(bool(self.active_sequence_model._undo_stack), bool(self.active_sequence_model._redo_stack))
+            
+            # --- FIX: Use self._clipboard ---
+            self.clipboard_state_changed.emit(bool(self._clipboard))
+
+            self._update_animator_controls_enabled_state()
+
+
+
+    def _on_timeline_selection_changed(self, selected_indices: list[int]):
         """
-        current_is_modified = self.active_sequence_model.is_modified
-        current_sequence_name = self.active_sequence_model.name
-        if (current_is_modified != self._last_emitted_is_modified) or \
-            (current_sequence_name != self._last_emitted_sequence_name):
-            # print(f"AMW DEBUG: Emitting sequence_modified_status_changed. PrevMod: {self._last_emitted_is_modified}, CurrMod: {current_is_modified}, PrevName: '{self._last_emitted_sequence_name}', CurrName: '{current_sequence_name}'") # Optional debug
-            self.sequence_modified_status_changed.emit(current_is_modified, current_sequence_name)
-            self._last_emitted_is_modified = current_is_modified
-            self._last_emitted_sequence_name = current_sequence_name
-        # else: # Optional debug
-            # print(f"AMW DEBUG: SKIPPING sequence_modified_status_changed. PrevMod: {self._last_emitted_is_modified}, CurrMod: {current_is_modified}, PrevName: '{self._last_emitted_sequence_name}', CurrName: '{current_sequence_name}'")
-        self.undo_redo_state_changed.emit(bool(self.active_sequence_model._undo_stack), bool(self.active_sequence_model._redo_stack))
-        self.clipboard_state_changed.emit(bool(self.frame_clipboard))
-        self._update_animator_controls_enabled_state() # Local UI update
+        Handles the new signal from the timeline. Updates the model's edit index
+        and then tells the timeline delegate to repaint borders, avoiding a full refresh.
+        """
+        if not self.active_sequence_model:
+            return
+
+        new_edit_index = -1
+        if selected_indices:
+            # The "edit" frame is always the first one in the selection list.
+            new_edit_index = selected_indices[0]
+        
+        # Tell the model which frame is the "current" one for editing.
+        # This will emit a signal from the model if the index actually changes.
+        self.active_sequence_model.set_current_edit_frame_index(new_edit_index)
+
+        # Manually update the delegate's visual state since we are not doing a full refresh.
+        current_playback_idx = self.active_sequence_model.get_current_playback_frame_index()
+        self.sequence_timeline_widget.update_delegate_visual_state(new_edit_index, current_playback_idx)
+
+        # Update the main pad grid to show the content of the new edit frame.
+        self._display_current_edit_frame()
+        self._update_animator_controls_enabled_state()
+
 
     def on_paint_stroke_started(self, row: int, col: int, mouse_button: Qt.MouseButton):
         """
@@ -308,6 +384,19 @@ class AnimatorManagerWidget(QWidget):
             self.sequence_controls_widget.set_frame_delay_ui(actual_delay_ms)
         # Notify MainWindow that properties (including potentially unsaved speed) changed
         self._emit_state_updates()
+
+
+    def _on_model_current_edit_frame_changed(self, new_edit_index: int):
+        """
+        Handles the model changing the edit frame. Updates the timeline's
+        selection and the main pad display.
+        """
+        # Sync the timeline's visual selection to match the model's new state.
+        self.sequence_timeline_widget.select_items_by_indices([new_edit_index] if new_edit_index >= 0 else [])
+        
+        self._display_current_edit_frame()
+        self._update_controls_enabled_state()
+
 
     def get_navigation_item_count(self) -> int:
         """Returns the number of actual items in the sequence combo box (excluding placeholder)."""
@@ -387,23 +476,33 @@ class AnimatorManagerWidget(QWidget):
             self.playback_status_update.emit("Nothing to redo.", 1500)
         self._emit_state_updates()
 
+
     def action_copy_frames(self):
         self.request_sampler_disable.emit()
         selected_indices = self.sequence_timeline_widget.get_selected_item_indices()
         if not selected_indices:
-            self.playback_status_update.emit("No frames selected to copy.", 2000)
+            self.playback_status_update.emit(
+                "No frames selected to copy.", 2000)
             return
-        self.frame_clipboard.clear()
+
+        # --- FIX: Use self._clipboard ---
+        self._clipboard.clear()
+
         copied_frames_count = 0
         for index in sorted(selected_indices):
             frame_obj = self.active_sequence_model.get_frame_object(index)
             if frame_obj:
-                self.frame_clipboard.append(AnimationFrame(colors=list(frame_obj.get_all_colors())))
+                # --- FIX: Use self._clipboard ---
+                self._clipboard.append(AnimationFrame(
+                    colors=list(frame_obj.get_all_colors())))
                 copied_frames_count += 1
+
         if copied_frames_count > 0:
-            self.playback_status_update.emit(f"{copied_frames_count} frame(s) copied.", 2000)
+            self.playback_status_update.emit(
+                f"{copied_frames_count} frame(s) copied.", 2000)
         else:
-            self.playback_status_update.emit("Could not copy selected frames.", 2000)
+            self.playback_status_update.emit(
+                "Could not copy selected frames.", 2000)
         self._emit_state_updates()
 
     def action_cut_frames(self):
@@ -411,39 +510,64 @@ class AnimatorManagerWidget(QWidget):
         self.stop_current_animation_playback()
         selected_indices = self.sequence_timeline_widget.get_selected_item_indices()
         if not selected_indices:
-            self.playback_status_update.emit("No frames selected to cut.", 2000); return
-        self.frame_clipboard.clear(); copied_frames_count = 0
-        for index in sorted(selected_indices): # Copy first
+            self.playback_status_update.emit(
+                "No frames selected to cut.", 2000)
+            return
+
+        # --- FIX: Use self._clipboard ---
+        self._clipboard.clear()
+
+        copied_frames_count = 0
+        for index in sorted(selected_indices):
             frame_obj = self.active_sequence_model.get_frame_object(index)
             if frame_obj:
-                self.frame_clipboard.append(AnimationFrame(colors=list(frame_obj.get_all_colors())))
+                # --- FIX: Use self._clipboard ---
+                self._clipboard.append(AnimationFrame(
+                    colors=list(frame_obj.get_all_colors())))
                 copied_frames_count += 1
+
         if copied_frames_count == 0:
-            self.playback_status_update.emit("Could not prepare frames for cutting.", 2000); return
-        if self.active_sequence_model.delete_frames_at_indices(selected_indices): # Then delete
-            self.playback_status_update.emit(f"{copied_frames_count} frame(s) cut.", 2000)
+            self.playback_status_update.emit(
+                "Could not prepare frames for cutting.", 2000)
+            return
+
+        if self.active_sequence_model.delete_frames_at_indices(selected_indices):
+            self.playback_status_update.emit(
+                f"{copied_frames_count} frame(s) cut.", 2000)
         else:
-            self.frame_clipboard.clear()
+            # --- FIX: Use self._clipboard ---
+            self._clipboard.clear()
             self.playback_status_update.emit("Error cutting frames.", 3000)
         self._emit_state_updates()
 
     def action_paste_frames(self):
         self.request_sampler_disable.emit()
-        if not self.frame_clipboard:
-            self.playback_status_update.emit("Clipboard is empty.", 2000); return
+
+        # --- FIX: Use self._clipboard ---
+        if not self._clipboard:
+            self.playback_status_update.emit("Clipboard is empty.", 2000)
+            return
+
         self.stop_current_animation_playback()
         selected_indices = self.sequence_timeline_widget.get_selected_item_indices()
         insertion_index = max(selected_indices) + 1 if selected_indices else \
-                            (self.active_sequence_model.get_current_edit_frame_index() + 1
-                            if self.active_sequence_model.get_current_edit_frame_index() != -1
-                            else self.active_sequence_model.get_frame_count())
-        pasted_indices = self.active_sequence_model.paste_frames(self.frame_clipboard, at_index=insertion_index)
+            (self.active_sequence_model.get_current_edit_frame_index() + 1
+             if self.active_sequence_model.get_current_edit_frame_index() != -1
+             else self.active_sequence_model.get_frame_count())
+
+        # --- FIX: Use self._clipboard ---
+        pasted_indices = self.active_sequence_model.paste_frames(
+            self._clipboard, at_index=insertion_index)
+
         if pasted_indices:
-            self.playback_status_update.emit(f"{len(pasted_indices)} frame(s) pasted.", 2000)
-            QTimer.singleShot(0, lambda: self.sequence_timeline_widget.select_items_by_indices(pasted_indices))
+            self.playback_status_update.emit(
+                f"{len(pasted_indices)} frame(s) pasted.", 2000)
+            QTimer.singleShot(
+                0, lambda: self.sequence_timeline_widget.select_items_by_indices(pasted_indices))
         else:
             self.playback_status_update.emit("Error pasting frames.", 3000)
         self._emit_state_updates()
+
 
     def action_duplicate_selected_frames(self):
         self.request_sampler_disable.emit()
@@ -516,30 +640,32 @@ class AnimatorManagerWidget(QWidget):
         )
         self._emit_state_updates()
 
+
     def _update_animator_controls_enabled_state(self):
         # This enables/disables controls *within* this AnimatorManagerWidget
-        # MainWindow will handle global enabling based on connection/sampler state
-        has_frames = self.active_sequence_model.get_frame_count() > 0
+        has_frames = self.active_sequence_model.get_frame_count() > 0 if self.active_sequence_model else False
         num_selected_frames = len(self.sequence_timeline_widget.get_selected_item_indices()) if self.sequence_timeline_widget else 0
         can_operate_on_selection = num_selected_frames > 0
+        
+        # --- FIX: Use self._clipboard ---
         self.sequence_controls_widget.set_controls_enabled_state(
-            enabled=True, # Assume this widget is enabled by MainWindow if animator can be used
+            enabled=True,
             frame_selected=can_operate_on_selection,
             has_frames=has_frames,
-            clipboard_has_content=bool(self.frame_clipboard)
+            clipboard_has_content=bool(self._clipboard)
         )
+        
         self.sequence_timeline_widget.setEnabled(True)
-        # File management buttons
         is_valid_combo_selection = self.sequence_selection_combo.currentIndex() > 0 and \
                                     self.sequence_selection_combo.currentText() != "No sequences found"
         self.load_sequence_button.setEnabled(is_valid_combo_selection)
-        # The delete button is enabled only for user/sampler sequences
         item_data = self.sequence_selection_combo.currentData()
         can_delete_combo_item = is_valid_combo_selection and item_data and item_data.get("type") in ["user", "sampler"]
         self.delete_sequence_button.setEnabled(can_delete_combo_item)
-        # The new sequence button is always enabled
-        self.new_sequence_button.setEnabled(True) # Always possible to start new
+        self.new_sequence_button.setEnabled(True)
         self.save_sequence_as_button.setEnabled(has_frames)
+
+
 
     def on_model_frame_content_updated(self, frame_index: int):
         # This slot is called when SequenceModel emits frame_content_updated,
@@ -573,48 +699,88 @@ class AnimatorManagerWidget(QWidget):
         #    and can affect undo/redo availability.
         self._emit_state_updates()
 
+
+    def _connect_signals_for_active_sequence_model(self):
+        """Connects the active sequence model's signals and internal timers."""
+        if self.active_sequence_model:
+            try:
+                self.active_sequence_model.frames_changed.disconnect()
+                self.active_sequence_model.frame_content_updated.disconnect()
+                self.active_sequence_model.current_edit_frame_changed.disconnect()
+                self.active_sequence_model.properties_changed.disconnect()
+                self.active_sequence_model.playback_state_changed.disconnect()
+            except TypeError: pass
+            self.active_sequence_model.frames_changed.connect(self._update_ui_for_current_sequence)
+            self.active_sequence_model.frame_content_updated.connect(self.on_model_frame_content_updated)
+            self.active_sequence_model.current_edit_frame_changed.connect(self.on_model_edit_frame_changed)
+            self.active_sequence_model.properties_changed.connect(self._update_ui_for_current_sequence_properties)
+            self.active_sequence_model.playback_state_changed.connect(self.on_model_playback_state_changed)
+
+        # Connect the playback timer tick
+        try:
+            self._playback_timer.timeout.disconnect()
+        except TypeError: pass
+        self._playback_timer.timeout.connect(self.advance_and_play_next_frame)
+
+
+
+    def _display_current_edit_frame(self):
+        """
+        Gets the color data for the currently selected edit frame from the model
+        and emits it to the main window for display.
+        """
+        if not self.active_sequence_model:
+            self.active_frame_data_for_display.emit([QColor("black").name()] * 64)
+            return
+
+        edit_idx = self.active_sequence_model.get_current_edit_frame_index()
+        colors_hex = None
+        if edit_idx != -1:
+            colors_hex = self.active_sequence_model.get_frame_colors(edit_idx)
+        
+        # Ensure we always emit a valid 64-color list
+        final_colors = colors_hex if colors_hex else [QColor("black").name()] * 64
+        self.active_frame_data_for_display.emit(final_colors)
+
+
     def on_model_edit_frame_changed(self, frame_index: int):
-        # print(f"DEBUG AMW: on_model_edit_frame_changed CALLED with NEW model_frame_index: {frame_index}")
+        # This method is called when the MODEL dictates the edit frame has changed
+        # (e.g., after a frame deletion).
+        # Visually update the selection in the timeline widget to match the model.
+        self.sequence_timeline_widget.select_items_by_indices([frame_index] if frame_index >= 0 else [])
+        
+        # The rest of the logic remains the same.
+        self._display_current_edit_frame()
+        self._emit_state_updates() # This will update controls
 
-        if self.sequence_timeline_widget:
-            # print(f"DEBUG AMW: on_model_edit_frame_changed - Calling timeline_widget.set_selected_frame_by_index({frame_index})")
-            self.sequence_timeline_widget.set_selected_frame_by_index(
-                frame_index)
 
-        current_colors_hex = None
-        if frame_index != -1 and self.active_sequence_model:
-            current_colors_hex = self.active_sequence_model.get_frame_colors(
-                frame_index)
-        final_data_to_emit = current_colors_hex if current_colors_hex else [
-            QColor("black").name()] * 64
-        self.active_frame_data_for_display.emit(final_data_to_emit)
-        self._emit_state_updates()
 
     def on_model_playback_state_changed(self, is_playing: bool):
         self.sequence_controls_widget.update_playback_button_state(is_playing)
         if is_playing:
             self.playback_status_update.emit("Sequence playing...", 0)
-            self.playback_timer.start(self.active_sequence_model.frame_delay_ms)
+            self._playback_timer.start(self.active_sequence_model.frame_delay_ms)
         else:
-            self.playback_timer.stop()
-            # Check if it was a natural stop or a pause
+            self._playback_timer.stop()
             is_at_start_after_stop = self.active_sequence_model.get_current_playback_frame_index() == 0 and \
-                                    not self.active_sequence_model.loop # Simplified: if at start and not looping, it's a full stop
-            if is_at_start_after_stop or not self.playback_timer.isActive(): # If timer stopped fully
+                                    not self.active_sequence_model.loop
+            if is_at_start_after_stop or not self._playback_timer.isActive():
                 self.playback_status_update.emit("Sequence stopped.", 3000)
-                # Restore edit frame view after stop
                 edit_idx = self.active_sequence_model.get_current_edit_frame_index()
                 current_frame_colors = self.active_sequence_model.get_frame_colors(edit_idx) if edit_idx !=-1 else None
                 self.active_frame_data_for_display.emit(current_frame_colors if current_frame_colors else [QColor("black").name()] * 64)
-            else: # It was a pause
-                self.playback_status_update.emit("Sequence paused.", 3000) 
-        self.animator_playback_active_status_changed.emit(is_playing) # <<< ADD THIS LINE to emit the new signal       
-        self._update_ui_for_current_sequence() # Refresh timeline playback indicator
+            else:
+                self.playback_status_update.emit("Sequence paused.", 3000)
+        self.animator_playback_active_status_changed.emit(is_playing)
+        self._update_ui_for_current_sequence()
         self._emit_state_updates()
 
+
     def stop_current_animation_playback(self):
-        if self.playback_timer.isActive(): self.playback_timer.stop()
+        if self._playback_timer.isActive(): self._playback_timer.stop()
         if self.active_sequence_model.get_is_playing(): self.active_sequence_model.stop_playback()
+
+
 
     def on_timeline_frame_selected(self, frame_index: int):
         # print(
@@ -713,9 +879,10 @@ class AnimatorManagerWidget(QWidget):
 
     def action_stop(self): self.active_sequence_model.stop_playback()
 
+
     def on_controls_frame_delay_changed(self, delay_ms: int):
         self.active_sequence_model.set_frame_delay_ms(delay_ms)
-        if self.playback_timer.isActive(): self.playback_timer.start(delay_ms)
+        if self._playback_timer.isActive(): self._playback_timer.start(delay_ms)
         self.playback_status_update.emit(f"Frame delay set to {delay_ms} ms.", 1500)
 
     def advance_and_play_next_frame(self):
@@ -731,16 +898,6 @@ class AnimatorManagerWidget(QWidget):
             self.stop_current_animation_playback()
             # on_model_playback_state_changed will handle further UI updates
 
-    def _get_sequence_dir_path(self, dir_type: str = "user") -> str:
-        if dir_type == "user":
-            return self.user_sequences_path
-        elif dir_type == "prefab":
-            return self.prefab_sequences_path
-        elif dir_type == "sampler":
-            return self.sampler_recordings_path
-        else:
-            print(f"Warning: Unknown sequence dir_type '{dir_type}' in AnimatorManagerWidget. Defaulting to user path.")
-            return self.user_sequences_path # Fallback
 
     def _load_all_sequences_metadata(self) -> dict:
         PREFIX_SAMPLER = "[Sampler] "
@@ -767,12 +924,27 @@ class AnimatorManagerWidget(QWidget):
                 except Exception: pass # Ignore malformed files
         return loaded_meta
 
+    def _get_sequence_dir_path(self, dir_type: str = "user") -> str:
+        if dir_type == "user":
+            return self.user_sequences_base_path
+        elif dir_type == "prefab":
+            return self.prefab_sequences_base_path
+        elif dir_type == "sampler":
+            return self.sampler_recordings_path
+        else:
+            print(f"Warning: Unknown sequence dir_type '{dir_type}' in AnimatorManagerWidget. Defaulting to user path.")
+            return self.user_sequences_base_path
+
+
     def _update_sequences_combobox(self, active_seq_raw_name: str | None = None, active_seq_type_id: str | None = None):
         self.sequence_selection_combo.blockSignals(True)
         current_text_before = self.sequence_selection_combo.currentText()
         self.sequence_selection_combo.clear()
         self.sequence_selection_combo.addItem("--- Select Sequence ---")
+        
+        # --- FIX: Correctly call the helper method to get the data ---
         all_meta = self._load_all_sequences_metadata()
+        
         if not all_meta:
             self.sequence_selection_combo.addItem("No sequences found")
         else:
@@ -793,8 +965,10 @@ class AnimatorManagerWidget(QWidget):
         
         if self.sequence_selection_combo.count() > target_idx:
             self.sequence_selection_combo.setCurrentIndex(target_idx)
+            
         self.sequence_selection_combo.blockSignals(False)
         self._on_sequence_combo_changed(self.sequence_selection_combo.currentIndex())
+
 
     def refresh_sequences_list_and_select(self, active_seq_raw_name: str | None = None, active_seq_type_id: str | None = None):
         self._update_sequences_combobox(active_seq_raw_name, active_seq_type_id)
