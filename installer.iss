@@ -1,5 +1,5 @@
 #define MyAppName "Akai Fire PixelForge"
-#define MyAppVersion "1.5.0"
+#define MyAppVersion "1.7.0"
 #define MyAppPublisher "Reg0lino"
 #define MyAppURL "https://github.com/Reg0lino/Akai_Fire_PixelForge"
 #define MyAppExeName "Akai Fire PixelForge.exe" 

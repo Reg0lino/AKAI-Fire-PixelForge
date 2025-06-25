@@ -43,22 +43,10 @@ datas_to_bundle = [
 
 # Use flat module paths, no prefix
 hidden_imports_list = [
+    # Core Dependencies
     'mido.backends.rtmidi',
     'rtmidi',
     'pyaudiowpatch',
-    'PyQt6.sip',
-    'PyQt6.QtNetwork',
-    'PyQt6.QtGui',
-    'PyQt6.QtCore',
-    'PyQt6.QtWidgets',
-    'PyQt6.QtSvg',
-    'PIL',
-    'PIL._tkinter_finder',
-    'PIL.ImageFont',
-    'PIL.ImageDraw',
-    'PIL.ImageEnhance',
-    'PIL.ImageOps',
-    'PIL.ImageSequence',
     'appdirs',
     'mss',
     'mss.windows',
@@ -67,12 +55,30 @@ hidden_imports_list = [
     'numpy',
     'numpy.core._dtype_ctypes',
     'packaging',
-    # Project modules (flat paths)
+    'colorsys', # ADDED: For hue shift calculations
+    # PyQt6 Modules
+    'PyQt6.sip',
+    'PyQt6.QtNetwork',
+    'PyQt6.QtGui',
+    'PyQt6.QtCore',
+    'PyQt6.QtWidgets',
+    'PyQt6.QtSvg', # ADDED: Good for icon support
+    # Pillow Modules
+    'PIL',
+    'PIL._tkinter_finder',
+    'PIL.ImageFont',
+    'PIL.ImageDraw',
+    'PIL.ImageEnhance',
+    'PIL.ImageOps',
+    'PIL.ImageSequence',
+    # Our Project's Modules (made exhaustive for safety)
     'utils',
+    'forge', # ADDED: Good practice to include main script
     'hardware.akai_fire_controller',
     'managers.oled_display_manager',
     'managers.hardware_input_manager',
     'managers.audio_visualizer_manager',
+    'managers.color_fx_utils', # ADDED: Critical for FX system
     'oled_utils.oled_renderer',
     'oled_utils.image_processing',
     'features.screen_sampler_core',
@@ -86,7 +92,11 @@ hidden_imports_list = [
     'gui.static_layouts_manager',
     'gui.interactive_pad_grid',
     'gui.screen_sampler_manager',
-
+    'gui.screen_sampler_ui_manager', # ADDED
+    'gui.capture_preview_dialog', # ADDED
+    'gui.set_max_frames_dialog', # ADDED
+    'gui.gif_export_dialog', # ADDED
+    'gui.oled_gif_export_dialog', # ADDED
     'gui.monitor_view_widget',
     'gui.oled_customizer_dialog',
     'gui.app_guide_dialog',
