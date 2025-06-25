@@ -516,11 +516,21 @@ QMenu::item:selected {
     color: #FFFFFF;
 }
 QMenu::item:disabled {
-    color: #5c2b2b;
+    color: #40703b;
     background-color: transparent;
 }
 QMenu::separator {
     height: 1px;
     background-color: #1b1b1b;
     margin: 5px 0px;
+}
+QPushButton#AppGuideMenuButton {
+    /* Style it to look less like a bulky button and more like a menu item */
+    border: none;
+    padding: 5px 10px;
+    background-color: transparent;
+    font-weight: bold;
+}
+QPushButton#AppGuideMenuButton:hover {
+    background-color: #0c0c0c; /* Same hover as menu items */
 }

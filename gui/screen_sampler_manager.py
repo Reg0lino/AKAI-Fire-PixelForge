@@ -115,11 +115,10 @@ class ScreenSamplerManager(QObject):
     sampler_adjustments_changed = pyqtSignal(dict)
 
     def __init__(self,
-                 presets_base_path: str,
-                 animator_manager_ref,
-                 parent: QObject | None = None):
+                presets_base_path: str,
+                animator_manager_ref,
+                parent: QObject | None = None):
         super().__init__(parent)
-        # ... (rest of __init__ as before)
         self.presets_base_path = presets_base_path
         self.animator_manager_ref = animator_manager_ref
         self.is_sampling_thread_active = False
@@ -132,6 +131,7 @@ class ScreenSamplerManager(QObject):
             'frequency_ms': self._fps_to_ms(DEFAULT_SAMPLING_FPS)
         }
         self.sampler_monitor_prefs = {}
+        self._emit_status_on_next_stop: bool = True
         self.recorded_sampler_frames: list[list[str]] = []
         self.current_recording_frame_count: int = 0
         self.captured_sampler_frequency_ms: int = self.current_sampler_params['frequency_ms']
@@ -193,27 +193,23 @@ class ScreenSamplerManager(QObject):
         if self.ui_manager and hasattr(self.ui_manager, 'enable_sampling_button'):
             self.ui_manager.enable_sampling_button.setEnabled(enabled)
 
-    def _connect_signals(self):  # Unchanged
-        if not GUI_IMPORTS_OK:
+    def _connect_signals(self):
+        if not GUI_IMPORTS_OK or not FEATURES_IMPORTS_OK:
             return
-        self.ui_manager.sampling_control_changed.connect(
-            self._handle_ui_sampling_control_changed)
-        self.ui_manager.request_monitor_list_population.connect(
-            self.populate_monitor_list_for_ui)
-        self.ui_manager.show_capture_preview_requested.connect(
-            self._show_capture_preview_dialog)
-        self.ui_manager.record_button_clicked.connect(
-            self._on_ui_record_button_clicked)
-        self.ui_manager.set_max_frames_button_clicked.connect(
-            self._on_ui_set_max_frames_button_clicked)
-        self.ui_manager.status_message_requested.connect(
-            self.sampler_status_update)
-        self.sampling_thread.pad_colors_sampled.connect(
-            self._handle_thread_pad_colors_sampled)
-        self.sampling_thread.processed_image_ready.connect(
-            self._handle_thread_processed_image_ready)
-        self.sampling_thread.error_occurred.connect(
-            self._handle_thread_error_occurred)
+        # UI Manager Signals
+        self.ui_manager.sampling_control_changed.connect(self._handle_ui_sampling_control_changed)
+        self.ui_manager.request_monitor_list_population.connect(self.populate_monitor_list_for_ui)
+        self.ui_manager.show_capture_preview_requested.connect(self._show_capture_preview_dialog)
+        self.ui_manager.record_button_clicked.connect(self._on_ui_record_button_clicked)
+        self.ui_manager.set_max_frames_button_clicked.connect(self._on_ui_set_max_frames_button_clicked)
+        self.ui_manager.status_message_requested.connect(self.sampler_status_update)
+        # Sampling Thread Signals
+        self.sampling_thread.pad_colors_sampled.connect(self._handle_thread_pad_colors_sampled)
+        self.sampling_thread.processed_image_ready.connect(self._handle_thread_processed_image_ready)
+        self.sampling_thread.error_occurred.connect(self._handle_thread_error_occurred)
+        # Connect the thread's finished signal to our handler
+        if hasattr(self.sampling_thread, 'finished'):
+            self.sampling_thread.finished.connect(self._on_thread_finished)
 
     def get_current_adjustments(self) -> dict:
         """
@@ -293,6 +289,27 @@ class ScreenSamplerManager(QObject):
         # Emit signal so UI (like main window knobs) can update
         self.sampler_adjustments_changed.emit(
             self.current_sampler_params['adjustments'].copy())
+
+    def _on_thread_finished(self):
+        """
+        Handles the graceful shutdown of the sampling thread. This is connected
+        to the thread's 'finished' signal or called directly if the thread was
+        already stopped. It respects the _emit_status_on_next_stop flag.
+        """
+        # Read the flag to determine if a status message should be shown.
+        should_emit_status = self._emit_status_on_next_stop
+        # Update internal state and emit signals.
+        self.is_sampling_thread_active = False
+        self.sampling_activity_changed.emit(False) # Let MainWindow know the state changed
+        # Update the UI elements within this manager.
+        if GUI_IMPORTS_OK and hasattr(self.ui_manager, 'update_record_button_ui') and hasattr(self.ui_manager, 'set_recording_status_text'):
+            self.ui_manager.update_record_button_ui(is_recording=False, can_record=False)
+            self.ui_manager.set_recording_status_text("Sampler OFF")
+        # Show status message ONLY if requested.
+        if should_emit_status:
+            self.sampler_status_update.emit("Screen sampling stopped.", 2000)
+        # IMPORTANT: Reset the flag to its default state for the next operation.
+        self._emit_status_on_next_stop = True
 
     def open_config_dialog(self):
         """
@@ -433,7 +450,6 @@ class ScreenSamplerManager(QObject):
         # 4. Update frequency from the UI.
         self.current_sampler_params['frequency_ms'] = basic_ui_params.get(
             'frequency_ms', self.current_sampler_params['frequency_ms'])
-
         # 5. Start the sampling thread with the now-guaranteed-correct parameters.
         self._synchronize_and_control_sampling_thread(True)
 
@@ -691,15 +707,30 @@ class ScreenSamplerManager(QObject):
         else:
             self._synchronize_and_control_sampling_thread(False)
 
-    def stop_sampling_thread(self):
-        self._synchronize_and_control_sampling_thread(False)
+    def stop_sampling_thread(self, emit_status: bool = True):
+        """
+        Stops the screen sampling thread and updates the UI. This method is now safe
+        to be called multiple times and handles the thread already being stopped.
+        Args:
+            emit_status (bool): If True, a status update message will be shown when the
+                                thread finishes. If False, it stops silently.
+        """
+        # Store the desired status outcome for when the thread actually finishes.
+        self._emit_status_on_next_stop = emit_status
+        if self.sampling_thread and self.sampling_thread.isRunning():
+            # THE FIX: Call the correct method name 'stop_sampling()'
+            self.sampling_thread.stop_sampling()
+        else:
+            # If the thread isn't running, we still need to ensure the manager's
+            # state is correct and respects the emit_status flag.
+            self._on_thread_finished()
 
     def _handle_thread_pad_colors_sampled(self, colors_list: list):
         if self.is_actively_recording:
             if self.current_recording_frame_count < self.MAX_RECORDING_FRAMES:
                 if colors_list and len(colors_list) == ScreenSamplerCore.NUM_GRID_ROWS * ScreenSamplerCore.NUM_GRID_COLS:
                     hex_frame = [QColor(r, g, b).name()
-                                 for r, g, b in colors_list]
+                                for r, g, b in colors_list]
                     self.recorded_sampler_frames.append(hex_frame)
                     self.current_recording_frame_count += 1
                     if GUI_IMPORTS_OK and hasattr(self.ui_manager, 'set_recording_status_text'):
@@ -820,8 +851,8 @@ class ScreenSamplerManager(QObject):
         timestamp_str = time.strftime("%Y%m%d-%H%M")
         default_name = f"Sampled {timestamp_str} ({num_frames}f)"
         user_name, ok = QInputDialog.getText(self.ui_manager if isinstance(self.ui_manager, QObject) else None,
-                                             "Name Recorded Sequence",
-                                             "Enter name:", text=default_name)
+                                            "Name Recorded Sequence",
+                                            "Enter name:", text=default_name)
         if not (ok and user_name and user_name.strip()):
             if QMessageBox.question(self.ui_manager if isinstance(self.ui_manager, QObject) else None,
                                     "Discard?", "Discard recorded frames?",

@@ -1,6 +1,51 @@
 # Changelog - Akai Fire PixelForge
 
-## [Version 1.6.0] - UI & FX Overhaul - (In Development)
+## [Version 1.7.0] - Master Stability & Final Polish 
+
+This is a landmark release focused on achieving master-level stability across the entire application and adding the final layer of professional polish before release. It addresses deep architectural flaws in the state management systems, particularly for the OLED display, resulting in a significantly more robust and crash-free user experience. This version also introduces a completely redesigned and comprehensive in-app guide to empower users.
+
+### ✨ **NEW FEATURES & ENHANCEMENTS**
+
+*   **NEW: Blinking/Pulsing "Connect" Button:**
+    *   The "Connect" button now features a vibrant, color-shifting animation when the device is disconnected, providing a clear and attractive visual cue to the user.
+    *   The animation automatically stops upon successful connection, and the button reverts to a standard "Disconnect" style.
+
+*   **NEW: Top-Level "App Guide" Menu Button:**
+    *   The "App Guide & Hotkeys" button has been promoted to a permanent, top-level position on the far right of the main menu bar for high visibility and easy access.
+
+*   **NEW: Comprehensive In-App Guide & Hotkey Reference:**
+    *   The App Guide dialog has been completely redesigned with a `QTabWidget` interface.
+    *   **"App Guide" Tab:** Contains a fully updated, detailed user manual explaining all major features, including the previously undocumented Audio Visualizer and advanced OLED/Hardware controls.
+    *   **"Controls & Hotkeys" Tab:** A new, dedicated "cheat sheet" tab provides a clean, scannable list of all keyboard shortcuts and physical hardware button functions.
+
+*   **NEW: Hardware Button for FX Toggle:**
+    *   The "Enable Color FX" checkbox can now be toggled directly from the hardware using the physical `STEP` button.
+
+### 🐛 **BUG FIXES & CRITICAL STABILITY OVERHAUL**
+
+*   **CRITICAL: OLED State Machine Refactor:**
+    *   Completely re-architected the `OLEDDisplayManager`'s state machine to eliminate a critical `RecursionError` that caused crashes on disconnect/reconnect and when reverting from temporary messages.
+    *   Consolidated all text rendering to use a single, robust "Qt-first" pipeline, fixing all `TypeError` crashes and font-loading failures (e.g., for Wingdings, Stencil). All system fonts now render correctly on the hardware display.
+    *   Fixed a bug where temporary OLED messages (like "New Seq") would get "stuck" and not revert to the active graphic. All temporary messages now correctly expire and revert.
+
+*   **CRITICAL: Cross-Feature Stability (Sampler/Visualizer):**
+    *   Fixed all `AttributeError` and `TypeError` crashes that occurred when trying to enable one master feature (like the Audio Visualizer) while another (like the Screen Sampler) was running.
+    *   The application now intelligently and seamlessly handles switching between these modes from either the GUI or hardware buttons without crashing.
+
+*   **Fixed Hardware Control Regressions:**
+    *   Restored full functionality to the `SELECT` encoder for navigating and loading animator sequences and layouts.
+    *   Fixed the OLED "SAVE?" cue, which now reliably appears on the hardware display when loading a sequence with unsaved changes via the `SELECT` encoder.
+    *   Restored missing OLED feedback for all top-row knob adjustments, providing clear visual confirmation of value changes.
+    *   Tuned the sensitivity of the sampler adjustment knobs to be less "laggy" and prevent overshooting, resulting in a much more precise and responsive feel.
+
+*   **Fixed UI & Dialog Bugs:**
+    *   Resolved `NameError` and `SyntaxError` crashes in the `AppGuideDialog`, making it fully functional.
+    *   Corrected the vertical alignment of non-scrolling text on the OLED display, preventing it from being cut off at the top.
+    *   Fixed highlight colors in the App Guide's text to match the application's aesthetic.
+
+---
+
+## [Version 1.6.0] - UI & FX Overhaul 
 
 This is a landmark release focused on a massive professional-grade overhaul of the application's user interface, user experience, and creative capabilities. The entire application layout has been re-architected for a more logical, clean, and scalable workflow. This version introduces a powerful, non-destructive "Color Grading / FX" system, a fully-featured menu bar, and a cascade of stability fixes that solidify the entire application.
 

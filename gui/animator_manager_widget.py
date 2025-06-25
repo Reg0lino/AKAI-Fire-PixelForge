@@ -1142,10 +1142,13 @@ class AnimatorManagerWidget(QWidget):
             self.refresh_sequences_list_and_select()
         self._emit_state_updates()
 
-    def action_new_sequence(self):
-        """Public action called by UI buttons to create a new sequence."""
+    def action_new_sequence(self, prompt_save=True):
+        """
+        Public action called by UI buttons or MainWindow to create a new sequence.
+        The 'prompt_save' argument allows MainWindow to handle the prompt centrally.
+        """
         self.request_sampler_disable.emit()
-        self.create_new_sequence(prompt_save=True)
+        self.create_new_sequence(prompt_save=prompt_save)
 
     def _request_load_selected_sequence_from_main(self):
         """Sends a signal to MainWindow to handle the prompt and load process."""
