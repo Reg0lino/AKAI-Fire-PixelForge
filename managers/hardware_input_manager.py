@@ -7,13 +7,17 @@ FIRE_BUTTON_GRID_LEFT = 0x22
 FIRE_BUTTON_GRID_RIGHT = 0x23 
 FIRE_ENCODER_SELECT_PRESS_NOTE = 0x19 # Note value for select encoder press (renamed for clarity)
 FIRE_ENCODER_SELECT_TURN_CC = 0x76 
+FIRE_BUTTON_FX_TOGGLE_STEP = 0x2C  # Physical "STEP" button
 
 FIRE_BUTTON_PATTERN_UP = 0x1F   # Physical "PATTERN UP" button note
 FIRE_BUTTON_PATTERN_DOWN = 0x20 # Physical "PATTERN DOWN" button note
 FIRE_BUTTON_BROWSER = 0x21      # Physical "BROWSER" button note
 
+FIRE_BUTTON_NOTE = 0x2D  # Physical "NOTE" button
+
 HW_BUTTON_SAMPLER_TOGGLE = 0x2F  # Physical "PERFORM" button
 HW_BUTTON_MONITOR_CYCLE = 0x2E   # Physical "DRUM" button
+
 
 # --- ADD CCs for the top four encoders ---
 FIRE_ENCODER_1_CC = 0x10 # Physical Knob 1 (Volume/Brightness)
@@ -29,11 +33,14 @@ class HardwareInputManager(QObject):
     grid_right_pressed = pyqtSignal()
     select_encoder_pressed = pyqtSignal()
     select_encoder_turned = pyqtSignal(int) # delta: +1, -1, +2, -2 for select encoder
+    
+    # signal for fx toggle --- note button on bottom
+    fx_toggle_requested = pyqtSignal()
 
     # Signals for Sampler Control
     request_toggle_screen_sampler = pyqtSignal()
     request_cycle_sampler_monitor = pyqtSignal()
-    
+    visualizer_toggle_requested = pyqtSignal()
     physical_encoder_rotated = pyqtSignal(int, int) # encoder_id (1-4), delta (+1 or -1)
 
     # --- START MODIFICATION: Old cueing signals ---
@@ -72,7 +79,6 @@ class HardwareInputManager(QObject):
     def _handle_generic_button_event(self, note_number: int, is_pressed: bool):
         if not is_pressed:
             return  # Process only on press
-
         # --- Standard Button Handling (Keep your existing logic for these) ---
         if note_number == FIRE_BUTTON_GRID_LEFT:
             self.grid_left_pressed.emit()
@@ -84,18 +90,16 @@ class HardwareInputManager(QObject):
             self.request_toggle_screen_sampler.emit()
         elif note_number == HW_BUTTON_MONITOR_CYCLE:
             self.request_cycle_sampler_monitor.emit()
-
-        # --- MODIFIED/NEW LOGIC for PATTERN UP/DOWN and BROWSER ---
+        elif note_number == FIRE_BUTTON_NOTE:
+            self.visualizer_toggle_requested.emit()
         # Physical PATTERN UP button (0x1F)
         elif note_number == FIRE_BUTTON_PATTERN_UP:
             self.request_cycle_active_oled_graphic_next.emit()
             # print(f"HIM DEBUG: Note {hex(note_number)} -> request_cycle_active_oled_graphic_next")
-
         # Physical PATTERN DOWN button (0x20)
         elif note_number == FIRE_BUTTON_PATTERN_DOWN:
             self.request_cycle_active_oled_graphic_prev.emit()
             # print(f"HIM DEBUG: Note {hex(note_number)} -> request_cycle_active_oled_graphic_prev")
-
         # Physical BROWSER button (0x21)
         elif note_number == FIRE_BUTTON_BROWSER:
             # Current behavior: Toggles sampler and emits oled_browser_activate_pressed
@@ -103,11 +107,9 @@ class HardwareInputManager(QObject):
             # If BROWSER button should have a *new distinct* OLED role, that would be a separate feature.
             if hasattr(self, 'oled_browser_activate_pressed'):
                 self.oled_browser_activate_pressed.emit()
-            # print(f"HIM DEBUG: Note {hex(note_number)} -> request_toggle_screen_sampler AND oled_browser_activate_pressed")
-
-        # Add any other specific button note checks here
-        # else:
-            # print(f"HIM DEBUG: Unhandled button note press: {hex(note_number)}") # Optional for debugging other buttons
+        # FX on or off
+        elif note_number == FIRE_BUTTON_FX_TOGGLE_STEP:
+            self.fx_toggle_requested.emit()
 
 
     def _handle_control_change_event(self, control_cc: int, value: int):

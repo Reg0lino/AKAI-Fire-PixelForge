@@ -96,23 +96,33 @@ QLabel#OLEDPlayPauseIconLabel:hover {
 QPushButton#ResetButton {
     background-color: transparent;
     border: none;
-    padding: 1px 2px;
-    min-height: 24px;
-    color: #B3B3B3;
-    font-size: 13pt;
+    color: #999999; /* A more subtle grey for the icon */
+    font-size: 14pt; /* Make the icon a good size */
     font-weight: bold;
-    border-radius: 2px;
+    
+    /* --- THE FIX: Reduce padding and set a fixed width --- */
+    padding: 0px 2px;      /* Minimal horizontal padding */
+    min-width: 22px;       /* Set a consistent minimum width */
+    max-width: 22px;       /* Set a consistent maximum width */
+    min-height: 22px;
+    max-height: 22px;
+    border-radius: 11px;   /* Make it a circle */
 }
+
 QPushButton#ResetButton:hover {
     background-color: #4A4A4A;
     color: #FFFFFF;
 }
+
 QPushButton#ResetButton:pressed {
     background-color: #333333;
     color: #CCCCCC;
 }
+
 QPushButton#ResetButton:focus {
+    /* No focus border needed for these small icon buttons */
     border: none;
+    outline: none;
 }
 
 /* ComboBoxes */
@@ -469,4 +479,58 @@ QLabel#DoomImagePreview {
     border-radius: 3px;
     padding: 2px;
     background-color: #101010; /* A near-black background to make the images pop */
+}
+/* --- Menu Bar & Dropdown Styling --- */
+QMenuBar {
+    background-color: #111111;
+    color: #D0D0D0;
+    border-bottom: 1px solid #0c0c0c;
+    padding-left: 5px;
+}
+QMenuBar::item {
+    background-color: transparent;
+    color: #D0D0D0;
+    padding: 5px 10px;
+}
+QMenuBar::item:selected {
+    background-color: #383838;
+    color: #FFFFFF;
+}
+QMenuBar::item:hover {
+    background-color: #202020;
+}
+/* Dropdown Menu Styling */
+QMenu {
+    background-color: #1b1b1b;
+    color: #D0D0D0;
+    border: 1px solid #141414;
+    padding: 5px;
+}
+QMenu::item {
+    color: #D0D0D0;
+    padding: 5px 20px;
+    border-radius: 3px;
+}
+QMenu::item:selected {
+    background-color: #564887; /* Consistent blue selection color */
+    color: #FFFFFF;
+}
+QMenu::item:disabled {
+    color: #40703b;
+    background-color: transparent;
+}
+QMenu::separator {
+    height: 1px;
+    background-color: #1b1b1b;
+    margin: 5px 0px;
+}
+QPushButton#AppGuideMenuButton {
+    /* Style it to look less like a bulky button and more like a menu item */
+    border: none;
+    padding: 5px 10px;
+    background-color: transparent;
+    font-weight: bold;
+}
+QPushButton#AppGuideMenuButton:hover {
+    background-color: #0c0c0c; /* Same hover as menu items */
 }

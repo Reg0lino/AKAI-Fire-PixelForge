@@ -107,7 +107,7 @@ class ScreenSamplerThread(QThread):
         # If self.isRunning() is true but self._is_running was false,
         # setting self._is_running = True will make the existing loop continue.
 
-    def stop_sampling(self):
+    def stop_sampling(self, emit_status_on_finish: bool = True):
         # print(f"DEBUG Thread: stop_sampling() called. Setting self._is_running = False. Was: {self._is_running}") # Quieter
         with QMutexLocker(self._parameters_mutex):
             self._is_running = False

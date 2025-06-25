@@ -35,13 +35,11 @@ SLIDER_MAX_FACTOR_VAL = 400
 SLIDER_MIN_HUE = -180
 SLIDER_MAX_HUE = 180
 
-
 # --- NEW Default Values ---
 DEFAULT_BRIGHTNESS_FACTOR = 1.0
 DEFAULT_SATURATION_FACTOR = 1.75
 DEFAULT_CONTRAST_FACTOR = 1.0
 DEFAULT_HUE_SHIFT = 0
-
 
 class CapturePreviewDialog(QDialog):
     sampling_parameters_changed = pyqtSignal(dict)
@@ -51,7 +49,6 @@ class CapturePreviewDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("👁️ Visual Sampler Configuration")
         self.setMinimumSize(850, 600)
-
         # --- UI Element Declarations ---
         self.monitor_view_widget: MonitorViewWidget | None = None
         self.cycle_monitor_button: QPushButton | None = None
@@ -68,7 +65,6 @@ class CapturePreviewDialog(QDialog):
         self.hue_slider: QSlider | None = None
         self.hue_value_label: QLabel | None = None
         self.hue_reset_button: QPushButton | None = None
-
         self._all_monitors_info_cache: list[dict] = []
         self.current_params = {
             'monitor_id': 1,
@@ -79,9 +75,7 @@ class CapturePreviewDialog(QDialog):
                 'contrast': DEFAULT_CONTRAST_FACTOR,
                 'hue_shift': DEFAULT_HUE_SHIFT
             },
-
         }
-
         self._init_ui()
         self._connect_signals()
         self._update_all_slider_value_labels()
@@ -90,36 +84,31 @@ class CapturePreviewDialog(QDialog):
         main_layout = QVBoxLayout(self)
         splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter, 1)
-
         # --- Left Panel ---
         left_panel_widget = QWidget()
         left_panel_layout = QVBoxLayout(left_panel_widget)
         left_panel_layout.setContentsMargins(5, 5, 5, 5)
         self.monitor_view_widget = MonitorViewWidget()
         left_panel_layout.addWidget(self.monitor_view_widget, 1)
-        
         instructions_label = QLabel("Drag box to move. Drag handles to resize. Position saves on exit")
         instructions_label.setWordWrap(True)
         instructions_label.setStyleSheet("font-size: 8pt; color: #888888;")
         left_panel_layout.addWidget(instructions_label)
-
         self.cycle_monitor_button = QPushButton("🔄 Cycle Monitor")
         left_panel_layout.addWidget(self.cycle_monitor_button, 0, Qt.AlignmentFlag.AlignCenter)
         splitter.addWidget(left_panel_widget)
-
         # --- Right Panel ---
         right_panel_widget = QWidget()
         right_panel_layout = QVBoxLayout(right_panel_widget)
         right_panel_layout.setContentsMargins(5, 5, 5, 5)
-
         self.preview_image_label = QLabel("Waiting for preview...")
         self.preview_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_image_label.setMinimumHeight(150)
         self.preview_image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.MinimumExpanding)
         self.preview_image_label.setStyleSheet("background-color: #282828; border: 1px solid #444;")
         right_panel_layout.addWidget(self.preview_image_label, 1)
-
         # Helper function to create a slider row
+
         def create_slider_row(label_text, min_val, max_val, initial_val):
             layout = QHBoxLayout()
             label = QLabel(label_text)
@@ -132,34 +121,26 @@ class CapturePreviewDialog(QDialog):
             reset_button = QPushButton("⟳")
             reset_button.setFixedSize(24, 24)
             reset_button.setObjectName("ResetButton")
-            
             layout.addWidget(label)
             layout.addWidget(slider)
             layout.addWidget(value_label)
             layout.addWidget(reset_button)
             return layout, slider, value_label, reset_button
-
-
         # Color Adjustments Group
         adjustments_group = QGroupBox("Color Adjustments")
         adjustments_layout = QVBoxLayout(adjustments_group)
-        
         bri_row_layout, self.brightness_slider, self.brightness_value_label, self.brightness_reset_button = \
             create_slider_row("Brightness:", SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL, self._factor_to_slider(self.current_params['adjustments']['brightness']))
         adjustments_layout.addLayout(bri_row_layout)
-
         sat_row_layout, self.saturation_slider, self.saturation_value_label, self.saturation_reset_button = \
             create_slider_row("Saturation:", SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL, self._factor_to_slider(self.current_params['adjustments']['saturation']))
         adjustments_layout.addLayout(sat_row_layout)
-
         con_row_layout, self.contrast_slider, self.contrast_value_label, self.contrast_reset_button = \
             create_slider_row("Contrast:", SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL, self._factor_to_slider(self.current_params['adjustments']['contrast']))
         adjustments_layout.addLayout(con_row_layout)
-
         hue_row_layout, self.hue_slider, self.hue_value_label, self.hue_reset_button = \
             create_slider_row("Hue Shift:", SLIDER_MIN_HUE, SLIDER_MAX_HUE, int(round(self.current_params['adjustments']['hue_shift'])))
         adjustments_layout.addLayout(hue_row_layout)
-        
         right_panel_layout.addWidget(adjustments_group)
         right_panel_layout.addStretch(0)
         splitter.addWidget(right_panel_widget)
@@ -205,13 +186,10 @@ class CapturePreviewDialog(QDialog):
         self.contrast_value_label.setText(f"{adj.get('contrast', DEFAULT_CONTRAST_FACTOR):.2f}x")
         self.hue_value_label.setText(f"{int(round(adj.get('hue_shift', DEFAULT_HUE_SHIFT))):+d}°")
 
-
     def _on_region_or_monitor_changed_in_view(self, monitor_id: int, region_rect_percentage: dict):
         self.current_params['monitor_id'] = monitor_id
         self.current_params['region_rect_percentage'] = region_rect_percentage.copy()
         self._emit_sampling_parameters_changed()
-
-
 
     def _on_adjustment_slider_changed(self):
         self.current_params['adjustments']['saturation'] = self._slider_to_factor(self.saturation_slider.value())
@@ -223,8 +201,6 @@ class CapturePreviewDialog(QDialog):
         self._emit_sampling_parameters_changed()
 
     # --- Reset Button Slots ---
-
-
     def _on_reset_brightness_clicked(self):
         self.brightness_slider.setValue(self._factor_to_slider(DEFAULT_BRIGHTNESS_FACTOR))
 
@@ -255,7 +231,7 @@ class CapturePreviewDialog(QDialog):
         self.monitor_view_widget.set_monitors_data(monitors_data, target_mss_id_to_focus=current_monitor_id)
         if hasattr(self.monitor_view_widget, 'blockSignals'):
             self.monitor_view_widget.blockSignals(False)
-        
+
     def set_current_parameters_from_main(self, params: dict):
         self.current_params.update(params)
         if 'adjustments' in self.current_params:
@@ -292,18 +268,14 @@ class CapturePreviewDialog(QDialog):
 
     def update_sliders_from_external_adjustments(self, new_adjustments: dict):
         self.current_params['adjustments'] = new_adjustments.copy()
-
         # Block color adjustment sliders only
         adj_sliders = [self.brightness_slider, self.saturation_slider, self.contrast_slider, self.hue_slider]
         for s in adj_sliders: s.blockSignals(True)
-        
         self.brightness_slider.setValue(self._factor_to_slider(new_adjustments.get('brightness', DEFAULT_BRIGHTNESS_FACTOR)))
         self.saturation_slider.setValue(self._factor_to_slider(new_adjustments.get('saturation', DEFAULT_SATURATION_FACTOR)))
         self.contrast_slider.setValue(self._factor_to_slider(new_adjustments.get('contrast', DEFAULT_CONTRAST_FACTOR)))
         self.hue_slider.setValue(int(round(new_adjustments.get('hue_shift', DEFAULT_HUE_SHIFT))))
-        
         for s in adj_sliders: s.blockSignals(False)
-        
         self._update_all_slider_value_labels()
 
     def update_preview_image(self, pil_image: Image.Image | None):
@@ -321,7 +293,6 @@ class CapturePreviewDialog(QDialog):
                 self.preview_image_label.setText("Preview Image Error")
                 self.preview_image_label.setPixmap(QPixmap())
                 return
-            
             pixmap = QPixmap.fromImage(q_image)
             scaled_pixmap = pixmap.scaled(self.preview_image_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.preview_image_label.setPixmap(scaled_pixmap)

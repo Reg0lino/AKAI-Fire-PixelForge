@@ -14,7 +14,6 @@ class ScreenSamplerCore:
         'saturation': 2.0, 'contrast': 1.0, 'brightness': 1.5, 'hue_shift': 0
     }
     _save_temp_preview_image_for_diagnosis = False 
-    
     NUM_GRID_ROWS = 4
     NUM_GRID_COLS = 16
 
@@ -201,16 +200,13 @@ if __name__ == '__main__':
             if not available_monitors: print("No monitors found."); exit()
             target_monitor = available_monitors[0]
             print(f"Sampling from: {target_monitor['name']} (mss ID: {target_monitor['id']})")
-            
             # Test with a region that's a good portion of the screen
             test_overall_region_perc = {'x': 0.25, 'y': 0.25, 'width': 0.5, 'height': 0.5} # Center 50%
             test_adjustments = {'saturation': 1.0, 'contrast': 1.0, 'brightness': 1.0, 'hue_shift': 0}
             print(f"Using overall region: {test_overall_region_perc}, adjustments: {test_adjustments}")
-            
             list_of_pad_colors, full_preview_img = ScreenSamplerCore.capture_and_grid_sample_colors(
                 sct, target_monitor['id'], test_overall_region_perc, adjustments=test_adjustments
             )
-            
             if list_of_pad_colors:
                 print(f"  Successfully got {len(list_of_pad_colors)} pad colors.")
                 # print(f"  First few colors: {list_of_pad_colors[:5]}")
@@ -219,13 +215,11 @@ if __name__ == '__main__':
                     print("  Color for pad (3,15) (bottom-right): ", list_of_pad_colors[63])
             else:
                 print(f"  Failed to get list of pad colors.")
-            
             if full_preview_img:
                 print(f"  Full S/C/B Adjusted Preview Image: Mode={full_preview_img.mode}, Size={full_preview_img.size}")
                 # full_preview_img.save(f"_test_grid_full_preview.png")
                 # print(f"  Saved full preview image to _test_grid_full_preview.png")
             else:
                 print(f"  No full preview image returned.")
-
     except Exception as e: print(f"Error in ScreenSamplerCore GR 그리드 샘플링 example: {e}")
     print("\nScreenSamplerCore: Example finished.")
