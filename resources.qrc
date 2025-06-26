@@ -1,0 +1,13 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/">
+    <file>resources/styles/style.qss</file>
+    <file>resources/icons/app_icon.png</file>
+    <file>resources/icons/doomoled.png</file>
+    <file>resources/icons/doomcontrol.png</file>
+    <file>resources/icons/play-pause.png</file>
+    <file>images/title_animation.gif</file>
+    <file>resources/fonts/Inter_18pt-Regular.ttf</file>
+    <file>resources/fonts/PressStart2P-Regular.ttf</file>
+    <file>resources/fonts/TomThumb.ttf</file>
+</qresource>
+</RCC>

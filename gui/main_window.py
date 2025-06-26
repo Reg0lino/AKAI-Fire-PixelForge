@@ -84,36 +84,32 @@ class KnobLabelOverlay(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.labels = ["", "", "", "", ""]
+        self.labels = ["", "", "", "", "", ""] # MODIFIED: Increased to 6 for the browser button
         self.knob_x_positions = []
         self.label_font = QFont("Segoe UI", 7)
         self.label_color = QColor("#999999")
 
     def set_knob_x_positions(self, positions: list[int]):
-        """Sets the center X coordinates for each of the 5 knobs."""
+        """Sets the center X coordinates for each of the 6 labeled controls."""
         self.knob_x_positions = positions
         self.update()
 
     def set_labels(self, labels: list[str]):
-        """Sets the text for the 5 labels. Use "" for a blank label."""
-        if len(labels) == 5:
+        """Sets the text for the 6 labels. Use "" for a blank label."""
+        if len(labels) == 6: # MODIFIED: Expects 6 labels
             self.labels = labels
             self.update()  # Trigger a repaint
-
 
     def paintEvent(self, event):
         if not self.knob_x_positions:
             return
-
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setFont(self.label_font)
         painter.setPen(self.label_color)
-
         for i, label_text in enumerate(self.labels):
             if label_text and i < len(self.knob_x_positions):
                 x_center = self.knob_x_positions[i]
-                # CORRECTED: y_pos is now higher up
                 y_pos = self.height() - 30 
                 
                 font_metrics = painter.fontMetrics()
@@ -121,8 +117,6 @@ class KnobLabelOverlay(QWidget):
                 x = x_center - (text_width / 2)
                 
                 painter.drawText(int(x), y_pos, label_text)
-                
-                
 # --- Project-specific Imports ---
 try:
     from ..utils import get_resource_path
@@ -577,8 +571,6 @@ class MainWindow(QMainWindow):
         graphics_triangle_style = "font-size: 9pt; color: #B0B0B0; font-weight: bold;"
         top_strip_main_layout.addStretch(1)
         knob_info = [
-            # --- FIX: Set the correct range and default value upon creation ---
-            # Attribute Name, Min Value, Max Value, Default Value
             ("knob_volume_top_right", self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX, self.FX_ADJUSTMENT_DEFAULT),
             ("knob_pan_top_right", self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX, self.FX_ADJUSTMENT_DEFAULT),
             ("knob_filter_top_right", self.FX_ADJUSTMENT_MIN, self.FX_ADJUSTMENT_MAX, self.FX_ADJUSTMENT_DEFAULT),
@@ -594,13 +586,11 @@ class MainWindow(QMainWindow):
             functional_dial.setNotchesVisible(False); functional_dial.setWrapping(False)
             functional_dial.setObjectName(attr_name)
             functional_dial.setStyleSheet("background-color: transparent;")
-            # ---  Set range and value here ---
             functional_dial.setRange(min_val, max_val)
             functional_dial.setValue(default_val)
             knob_stack.addWidget(functional_dial)
             top_strip_main_layout.addWidget(knob_stack, 0, Qt.AlignmentFlag.AlignCenter)
             setattr(self, attr_name, functional_dial); setattr(self, f"{attr_name}_visual", static_knob_visual); setattr(self, f"{attr_name}_stack", knob_stack)
-        # ... graphics buttons, OLED, browser button, etc. ...
         pattern_buttons_layout = QVBoxLayout()
         pattern_buttons_layout.setSpacing(2)
         triangle_up_label = QLabel("▲", styleSheet=graphics_triangle_style)
@@ -618,11 +608,24 @@ class MainWindow(QMainWindow):
         self.button_pattern_up_top_right.clicked.connect(self._handle_cycle_active_oled_next_request)
         self.button_pattern_down_top_right.clicked.connect(self._handle_cycle_active_oled_prev_request)
         top_strip_main_layout.addLayout(pattern_buttons_layout)
+        # --- FIX: Create a vertical container for the OLED and its restored label ---
+        oled_container_widget = QWidget()
+        oled_container_layout = QVBoxLayout(oled_container_widget)
+        oled_container_layout.setContentsMargins(0, 0, 0, 0)
+        oled_container_layout.setSpacing(2)
+        # Create and style the restored label
+        self.oled_customize_label = QLabel("Click  to  Customize  OLED")
+        self.oled_customize_label.setStyleSheet("font-size: 7pt; color: #888888;")
+        self.oled_customize_label.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom)
+        oled_container_layout.addWidget(self.oled_customize_label)
+        # Create the OLED mirror widget
         self.oled_display_mirror_widget = QLabel(objectName="OLEDMirror", toolTip="Click to open OLED Customizer")
         self.oled_display_mirror_widget.setFixedSize(QSize(int(128 * 1.2), int(64 * 1.2)))
         self.oled_display_mirror_widget.setStyleSheet("QLabel#OLEDMirror { background-color: black; border: 1px solid #383838; }")
         self._setup_oled_mirror_clickable()
-        top_strip_main_layout.addWidget(self.oled_display_mirror_widget, 0, Qt.AlignmentFlag.AlignCenter)
+        oled_container_layout.addWidget(self.oled_display_mirror_widget)
+        # Add the entire container to the main horizontal layout
+        top_strip_main_layout.addWidget(oled_container_widget, 0, Qt.AlignmentFlag.AlignCenter)
         self.oled_play_pause_icon_label = QLabel()
         self.oled_play_pause_icon_label.setObjectName("OLEDPlayPauseIconLabel")
         self.oled_play_pause_icon_label.setToolTip("Toggle OLED Active Graphic Pause/Play")
@@ -641,6 +644,9 @@ class MainWindow(QMainWindow):
         self.button_browser_top_right = QPushButton("")
         self.button_browser_top_right.setObjectName("BrowserButton")
         self.button_browser_top_right.setFixedSize(icon_button_size)
+        # --- FIX: Add tooltip and connect click signal ---
+        self.button_browser_top_right.setToolTip("Open OLED Customizer")
+        self.button_browser_top_right.clicked.connect(self._open_oled_customizer_dialog)
         top_strip_main_layout.addWidget(self.button_browser_top_right, 0, Qt.AlignmentFlag.AlignCenter)
         select_knob_stack = QStackedWidget()
         select_knob_stack.setFixedSize(QSize(knob_size, knob_size))
@@ -680,7 +686,7 @@ class MainWindow(QMainWindow):
             # or promote it to a custom clickable QLabel subclass.
             # Event filter is simpler for now.
             self.oled_display_mirror_widget.setToolTip(
-                "Click to customize OLED display")
+                "Click to Customize OLED Display")
             self.oled_display_mirror_widget.installEventFilter(
                 self)  # MainWindow will handle its events
             # print("MW TRACE: OLED mirror configured for click.")
@@ -961,7 +967,9 @@ class MainWindow(QMainWindow):
             if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_prev'):
                 self.hardware_input_manager.request_cycle_active_oled_graphic_prev.connect(self._handle_cycle_active_oled_prev_request)
             if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
-                self.hardware_input_manager.oled_browser_activate_pressed.connect(self._handle_oled_browser_activate)
+                # --- THIS IS THE FIX ---
+                # The BROWSER button now opens the customizer dialog directly.
+                self.hardware_input_manager.oled_browser_activate_pressed.connect(self._open_oled_customizer_dialog)
         # OLEDDisplayManager Signals
         if self.oled_display_manager:
             if self.akai_controller:
@@ -1223,28 +1231,37 @@ class MainWindow(QMainWindow):
         # print("MW TRACE: _on_avm_capture_stopped - Guard released.")
 
     def _calculate_and_set_knob_positions_for_overlay(self):
-        """Calculates the center X of each knob and tells the overlay."""
+        """Calculates the center X of each labeled control and tells the overlay."""
         if not self.top_strip_group.isVisible():
             QTimer.singleShot(50, self._calculate_and_set_knob_positions_for_overlay)
             return
-        knob_stacks = [
+        # --- List now includes the browser button ---
+        labeled_widgets = [
             getattr(self, "knob_volume_top_right_stack", None),
             getattr(self, "knob_pan_top_right_stack", None),
             getattr(self, "knob_filter_top_right_stack", None),
             getattr(self, "knob_resonance_top_right_stack", None),
+            getattr(self, "button_browser_top_right", None), # Added browser button
             getattr(self, "SelectKnobTopRight_stack", None),
         ]
         positions = []
-        for stack in knob_stacks:
-            if stack:
-                # Get position relative to the GroupBox's content area
-                pos = stack.pos()
-                x_center = pos.x() + stack.width() // 2
+        for widget in labeled_widgets:
+            if widget:
+                pos = widget.pos()
+                x_center = pos.x() + widget.width() // 2
                 positions.append(x_center)
         if self.knob_label_overlay:
-            # Resize overlay to match the parent groupbox and set positions
             self.knob_label_overlay.setGeometry(self.top_strip_group.rect())
             self.knob_label_overlay.set_knob_x_positions(positions)
+        if hasattr(self, 'oled_customize_label') and self.oled_customize_label and \
+            hasattr(self, 'oled_display_mirror_widget') and self.oled_display_mirror_widget:
+            mirror_pos = self.oled_display_mirror_widget.pos()
+            mirror_width = self.oled_display_mirror_widget.width()
+            label_width = self.oled_customize_label.width()
+            # Position the label centered above the mirror widget
+            label_x = mirror_pos.x() + (mirror_width - label_width) // 2
+            # The label's parent container will handle the Y position correctly
+            self.oled_customize_label.move(label_x, self.oled_customize_label.y())
 
     def _handle_visualizer_capture_error(self, error_message: str):
         # print(f"MW TRACE: _handle_visualizer_capture_error received: '{error_message}'")
@@ -1706,13 +1723,14 @@ class MainWindow(QMainWindow):
         """
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
         animator_is_playing = self.is_animator_playing
-        labels = ["Brightness", "Saturation", "Contrast", "Hue", ""]
+        # ---  List now has 6 labels ---
+        labels = ["Brightness", "Saturation", "Contrast", "Hue", "Customize", ""]
         dials = [self.knob_volume_top_right, self.knob_pan_top_right,
                 self.knob_filter_top_right, self.knob_resonance_top_right, self.knob_select_top_right]
         for dial in dials:
             if dial: dial.blockSignals(True)
         if sampler_is_active:
-            # CONFIGURE KNOBS FOR SAMPLER MODE
+            # CONFIGURE KNOBS 1-4 FOR SAMPLER MODE
             self.knob_volume_top_right.setRange(self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX)
             self.knob_pan_top_right.setRange(self.SAMPLER_SATURATION_KNOB_MIN, self.SAMPLER_SATURATION_KNOB_MAX)
             self.knob_filter_top_right.setRange(self.SAMPLER_CONTRAST_KNOB_MIN, self.SAMPLER_CONTRAST_KNOB_MAX)
@@ -1723,35 +1741,31 @@ class MainWindow(QMainWindow):
             self.knob_filter_top_right.setValue(int(sampler_adjustments.get('contrast', 1.0) * 100))
             self.knob_resonance_top_right.setValue(int(sampler_adjustments.get('hue_shift', 0)))
         else:
-            # CONFIGURE KNOBS FOR FX PANEL MODE
+            # CONFIGURE KNOBS 1-4 FOR FX PANEL MODE
             if self.fx_brightness_slider: self.knob_volume_top_right.setRange(self.fx_brightness_slider.minimum(), self.fx_brightness_slider.maximum())
             if self.fx_saturation_slider: self.knob_pan_top_right.setRange(self.fx_saturation_slider.minimum(), self.fx_saturation_slider.maximum())
             if self.fx_contrast_slider: self.knob_filter_top_right.setRange(self.fx_contrast_slider.minimum(), self.fx_contrast_slider.maximum())
             if self.fx_hue_slider: self.knob_resonance_top_right.setRange(self.fx_hue_slider.minimum(), self.fx_hue_slider.maximum())
-            # Snap knob values to the FX sliders' current values
             if self.fx_brightness_slider: self.knob_volume_top_right.setValue(self.fx_brightness_slider.value())
             if self.fx_saturation_slider: self.knob_pan_top_right.setValue(self.fx_saturation_slider.value())
             if self.fx_contrast_slider: self.knob_filter_top_right.setValue(self.fx_contrast_slider.value())
             if self.fx_hue_slider: self.knob_resonance_top_right.setValue(self.fx_hue_slider.value())
-        # CONFIGURE KNOB 5 (Select/Speed)
+        # ---  Update label for the 6th position (Select knob) ---
         if animator_is_playing:
-            labels[4] = "Speed"
+            labels[5] = "Speed" # The 6th label is for the Select knob
             if self.knob_select_top_right:
                 speed_slider = self.animator_manager.sequence_controls_widget.speed_slider
                 self.knob_select_top_right.setRange(speed_slider.minimum(), speed_slider.maximum())
                 self.knob_select_top_right.setValue(speed_slider.value())
         else:
-            labels[4] = "Select"
+            labels[5] = "Select" # The 6th label is for the Select knob
             if self.knob_select_top_right:
-                # Set range for navigation
                 nav_count = 0
                 if self.current_oled_nav_target_widget:
                     nav_count = self.current_oled_nav_target_widget.get_navigation_item_count()
                 self.knob_select_top_right.setRange(0, max(0, nav_count - 1))
-                # Lock the knob's value to the center of its range for a neutral visual appearance.
                 center_value = (self.knob_select_top_right.minimum() + self.knob_select_top_right.maximum()) // 2
                 self.knob_select_top_right.setValue(center_value)
-        # Update labels and visuals
         if hasattr(self, 'knob_label_overlay') and self.knob_label_overlay:
             self.knob_label_overlay.set_labels(labels)
         self._update_all_knob_tooltips()
@@ -2030,6 +2044,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'play_pause_action'):
             # Can only play if no other master mode is running
             self.play_pause_action.setEnabled(is_playing or can_start_any_master_mode)
+        # Explicitly control the enabled state of the OLED Play/Pause icon.
+        # It should be enabled ONLY when the controller is connected.
+        if hasattr(self, 'oled_play_pause_icon_label') and self.oled_play_pause_icon_label:
+            self.oled_play_pause_icon_label.setEnabled(is_connected)
 
 # q main window init here
     def __init__(self):
@@ -2533,7 +2551,6 @@ class MainWindow(QMainWindow):
         if status_message:
             self.status_bar.showMessage(status_message, 4000) # Show for 4 seconds
 
-
     def _on_speed_slider_changed(self, value: int):
         """
         This slot is connected to the real speed slider's valueChanged signal.
@@ -2709,17 +2726,17 @@ class MainWindow(QMainWindow):
         self._update_contextual_knob_configs()
 
     def _toggle_oled_active_graphic_pause(self):
-        # print("MW DEBUG: _toggle_oled_active_graphic_pause called") 
+        # print("MW DEBUG: _toggle_oled_active_graphic_pause called")
         if not self.oled_display_manager:
             # print("MW DEBUG: OLEDDisplayManager is None in _toggle_oled_active_graphic_pause.")
             return
         if self.oled_display_manager.is_active_graphic_paused():
             self.oled_display_manager.resume_active_graphic()
-            self.oled_manual_override_active_state = False # User manually set to PLAY
+            self.oled_manual_override_active_state = False  # User manually set to PLAY
             # print("MW DEBUG: Manually requested RESUME OLED, override state = False (User wants Play)")
         else:
             self.oled_display_manager.pause_active_graphic()
-            self.oled_manual_override_active_state = True # User manually set to PAUSE
+            self.oled_manual_override_active_state = True  # User manually set to PAUSE
             # print("MW DEBUG: Manually requested PAUSE OLED, override state = True (User wants Pause)")
 
     def _update_oled_mirror(self, packed_bitmap_data_7bit: bytearray):

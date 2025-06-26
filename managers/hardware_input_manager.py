@@ -33,23 +33,14 @@ class HardwareInputManager(QObject):
     grid_right_pressed = pyqtSignal()
     select_encoder_pressed = pyqtSignal()
     select_encoder_turned = pyqtSignal(int) # delta: +1, -1, +2, -2 for select encoder
-    
     # signal for fx toggle --- note button on bottom
     fx_toggle_requested = pyqtSignal()
-
     # Signals for Sampler Control
     request_toggle_screen_sampler = pyqtSignal()
     request_cycle_sampler_monitor = pyqtSignal()
     visualizer_toggle_requested = pyqtSignal()
     physical_encoder_rotated = pyqtSignal(int, int) # encoder_id (1-4), delta (+1 or -1)
-
-    # --- START MODIFICATION: Old cueing signals ---
-    # oled_pattern_up_pressed = pyqtSignal()
-    # oled_pattern_down_pressed = pyqtSignal()
-
     oled_browser_activate_pressed = pyqtSignal() # Keep if BROWSER button still has a role
-    # --- END MODIFICATION ---
-
     # Add new signals for direct cycling of active OLED graphic
     request_cycle_active_oled_graphic_next = pyqtSignal()
     request_cycle_active_oled_graphic_prev = pyqtSignal()
@@ -57,16 +48,15 @@ class HardwareInputManager(QObject):
     def __init__(self, akai_fire_controller_ref, parent=None):
         super().__init__(parent)
         self.akai_fire_controller = akai_fire_controller_ref
-
         if self.akai_fire_controller:
             self.akai_fire_controller.play_button_pressed.connect(self._on_fire_play_pressed)
             self.akai_fire_controller.stop_button_pressed.connect(self._on_fire_stop_pressed)
             self.akai_fire_controller.fire_button_event.connect(self._handle_generic_button_event)
             
             if hasattr(self.akai_fire_controller, 'control_change_event'):
-                 self.akai_fire_controller.control_change_event.connect(self._handle_control_change_event)
+                self.akai_fire_controller.control_change_event.connect(self._handle_control_change_event)
             else:
-                 print("HIM WARNING: AkaiFireController does not have 'control_change_event' signal.")
+                print("HIM WARNING: AkaiFireController does not have 'control_change_event' signal.")
         else:
             print("HIM CRITICAL: AkaiFireController reference not provided!")
 
@@ -95,22 +85,19 @@ class HardwareInputManager(QObject):
         # Physical PATTERN UP button (0x1F)
         elif note_number == FIRE_BUTTON_PATTERN_UP:
             self.request_cycle_active_oled_graphic_next.emit()
-            # print(f"HIM DEBUG: Note {hex(note_number)} -> request_cycle_active_oled_graphic_next")
         # Physical PATTERN DOWN button (0x20)
         elif note_number == FIRE_BUTTON_PATTERN_DOWN:
             self.request_cycle_active_oled_graphic_prev.emit()
-            # print(f"HIM DEBUG: Note {hex(note_number)} -> request_cycle_active_oled_graphic_prev")
         # Physical BROWSER button (0x21)
         elif note_number == FIRE_BUTTON_BROWSER:
-            # Current behavior: Toggles sampler and emits oled_browser_activate_pressed
-            self.request_toggle_screen_sampler.emit()  # Keep sampler toggle
-            # If BROWSER button should have a *new distinct* OLED role, that would be a separate feature.
+            # --- THIS IS THE FIX ---
+            # The incorrect sampler toggle signal has been removed.
+            # This button now ONLY emits the signal to open the OLED customizer.
             if hasattr(self, 'oled_browser_activate_pressed'):
                 self.oled_browser_activate_pressed.emit()
         # FX on or off
         elif note_number == FIRE_BUTTON_FX_TOGGLE_STEP:
             self.fx_toggle_requested.emit()
-
 
     def _handle_control_change_event(self, control_cc: int, value: int):
         delta = 0
@@ -127,7 +114,6 @@ class HardwareInputManager(QObject):
             elif value == 126: select_delta = -2
             if select_delta != 0:
                 self.select_encoder_turned.emit(select_delta)
-        
         # --- ADD Logic for Physical Encoders 1-4 ---
         elif control_cc == FIRE_ENCODER_1_CC:
             if delta != 0: self.physical_encoder_rotated.emit(1, delta)
@@ -137,7 +123,5 @@ class HardwareInputManager(QObject):
             if delta != 0: self.physical_encoder_rotated.emit(3, delta)
         elif control_cc == FIRE_ENCODER_4_CC:
             if delta != 0: self.physical_encoder_rotated.emit(4, delta)
-        # --- END ADD ---
-        
         # if delta != 0 and control_cc in [FIRE_ENCODER_1_CC, FIRE_ENCODER_2_CC, FIRE_ENCODER_3_CC, FIRE_ENCODER_4_CC]:
         #     print(f"HIM TRACE: Physical Encoder CC {hex(control_cc)} rotated, delta: {delta}")

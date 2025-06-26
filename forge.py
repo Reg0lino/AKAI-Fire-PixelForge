@@ -5,6 +5,7 @@ import sys
 import os
 import time
 from utils import get_resource_path
+import resources_rc
 os.environ['MIDO_BACKEND'] = 'mido.backends.rtmidi'
 project_root_for_path = os.path.dirname(os.path.abspath(__file__))
 if project_root_for_path not in sys.path:

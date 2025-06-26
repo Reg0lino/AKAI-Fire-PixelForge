@@ -617,30 +617,48 @@ class OLEDDisplayManager(QObject):
         self.request_send_bitmap_to_fire.emit(blank_bitmap)
         self.request_update_mirror_widget.emit(blank_bitmap)
 
+    def is_active_graphic_paused(self) -> bool:
+        """Returns True if the Active Graphic is currently paused by a call to pause_active_graphic()."""
+        # --- FIX: Return the correct, existing attribute ---
+        return self._is_manually_paused
+
     def pause_active_graphic(self):
-        if self.is_active_graphic_paused:
+        """
+        Pauses the currently running Active Graphic (animation or scrolling text).
+        This is called by MainWindow when the user clicks the UI pause button.
+        """
+        # ---  Correctly check the pause state by CALLING the method ---
+        if self.is_active_graphic_paused():
             return
-        self.is_active_graphic_paused = True
-        if self.text_scroll_timer.isActive():
-            self.text_scroll_timer.stop()
-        if self.gif_anim_timer.isActive():
-            self.gif_anim_timer.stop()
+        # ---  Set the correct internal attribute ---
+        self._is_manually_paused = True
+        # ---  Stop the correct, existing timers ---
+        if self._text_scroll_timer.isActive():
+            self._text_scroll_timer.stop()
+        if self._animation_timer.isActive():
+            self._animation_timer.stop()
+        # Notify the UI that the state has changed.
         self.active_graphic_pause_state_changed.emit(True)
 
     def resume_active_graphic(self):
-        if not self.is_active_graphic_paused:
+        """
+        Resumes a paused Active Graphic.
+        This is called by MainWindow when the user clicks the UI pause button again.
+        """
+        # --- Correctly check the pause state by CALLING the method ---
+        if not self.is_active_graphic_paused():
             return
-        self.is_active_graphic_paused = False
-        if self.current_text_is_scrolling:
-            self.text_scroll_timer.start(
-                max(20, self.current_text_item_scroll_delay_ms))
-        elif self._active_graphic_item_type == "image_animation":
-            self.gif_anim_timer.start(self.current_gif_frame_delay_ms)
+        # --- Set the correct internal attribute ---
+        self._is_manually_paused = False
+        # --- Restart the appropriate timer based on the active graphic's type and state ---
+        # Check if an animation was playing
+        if self._animation_is_playing:
+            self._animation_timer.start(self._animation_frame_delay_ms)
+        # Check if text was scrolling
+        elif self._text_is_scrolling:
+            self._text_scroll_timer.start(self._text_step_delay_ms)
+        # Notify the UI that the state has changed.
         self.active_graphic_pause_state_changed.emit(False)
-
-    def is_active_graphic_paused(self) -> bool:
-        """Returns True if the Active Graphic is currently paused by a call to pause_active_graphic()."""
-        return self._active_graphic_is_manually_paused
 
     def _play_active_graphic_animation(self):
         if self._active_graphic_is_manually_paused:  # <<< ADD CHECK
