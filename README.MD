@@ -2,8 +2,7 @@
 
 ## 🚀 Download Latest Release v1.7.0!
 
-**Get the latest standalone executable for Windows from the [GitHub Releases Page](https://github.com/Reg0lino/AKAI-Fire-PixelForge/releases/latest)!**
-*(See "Getting Started (Standalone Executable)" below for installation instructions.)*
+**Get the latest version for Windows from the [GitHub Releases Page](https://github.com/Reg0lino/AKAI-Fire-PixelForge/releases/latest)!**
 
 ![PixelForge Main UI](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/full.png)
 
@@ -37,6 +36,7 @@ This application turns the Akai Fire into a dynamic lighting instrument, a rich 
     *   Features procedural map generation, enemies, and full control via pads and keyboard.
 
     ![LazyDOOM OLED](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/doomoled.png)
+
     ![LazyDOOM Controls](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/doomcontrol.png)
 
 *   **Advanced OLED Display Customization**
