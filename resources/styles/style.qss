@@ -1,12 +1,12 @@
 /* AKAI_Fire_RGB_Controller/resources/styles/style.qss */
 QWidget {
-    background-color: #181818;
+    background-color: #131313;
     color: #B3B3B3;
     font-family: "Segoe UI", Arial, sans-serif;
     font-size: 10pt;
 }
 QMainWindow {
-    background-color: #131313;
+    background-color: #000000;
 }
 /* General QPushButton Styling */
 QPushButton {

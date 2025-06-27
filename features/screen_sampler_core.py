@@ -73,123 +73,88 @@ class ScreenSamplerCore:
         adjustments: dict | None = None
     ) -> tuple[list[tuple[int, int, int]] | None, Image.Image | None]:
         """
-        Captures the overall region, applies ALL adjustments (B/C/S/H), then subdivides
-        this fully adjusted image into a 4x16 grid, calculates the average color for 
-        each cell, and returns the list of 64 colors along with the full preview image.
+        Captures the region and processes it with a highly optimized, single-pass
+        numpy algorithm, ensuring correct BGR-to-RGB color conversion for accuracy.
         """
-        pad_colors_final = None
-        pil_full_preview_adjusted = None
         if not sct_instance:
-            print("ScreenSamplerCore: mss instance not provided.")
             return None, None
+
         current_adjustments = ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()
         if adjustments:
             current_adjustments.update(adjustments)
+
         try:
             all_monitors_info = sct_instance.monitors
             if not (0 <= monitor_capture_id < len(all_monitors_info)):
-                print(
-                    f"ScreenSamplerCore: Invalid monitor_id '{monitor_capture_id}'.")
                 return None, None
             selected_monitor_info = all_monitors_info[monitor_capture_id]
-        except Exception as e:
-            print(f"ScreenSamplerCore: Error accessing monitor info: {e}")
-            return None, None
-        overall_pixel_bbox = ScreenSamplerCore._calculate_pixel_bounding_box_from_percentage(
-            selected_monitor_info, overall_region_percentage
-        )
-        if not overall_pixel_bbox:
-            return None, None
-        try:
-            # 1. Capture the entire user-defined region once
-            sct_overall_img = sct_instance.grab(overall_pixel_bbox)
-            if sct_overall_img.width == 0 or sct_overall_img.height == 0:
+
+            overall_pixel_bbox = ScreenSamplerCore._calculate_pixel_bounding_box_from_percentage(
+                selected_monitor_info, overall_region_percentage
+            )
+            if not overall_pixel_bbox:
                 return None, None
-            # 2. Convert to PIL & apply R/B channel swap fix
+
+            sct_overall_img = sct_instance.grab(overall_pixel_bbox)
+            if sct_overall_img.width < ScreenSamplerCore.NUM_GRID_COLS or sct_overall_img.height < ScreenSamplerCore.NUM_GRID_ROWS:
+                return [(0, 0, 0)] * 64, None
+
             pil_img_raw = Image.frombytes(
-                "RGB", (sct_overall_img.width, sct_overall_img.height), sct_overall_img.rgb, "raw", "BGR")
-            if pil_img_raw.mode == 'RGB':
-                r, g, b = pil_img_raw.split()
-                pil_img_corrected_rgb = Image.merge("RGB", (b, g, r))
-            else:
-                pil_img_corrected_rgb = pil_img_raw
-            # 3. Apply Brightness, Contrast, Saturation adjustments to this entire corrected image
-            pil_full_preview_adjusted = pil_img_corrected_rgb
+                "RGB", sct_overall_img.size, sct_overall_img.rgb, "raw", "BGR")
+
+            # --- THIS IS THE FIX: Restore the BGR -> RGB channel swap ---
+            r, g, b = pil_img_raw.split()
+            pil_img_bgr_fixed = Image.merge("RGB", (b, g, r))
+            # --- END OF FIX ---
+
+            # Start all enhancements from the color-corrected image
+            pil_preview_adjusted = pil_img_bgr_fixed
+
             if current_adjustments['brightness'] != 1.0:
-                enhancer_b = ImageEnhance.Brightness(pil_full_preview_adjusted)
-                pil_full_preview_adjusted = enhancer_b.enhance(
+                enhancer = ImageEnhance.Brightness(pil_preview_adjusted)
+                pil_preview_adjusted = enhancer.enhance(
                     current_adjustments['brightness'])
             if current_adjustments['contrast'] != 1.0:
-                enhancer_c = ImageEnhance.Contrast(pil_full_preview_adjusted)
-                pil_full_preview_adjusted = enhancer_c.enhance(
+                enhancer = ImageEnhance.Contrast(pil_preview_adjusted)
+                pil_preview_adjusted = enhancer.enhance(
                     current_adjustments['contrast'])
             if current_adjustments['saturation'] != 1.0:
-                enhancer_s = ImageEnhance.Color(pil_full_preview_adjusted)
-                pil_full_preview_adjusted = enhancer_s.enhance(
+                enhancer = ImageEnhance.Color(pil_preview_adjusted)
+                pil_preview_adjusted = enhancer.enhance(
                     current_adjustments['saturation'])
-            # --- STEP 4: Apply Hue Shift to the ENTIRE preview image ---
+
+            # --- HYPER-OPTIMIZED NUMPY ALGORITHM ---
+
+            img_np = np.array(pil_preview_adjusted)
+            cell_height = img_np.shape[0] // ScreenSamplerCore.NUM_GRID_ROWS
+            cell_width = img_np.shape[1] // ScreenSamplerCore.NUM_GRID_COLS
+            cropped_height = cell_height * ScreenSamplerCore.NUM_GRID_ROWS
+            cropped_width = cell_width * ScreenSamplerCore.NUM_GRID_COLS
+            img_cropped = img_np[:cropped_height, :cropped_width]
+
+            reshaped = img_cropped.reshape(ScreenSamplerCore.NUM_GRID_ROWS, cell_height,
+                                            ScreenSamplerCore.NUM_GRID_COLS, cell_width, 3)
+            grid_cells = reshaped.swapaxes(
+                1, 2).reshape(-1, cell_height * cell_width, 3)
+            avg_colors_np = np.mean(grid_cells, axis=1).astype(int)
+
             hue_shift_degrees = current_adjustments.get('hue_shift', 0)
             if hue_shift_degrees != 0:
-                # Convert image to numpy array for fast pixel manipulation
-                img_np = np.array(pil_full_preview_adjusted)
-                # Normalize to float (0-1) for colorsys
-                img_hsv_np = img_np / 255.0
-                # Apply hue shift to all pixels at once using numpy vectorization
-                h, s, v = np.vectorize(colorsys.rgb_to_hsv)(
-                    img_hsv_np[:, :, 0], img_hsv_np[:, :, 1], img_hsv_np[:, :, 2])
-                h_shifted = (h + (hue_shift_degrees / 360.0)) % 1.0
-                # Convert back to RGB
-                r_fin, g_fin, b_fin = np.vectorize(
-                    colorsys.hsv_to_rgb)(h_shifted, s, v)
-                # Denormalize back to 0-255 integer range
-                img_shifted_np = (
-                    np.stack([r_fin, g_fin, b_fin], axis=-1) * 255).astype(np.uint8)
-                # Convert back to PIL Image
-                pil_full_preview_adjusted = Image.fromarray(
-                    img_shifted_np, 'RGB')
-            # 5. Subdivide and Average for each grid cell
-            pad_colors_final = []
-            sub_width_pil = pil_full_preview_adjusted.width / ScreenSamplerCore.NUM_GRID_COLS
-            sub_height_pil = pil_full_preview_adjusted.height / ScreenSamplerCore.NUM_GRID_ROWS
-            if sub_width_pil < 1 or sub_height_pil < 1:
-                print(
-                    "ScreenSamplerCore: Overall region too small for 4x16 grid. Sending black.")
-                pad_colors_final = [
-                    (0, 0, 0)] * (ScreenSamplerCore.NUM_GRID_ROWS * ScreenSamplerCore.NUM_GRID_COLS)
-                return pad_colors_final, pil_full_preview_adjusted
-            for r_idx in range(ScreenSamplerCore.NUM_GRID_ROWS):
-                for c_idx in range(ScreenSamplerCore.NUM_GRID_COLS):
-                    left = c_idx * sub_width_pil
-                    top = r_idx * sub_height_pil
-                    right = (c_idx + 1) * sub_width_pil
-                    bottom = (r_idx + 1) * sub_height_pil
-                    crop_box = (int(round(left)), int(round(top)),
-                                int(round(right)), int(round(bottom)))
-                    if crop_box[0] >= crop_box[2] or crop_box[1] >= crop_box[3]:
-                        pad_colors_final.append((0, 0, 0))
-                        continue
-                    sub_image_pil = pil_full_preview_adjusted.crop(crop_box)
-                    if sub_image_pil.width == 0 or sub_image_pil.height == 0:
-                        pad_colors_final.append((0, 0, 0))
-                        continue
-                    # Average the sub-image
-                    sub_img_np = np.array(sub_image_pil)
-                    if sub_img_np.size == 0:
-                        pad_colors_final.append((0, 0, 0))
-                        continue
-                    avg_r = int(np.mean(sub_img_np[:, :, 0]))
-                    avg_g = int(np.mean(sub_img_np[:, :, 1]))
-                    avg_b = int(np.mean(sub_img_np[:, :, 2]))
-                    # The hue shift is already applied to the image, so we just append the averaged color.
-                    pad_colors_final.append((avg_r, avg_g, avg_b))
-            return pad_colors_final, pil_full_preview_adjusted
+                pad_colors_final = [ScreenSamplerCore._apply_hue_shift(
+                    tuple(color), hue_shift_degrees) for color in avg_colors_np]
+            else:
+                pad_colors_final = [tuple(color) for color in avg_colors_np]
+
+            return pad_colors_final, pil_preview_adjusted
+
         except mss.exception.ScreenShotError:
             pass
         except Exception as e:
             print(f"ScreenSamplerCore: Error in grid sampling: {e}")
             import traceback
-            traceback.print_exc()  # Print full traceback for debugging this complex part
-        return None, pil_full_preview_adjusted
+            traceback.print_exc()
+
+        return None, None
 
 if __name__ == '__main__':
     print("ScreenSamplerCore: Main example for GR 그리드 샘플링 started.")

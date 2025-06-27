@@ -608,7 +608,7 @@ class MainWindow(QMainWindow):
         self.button_pattern_up_top_right.clicked.connect(self._handle_cycle_active_oled_next_request)
         self.button_pattern_down_top_right.clicked.connect(self._handle_cycle_active_oled_prev_request)
         top_strip_main_layout.addLayout(pattern_buttons_layout)
-        # --- FIX: Create a vertical container for the OLED and its restored label ---
+        # --- Create a vertical container for the OLED and its restored label ---
         oled_container_widget = QWidget()
         oled_container_layout = QVBoxLayout(oled_container_widget)
         oled_container_layout.setContentsMargins(0, 0, 0, 0)
@@ -1851,7 +1851,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'fx_master_reset_button') and self.fx_master_reset_button:
             self.fx_master_reset_button.clicked.connect(
                 self._on_reset_all_fx_clicked)
-        # --- FIX: Connect the 'Apply to Selected Frames' button ---
+        # --- Connect the 'Apply to Selected Frames' button ---
         if self.apply_fx_button:
             self.apply_fx_button.clicked.connect(
                 self._on_apply_fx_to_frames_clicked)

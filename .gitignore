@@ -83,3 +83,6 @@ run_forge.bat
 mockup 2.0
 gui/main_window.py
 mockup 2.0.png
+.venv/
+.build_venv/
+Build

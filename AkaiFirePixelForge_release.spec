@@ -35,13 +35,14 @@ else:
 
 project_root = SPECPATH
 
-# Point directly to the top-level folders
+# --- MODIFIED: Added 'images' folder ---
 datas_to_bundle = [
     (os.path.join(project_root, 'resources'), 'resources'),
     (os.path.join(project_root, 'presets'), 'presets'),
+    (os.path.join(project_root, 'images'), 'images'),
 ]
 
-# Use flat module paths, no prefix
+# --- MODIFIED: Added 'resources_rc' ---
 hidden_imports_list = [
     # Core Dependencies
     'mido.backends.rtmidi',
@@ -55,14 +56,15 @@ hidden_imports_list = [
     'numpy',
     'numpy.core._dtype_ctypes',
     'packaging',
-    'colorsys', # ADDED: For hue shift calculations
+    'colorsys',
+    'resources_rc', # ADDED: Crucial for the Qt Resource System
     # PyQt6 Modules
     'PyQt6.sip',
     'PyQt6.QtNetwork',
     'PyQt6.QtGui',
     'PyQt6.QtCore',
     'PyQt6.QtWidgets',
-    'PyQt6.QtSvg', # ADDED: Good for icon support
+    'PyQt6.QtSvg',
     # Pillow Modules
     'PIL',
     'PIL._tkinter_finder',
@@ -73,12 +75,12 @@ hidden_imports_list = [
     'PIL.ImageSequence',
     # Our Project's Modules (made exhaustive for safety)
     'utils',
-    'forge', # ADDED: Good practice to include main script
+    'forge',
     'hardware.akai_fire_controller',
     'managers.oled_display_manager',
     'managers.hardware_input_manager',
     'managers.audio_visualizer_manager',
-    'managers.color_fx_utils', # ADDED: Critical for FX system
+    'managers.color_fx_utils',
     'oled_utils.oled_renderer',
     'oled_utils.image_processing',
     'features.screen_sampler_core',
@@ -92,11 +94,11 @@ hidden_imports_list = [
     'gui.static_layouts_manager',
     'gui.interactive_pad_grid',
     'gui.screen_sampler_manager',
-    'gui.screen_sampler_ui_manager', # ADDED
-    'gui.capture_preview_dialog', # ADDED
-    'gui.set_max_frames_dialog', # ADDED
-    'gui.gif_export_dialog', # ADDED
-    'gui.oled_gif_export_dialog', # ADDED
+    'gui.screen_sampler_ui_manager',
+    'gui.capture_preview_dialog',
+    'gui.set_max_frames_dialog',
+    'gui.gif_export_dialog',
+    'gui.oled_gif_export_dialog',
     'gui.monitor_view_widget',
     'gui.oled_customizer_dialog',
     'gui.app_guide_dialog',
@@ -115,7 +117,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['PySide6'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False, 
     cipher=None,
@@ -130,13 +132,13 @@ exe = EXE(
     [],  
     exclude_binaries=True, 
     name='Akai Fire PixelForge', 
-    debug=False, # Changed for release
+    debug=False,
     bootloader_ignore_signals=False,
     strip=False, 
     upx=False,   
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False, # Changed for release (no console window)
+    console=False,
     disable_windowed_traceback=True, 
     argv_emulation=False,
     target_arch=None, 

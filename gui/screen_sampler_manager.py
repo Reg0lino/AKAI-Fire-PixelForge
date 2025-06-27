@@ -81,7 +81,7 @@ except ImportError as e:
 
     class ScreenSamplerCore:  # ... (minimal placeholder) ...
         DEFAULT_ADJUSTMENTS = {'brightness': 1.0, 'contrast': 1.0,
-                               'saturation': 1.0, 'hue_shift': 0}  # Ensure defaults exist
+                                'saturation': 1.0, 'hue_shift': 0}  # Ensure defaults exist
         NUM_GRID_ROWS = 4
         NUM_GRID_COLS = 16
         @staticmethod
