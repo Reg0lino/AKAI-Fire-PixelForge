@@ -36,13 +36,14 @@ else:
 
 project_root = SPECPATH
 
-# --- CORRECTED: Point directly to the top-level folders ---
+# --- CORRECTED: Added 'images' folder ---
 datas_to_bundle = [
     (os.path.join(project_root, 'resources'), 'resources'),
     (os.path.join(project_root, 'presets'), 'presets'),
+    (os.path.join(project_root, 'images'), 'images'),
 ]
 
-# --- CORRECTED: Use flat module paths, no prefix ---
+# --- CORRECTED: Added 'resources_rc' ---
 hidden_imports_list = [
     # Core Dependencies
     'mido.backends.rtmidi',
@@ -56,14 +57,15 @@ hidden_imports_list = [
     'numpy',
     'numpy.core._dtype_ctypes',
     'packaging',
-    'colorsys', # ADDED: For hue shift calculations
+    'colorsys',
+    'resources_rc', # ADDED: Crucial for the Qt Resource System
     # PyQt6 Modules
     'PyQt6.sip',
     'PyQt6.QtNetwork',
     'PyQt6.QtGui',
     'PyQt6.QtCore',
     'PyQt6.QtWidgets',
-    'PyQt6.QtSvg', # ADDED: Good for icon support
+    'PyQt6.QtSvg',
     # Pillow Modules
     'PIL',
     'PIL._tkinter_finder',
@@ -74,12 +76,12 @@ hidden_imports_list = [
     'PIL.ImageSequence',
     # Our Project's Modules (made exhaustive for safety)
     'utils',
-    'forge', # ADDED: Good practice to include main script
+    'forge',
     'hardware.akai_fire_controller',
     'managers.oled_display_manager',
     'managers.hardware_input_manager',
     'managers.audio_visualizer_manager',
-    'managers.color_fx_utils', # ADDED: Critical for FX system
+    'managers.color_fx_utils',
     'oled_utils.oled_renderer',
     'oled_utils.image_processing',
     'features.screen_sampler_core',
@@ -93,11 +95,11 @@ hidden_imports_list = [
     'gui.static_layouts_manager',
     'gui.interactive_pad_grid',
     'gui.screen_sampler_manager',
-    'gui.screen_sampler_ui_manager', # ADDED
-    'gui.capture_preview_dialog', # ADDED
-    'gui.set_max_frames_dialog', # ADDED
-    'gui.gif_export_dialog', # ADDED
-    'gui.oled_gif_export_dialog', # ADDED
+    'gui.screen_sampler_ui_manager',
+    'gui.capture_preview_dialog',
+    'gui.set_max_frames_dialog',
+    'gui.gif_export_dialog',
+    'gui.oled_gif_export_dialog',
     'gui.monitor_view_widget',
     'gui.oled_customizer_dialog',
     'gui.app_guide_dialog',
@@ -110,14 +112,14 @@ hidden_imports_list = [
 
 a = Analysis(
     ['forge.py'], 
-    pathex=[project_root], # This is correct, points to the root where all packages are
+    pathex=[project_root],
     binaries=binaries_to_bundle,
     datas=datas_to_bundle,
     hiddenimports=hidden_imports_list,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['PySide6'], # ADDED: Exclude the unused build tool library
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=None,
@@ -138,13 +140,13 @@ exe = EXE(
     upx=False,   
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True, # This is KEY for debugging
+    console=True,
     disable_windowed_traceback=False, 
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(project_root, 'resources', 'icons', 'app_icon.ico') # CORRECTED
+    icon=os.path.join(project_root, 'resources', 'icons', 'app_icon.ico')
 )
    
 coll = COLLECT(
