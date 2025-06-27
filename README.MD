@@ -52,7 +52,7 @@ This application turns the Akai Fire into a dynamic lighting instrument, a rich 
     *   **Primary/Secondary Color System:** A professional painting workflow with separate colors for left-click and right-click.
 
     ![Animator UI](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/animatorUI.png)
-    ![Image](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/redbluepurpleburst.gif)
+    ![Export Gifs](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/redbluepurpleburst.gif)
 *   **Interactive Screen Sampler ("Ambient Mode")**
     *   Visually select screen regions and mirror them onto the pads.
     *   Adjust Brightness, Saturation, Contrast, and Hue Shift in real-time.
