@@ -86,3 +86,4 @@ mockup 2.0.png
 .venv/
 .build_venv/
 Build
+activatevenv.md

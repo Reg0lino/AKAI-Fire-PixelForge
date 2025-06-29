@@ -1,4 +1,4 @@
-# AKAI_Fire_RGB_Controller/fire_control_app.py
+# AKAI_Fire_RGB_Controller/forge.py
 from PyQt6.QtGui import QIcon, QFontDatabase
 from PyQt6.QtWidgets import QApplication
 import sys
