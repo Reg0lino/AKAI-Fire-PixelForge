@@ -17,8 +17,8 @@ except ImportError:
     print("ScreenSamplerUIManager: Warning - Could not import ScreenSamplerCore for VALID_QUADRANTS. Using fallback.")
 # Define constants used by this UI module
 MIN_SAMPLING_FPS = 1
-MAX_SAMPLING_FPS = 30  # Can be up to 60 or more, but 30 is reasonable for UI slider
-DEFAULT_SAMPLING_FPS = 10
+MAX_SAMPLING_FPS = 90  # Can be up to 60 or more, but 30 is reasonable for UI slider
+DEFAULT_SAMPLING_FPS = 20
 ICON_RECORD = "🎬"
 ICON_STOP_RECORDING = "🔴"
 ICON_SETTINGS = "⚙️"

@@ -6,6 +6,7 @@ import colorsys
 import os 
 
 class ScreenSamplerCore:
+    INTERMEDIATE_DOWNSAMPLE_SIZE = (320, 180)  # <<< ADD THIS LINE
     VALID_QUADRANTS_FOR_DEFAULT_REGIONS = ["top-left", "top-right", "bottom-left", "bottom-right", "center", "full-screen"]
     DEFAULT_FALLBACK_LOGICAL_WIDTH = 128 
     DEFAULT_FALLBACK_LOGICAL_HEIGHT = 128
@@ -73,43 +74,43 @@ class ScreenSamplerCore:
         adjustments: dict | None = None
     ) -> tuple[list[tuple[int, int, int]] | None, Image.Image | None]:
         """
-        Captures the region and processes it with a highly optimized, single-pass
-        numpy algorithm, ensuring correct BGR-to-RGB color conversion for accuracy.
+        Captures a screen region, immediately downsamples it for massive performance
+        gains, applies color enhancements to the small image, and then samples it.
         """
         if not sct_instance:
             return None, None
-
         current_adjustments = ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()
         if adjustments:
             current_adjustments.update(adjustments)
-
         try:
             all_monitors_info = sct_instance.monitors
             if not (0 <= monitor_capture_id < len(all_monitors_info)):
                 return None, None
             selected_monitor_info = all_monitors_info[monitor_capture_id]
-
             overall_pixel_bbox = ScreenSamplerCore._calculate_pixel_bounding_box_from_percentage(
                 selected_monitor_info, overall_region_percentage
             )
             if not overall_pixel_bbox:
                 return None, None
-
+            # --- STEP 1: Capture the (potentially large) region ---
             sct_overall_img = sct_instance.grab(overall_pixel_bbox)
+            # --- This check remains important ---
             if sct_overall_img.width < ScreenSamplerCore.NUM_GRID_COLS or sct_overall_img.height < ScreenSamplerCore.NUM_GRID_ROWS:
                 return [(0, 0, 0)] * 64, None
-
+            # --- STEP 2: Convert to PIL and IMMEDIATELY downsample ---
+            # The BGR -> RGB swap must be done before resizing to maintain color integrity.
             pil_img_raw = Image.frombytes(
                 "RGB", sct_overall_img.size, sct_overall_img.rgb, "raw", "BGR")
-
-            # --- THIS IS THE FIX: Restore the BGR -> RGB channel swap ---
-            r, g, b = pil_img_raw.split()
-            pil_img_bgr_fixed = Image.merge("RGB", (b, g, r))
-            # --- END OF FIX ---
-
-            # Start all enhancements from the color-corrected image
-            pil_preview_adjusted = pil_img_bgr_fixed
-
+            b, g, r = pil_img_raw.split()
+            # Re-merge in correct R,G,B order
+            pil_img_bgr_fixed = Image.merge("RGB", (r, g, b))
+            # THE CORE OPTIMIZATION: Resize to a small, manageable intermediate image
+            pil_img_small = pil_img_bgr_fixed.resize(
+                ScreenSamplerCore.INTERMEDIATE_DOWNSAMPLE_SIZE,
+                resample=Image.Resampling.NEAREST  # NEAREST is fastest and good enough for this
+            )
+            # --- STEP 3: Apply all enhancements to the SMALL image ---
+            pil_preview_adjusted = pil_img_small  # Start with the small image
             if current_adjustments['brightness'] != 1.0:
                 enhancer = ImageEnhance.Brightness(pil_preview_adjusted)
                 pil_preview_adjusted = enhancer.enhance(
@@ -122,38 +123,35 @@ class ScreenSamplerCore:
                 enhancer = ImageEnhance.Color(pil_preview_adjusted)
                 pil_preview_adjusted = enhancer.enhance(
                     current_adjustments['saturation'])
-
-            # --- HYPER-OPTIMIZED NUMPY ALGORITHM ---
-
+            # --- STEP 4: Grid sample from the small, enhanced image ---
             img_np = np.array(pil_preview_adjusted)
             cell_height = img_np.shape[0] // ScreenSamplerCore.NUM_GRID_ROWS
             cell_width = img_np.shape[1] // ScreenSamplerCore.NUM_GRID_COLS
+            # This logic should now be safe since we control the intermediate size
+            if cell_height == 0 or cell_width == 0:
+                return [(0, 0, 0)] * 64, pil_preview_adjusted
             cropped_height = cell_height * ScreenSamplerCore.NUM_GRID_ROWS
             cropped_width = cell_width * ScreenSamplerCore.NUM_GRID_COLS
             img_cropped = img_np[:cropped_height, :cropped_width]
-
             reshaped = img_cropped.reshape(ScreenSamplerCore.NUM_GRID_ROWS, cell_height,
-                                            ScreenSamplerCore.NUM_GRID_COLS, cell_width, 3)
+                                           ScreenSamplerCore.NUM_GRID_COLS, cell_width, 3)
             grid_cells = reshaped.swapaxes(
                 1, 2).reshape(-1, cell_height * cell_width, 3)
             avg_colors_np = np.mean(grid_cells, axis=1).astype(int)
-
             hue_shift_degrees = current_adjustments.get('hue_shift', 0)
             if hue_shift_degrees != 0:
                 pad_colors_final = [ScreenSamplerCore._apply_hue_shift(
                     tuple(color), hue_shift_degrees) for color in avg_colors_np]
             else:
                 pad_colors_final = [tuple(color) for color in avg_colors_np]
-
+            # Return the final colors and the SMALL adjusted image for the preview window
             return pad_colors_final, pil_preview_adjusted
-
         except mss.exception.ScreenShotError:
             pass
         except Exception as e:
             print(f"ScreenSamplerCore: Error in grid sampling: {e}")
             import traceback
             traceback.print_exc()
-
         return None, None
 
 if __name__ == '__main__':
