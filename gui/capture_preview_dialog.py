@@ -285,7 +285,7 @@ class CapturePreviewDialog(QDialog):
         """
         This is the "UNLOCK" part of the slingshot. It gives control back to the user.
         """
-        print("DEBUG: UNLOCKING window. User can now resize.")
+        # print("DEBUG: UNLOCKING window. User can now resize.")
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)  # QWIDGETSIZE_MAX
 
@@ -294,7 +294,7 @@ class CapturePreviewDialog(QDialog):
         This is the "LOCK & RELEASE" maneuver. It commands the window to snap
         to a single, consistent, compact size, then immediately unlocks it.
         """
-        print("DEBUG: SNAPPING window to compact size.")
+        # print("DEBUG: SNAPPING window to compact size.")
         COMPACT_SIZE = QSize(850, 420)
         self.setFixedSize(COMPACT_SIZE)
         QTimer.singleShot(0, self._release_size_constraints)
@@ -330,8 +330,8 @@ class CapturePreviewDialog(QDialog):
         self._emit_sampling_parameters_changed()
         # --- Only snap the window size IF the monitor actually changed ---
         if monitor_has_changed:
-            print(
-                f"DEBUG: Monitor changed from {not monitor_id} to {monitor_id}. Triggering snap.")
+            # print(
+            #     f"DEBUG: Monitor changed from {not monitor_id} to {monitor_id}. Triggering snap.")
             # This call will snap the window back to the compact size and unlock it.
             self._snap_window_to_compact_size()
 
