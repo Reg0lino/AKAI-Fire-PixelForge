@@ -90,9 +90,19 @@ APP_GUIDE_HTML_CONTENT = """
     <h3>Primary/Secondary Colors</h3><p>The Color Picker uses a <b>Primary/Secondary</b> color system. Left-click (or drag) on the main grid paints with the Primary Color. Right-click (or drag) paints with the Secondary Color. By default, the secondary color is black, acting as an eraser.</p>
     <h3>Animator Timeline</h3><p>The timeline is your main workspace for building animations. You can select, multi-select (with <code>Ctrl</code> or <code>Shift</code>), and drag-and-drop frames to reorder them. Use the buttons or hotkeys for operations like adding, duplicating, and deleting frames.</p>
     <h2>🎵 Audio Visualizer</h2><p>Unleash your music visually! The Audio Visualizer listens to your computer's sound output and transforms it into dynamic, colorful light shows on the pads.</p>
-    <ul><li><b>Audio Source:</b> Select the sound device you want to visualize (often labeled "Loopback" or "Stereo Mix").</li><li><b>Enable/Disable:</b> Use the "Enable Visualizer" button or press the <span class="key-cap">NOTE</span> button on the hardware.</li><li><b>Live Settings:</b> Click the <code>Setup...</code> button to open a dialog where you can tweak all settings in <b>real-time</b> while the visualizer is running.</li></ul>
+    <ul>
+        <li><b>Audio Source:</b> Select the sound device you want to visualize (often labeled "Loopback" or "Stereo Mix").</li>
+        <li><b>Enable/Disable:</b> Use the "Enable Visualizer" button or press the <span class="key-cap">STEP</span> button on the hardware.</li>
+        <li><b>Live Settings:</b> Click the <code>Setup...</code> button to open a dialog where you can tweak all settings in <b>real-time</b> while the visualizer is running.
+    </ul>
     <h2>🖥️ Screen Sampler</h2><p>Dynamically mirror colors from your screen onto the pads and record the output into new animations.</p>
-    <ul><li><b>Activation:</b> Toggle using the "Screen Sampling" button in the UI or the <span class="key-cap">PERFORM</span> button on the hardware.</li><li><b>Configuration:</b> Click <code>Configure...</code> to open a dialog where you can select a monitor, drag to define a capture area, and adjust color processing.</li><li><b>Record Output:</b> Click "Record" to capture the sampler's visual output directly into a new animation sequence in the Animator Studio.</li></ul>
+    <ul>
+        <li><b>Activation:</b> Toggle using the "Screen Sampling" button in the UI or the <span class="key-cap">PERFORM</span> button on the hardware.</li>
+        <li><b>Monitor Selection:</b> Use the "Cycle" button in the UI or the <span class="key-cap">DRUM</span> button on the hardware to switch between connected monitors.</li>
+        <li><b>Mode Selection:</b> Use the "Mode" dropdown in the UI or the <span class="key-cap">NOTE</span> button on the hardware to cycle through different sampling algorithms (e.g., Region, Thumbnail, Palette).</li>
+        <li><b>Configuration:</b> Click <code>Configure...</code> to open a dialog where you can define a capture area (for Region mode) and adjust color processing (for all modes).</li>
+        <li><b>Record Output:</b> Click "Record" to capture the sampler's visual output directly into a new animation sequence in the Animator Studio.
+    </ul>
     <p class="note"><b>Power User Tip:</b> Websites like <a href="https://giphy.com/search/abstract-color" target="_blank">GIPHY</a> are a goldmine for sampler content. Play an abstract color GIF, position the sampler region over it, and record the output to create amazing pad animations with ease!</p>
     <h2>⚙️ Advanced OLED Customization</h2><ul><li><b>OLED Customizer:</b> Click the <span class="key-cap">BROWSER</span> button on the hardware (or the OLED mirror in the UI) to open the Customizer. Here you can create, edit, and manage a library of Text items, Image sprites, and dithered GIF animations.</li><li><b>Active Graphic:</b> In the Customizer, you can designate any creation to be the persistent default display on your Fire's OLED screen.</li><li><b>Live Controls:</b> Use <span class="key-cap">PATTERN UP</span> / <span class="key-cap">DOWN</span> to cycle the Active Graphic. Click the Play/Pause icon next to the UI mirror to freeze/unfreeze animations.</li></ul>
     <h2 class="doom-title">👹 LazyDOOM</h2><p>A fully playable, DOOM-themed retro first-person shooter that runs entirely on the controller's OLED display, using the pads for input. Click the "Launch LazyDOOM" button and read the instructions carefully before playing!</p>
@@ -106,12 +116,11 @@ APP_GUIDE_HTML_CONTENT = """
 </body>
 </html>
 """
-
 class AppGuideDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(
-            "🚀 Akai Fire PixelForge - App Guide & Hotkeys (v1.7.0)")
+            "🚀 Akai Fire PixelForge - App Guide & Hotkeys (v1.8.0)")
         self.setMinimumSize(900, 700)
         self.resize(1000, 850)
         main_layout = QVBoxLayout(self)
@@ -178,7 +187,6 @@ class AppGuideDialog(QDialog):
         return master_scroll_area
 
     def _create_controls_tab(self) -> QWidget:
-        # This method remains unchanged as its content is already correct.
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setObjectName("ControlsScrollArea")
@@ -186,36 +194,68 @@ class AppGuideDialog(QDialog):
         main_controls_layout = QVBoxLayout(container_widget)
         main_controls_layout.setSpacing(20)
         main_controls_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         top_strip_group = QGroupBox("🎛️ Top Strip Hardware Controls")
         top_strip_layout = QGridLayout(top_strip_group)
         top_strip_layout.setColumnStretch(1, 1)
         top_strip_layout.setVerticalSpacing(8)
         top_strip_layout.setHorizontalSpacing(15)
-        top_strip_buttons = [("BROWSER", "Open the OLED Customizer dialog."), ("PATTERN UP", "Cycle to the NEXT Active OLED Graphic."), ("PATTERN DOWN", "Cycle to the PREVIOUS Active OLED Graphic."), ("GRID ▶ / ◀",
-                                                                                                                                                                                                        "Cycle Navigation Focus (e.g., Animator vs. Static Layouts)."), ("SELECT (Turn)", "Scroll through items in the focused panel (e.g., animations, layouts)."), ("SELECT (Press)", "Load / Apply the currently highlighted item."),]
+        top_strip_buttons = [
+            ("BROWSER", "Open the OLED Customizer dialog."),
+            ("PATTERN UP", "Cycle to the NEXT Active OLED Graphic."),
+            ("PATTERN DOWN", "Cycle to the PREVIOUS Active OLED Graphic."),
+            ("GRID ▶ / ◀", "Cycle Navigation Focus (e.g., Animator vs. Static Layouts)."),
+            ("SELECT (Turn)", "Scroll through items in the focused panel (e.g., animations, layouts)."),
+            ("SELECT (Press)", "Load / Apply the currently highlighted item."),
+        ]
         for i, (key, desc) in enumerate(top_strip_buttons):
             self._add_control_row(top_strip_layout, i, key, desc)
         main_controls_layout.addWidget(top_strip_group)
+
         hw_group = QGroupBox("🔥 Main Function Hardware Controls")
         hw_layout = QGridLayout(hw_group)
         hw_layout.setColumnStretch(1, 1)
         hw_layout.setVerticalSpacing(8)
         hw_layout.setHorizontalSpacing(15)
-        hw_buttons = [("PERFORM", "Toggle Screen Sampler (Ambient Mode) ON/OFF."), ("DRUM", "While Sampler is active, cycle through available monitors."), ("NOTE",
-                                                                                                                                                            "Toggle Audio Visualizer ON/OFF."), ("STEP", "Toggle the 'Enable Color FX' checkbox."), ("PLAY", "Play / Pause Animator."), ("STOP", "Stop Animator playback."),]
+
+        # --- UPDATED HW BUTTONS FOR NEW MAPPINGS ---
+        hw_buttons = [
+            ("PERFORM", "Toggle Screen Sampler (Ambient Mode) ON/OFF."),
+            ("DRUM", "While Sampler is active, cycle through available monitors."),
+            # UPDATED
+            ("NOTE", "Cycle through Screen Sampling Modes (Region, Thumbnail, Palette)."),
+            ("STEP", "Toggle Audio Visualizer ON/OFF."),  # UPDATED
+            ("ALT", "Toggle the 'Enable Color FX' checkbox."),  # NEW ENTRY
+            ("PLAY", "Play / Pause Animator."),
+            ("STOP", "Stop Animator playback."),
+        ]
         for i, (key, desc) in enumerate(hw_buttons):
             self._add_control_row(hw_layout, i, key, desc)
         main_controls_layout.addWidget(hw_group)
+
         kbd_group = QGroupBox("⌨️ Keyboard Hotkeys")
         kbd_layout = QGridLayout(kbd_group)
         kbd_layout.setColumnStretch(1, 1)
         kbd_layout.setVerticalSpacing(8)
         kbd_layout.setHorizontalSpacing(15)
-        hotkeys = [("Ctrl + N", "New Animation Sequence"), ("Ctrl + O", "Load Animation Sequence"), ("Ctrl + Shift + S", "Save Sequence As..."), ("Spacebar", "Play / Pause Animation"), ("Ctrl + Z", "Undo last paint stroke or frame operation"), ("Ctrl + Y", "Redo last paint stroke or frame operation"),
-                    ("Ctrl + C", "Copy selected frame(s)"), ("Ctrl + X", "Cut selected frame(s)"), ("Ctrl + V", "Paste frame(s) from clipboard"), ("Ctrl + D", "Duplicate selected frame(s)"), ("Delete", "Delete selected frame(s)"), ("I", "Toggle Eyedropper tool for color picking")]
+        hotkeys = [
+            ("Ctrl + N", "New Animation Sequence"),
+            ("Ctrl + O", "Load Animation Sequence"),
+            ("Ctrl + Shift + S", "Save Sequence As..."),
+            ("Spacebar", "Play / Pause Animation"),
+            ("Ctrl + Z", "Undo last paint stroke or frame operation"),
+            ("Ctrl + Y", "Redo last paint stroke or frame operation"),
+            ("Ctrl + C", "Copy selected frame(s)"),
+            ("Ctrl + X", "Cut selected frame(s)"),
+            ("Ctrl + V", "Paste frame(s) from clipboard"),
+            ("Ctrl + D", "Duplicate selected frame(s)"),
+            ("Delete", "Delete selected frame(s)"),
+            ("I", "Toggle Eyedropper tool for color picking")
+        ]
         for i, (key, desc) in enumerate(hotkeys):
             self._add_control_row(kbd_layout, i, key, desc)
         main_controls_layout.addWidget(kbd_group)
+
         scroll_area.setWidget(container_widget)
         return scroll_area
 

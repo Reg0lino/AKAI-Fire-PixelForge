@@ -1,5 +1,37 @@
 # Changelog - Akai Fire PixelForge
 
+## [Version 1.8.0] - June 1, 2025
+
+This is a major feature and performance release that introduces two new high-performance "Ambient" sampling modes, designed to be extremely fast for use-cases like gaming. This version also includes a significant refactoring of the entire sampler UI and state management system to be more robust, intuitive, and bug-free.
+
+### ✨ **NEW FEATURES & ENHANCEMENTS**
+
+*   **NEW: High-Performance Ambient Sampling Modes:**
+    *   The Screen Sampler now features a "Sampling Mode" dropdown to choose between algorithms.
+    *   **"Thumbnail (Fast)" Mode:** A new, ultra-fast mode that captures the screen, resizes it to a `16x4` thumbnail, and maps it directly to the pads. This provides a beautiful, low-resolution mirror of the screen with minimal CPU impact, perfect for gaming.
+    *   **"Palette (Creative)" Mode:** A new, creative mode that uses the `colorthief` library to find the 5 most dominant colors on screen and then generates a smooth, aesthetically pleasing gradient across the 64 pads.
+*   **NEW: Dedicated "Ambient Mode" Configuration Dialog:**
+    *   When a high-performance mode ("Thumbnail" or "Palette") is selected, the "Configure..." button now opens a new, streamlined dialog that contains *only* the color adjustment sliders.
+    *   This provides a clean, focused UI for tuning the look of ambient modes without the unnecessary complexity of the region selector.
+    *   Added a "Cycle Monitor" button to this new dialog for complete functionality.
+*   **Major Sampler UI/UX Overhaul:**
+    *   The "Monitor" and "Mode" dropdown menus are now **always enabled** when the device is connected, allowing the user to pre-select their desired configuration *before* starting the sampler.
+    *   The monitor list now correctly populates immediately upon connecting the device, rather than waiting for the sampler to be enabled.
+    *   The dropdowns now correctly update the manager's state in real-time, even when the sampler is off.
+
+### 🐛 **BUG FIXES & STABILITY**
+
+*   **CRITICAL: Fixed Sampler State Management:**
+    *   Completely refactored the interaction between the UI and the logic manager to use a "pull" strategy, eliminating all "stale state" bugs. The manager now always acts on the most current UI settings.
+    *   Fixed a critical `AttributeError` crash that occurred when starting the sampler or changing modes due to an incorrect initialization order.
+    *   Fixed the bug where changing the "Mode" dropdown had no effect until the sampler was restarted.
+*   **CRITICAL: Fixed `ValueError` in Palette Sampling:**
+    *   Resolved a `numpy` broadcasting error that caused the "Palette (Creative)" mode to crash continuously. The gradient interpolation math is now correct and stable.
+*   **Fixed Sampler Dialog Resizing:**
+    *   Stabilized the `VisualSamplerConfiguration` (Grid Mode) dialog. It now correctly snaps to a compact, user-resizable window on open and on monitor cycle, fixing a long-standing bug that caused it to lock up or resize uncontrollably.
+
+---
+
 ## [Version 1.7.0] - Master Stability & Final Polish 
 
 This is a landmark release focused on achieving master-level stability across the entire application and adding the final layer of professional polish before release. It addresses deep architectural flaws in the state management systems, particularly for the OLED display, resulting in a significantly more robust and crash-free user experience. This version also introduces a completely redesigned and comprehensive in-app guide to empower users.

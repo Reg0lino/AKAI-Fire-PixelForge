@@ -10,3 +10,4 @@ Pillow==11.2.1
 mss==10.0.0
 appdirs==1.4.4
 PyInstaller==6.9.0
+colorthief==2.0.2

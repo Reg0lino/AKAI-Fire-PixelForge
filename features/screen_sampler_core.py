@@ -5,6 +5,14 @@ from PIL import Image, ImageEnhance
 import colorsys 
 import os 
 
+# Near other imports at the top
+try:
+    from colorthief import ColorThief
+    COLORTHIEF_AVAILABLE = True
+except ImportError:
+    COLORTHIEF_AVAILABLE = False
+    print("ScreenSamplerCore WARNING: colorthief library not found. 'Palette' mode will be unavailable.")
+
 class ScreenSamplerCore:
     INTERMEDIATE_DOWNSAMPLE_SIZE = (320, 180)  # <<< ADD THIS LINE
     VALID_QUADRANTS_FOR_DEFAULT_REGIONS = ["top-left", "top-right", "bottom-left", "bottom-right", "center", "full-screen"]
@@ -153,6 +161,130 @@ class ScreenSamplerCore:
             import traceback
             traceback.print_exc()
         return None, None
+
+    @staticmethod
+    def capture_and_thumbnail_sample(
+        sct_instance, monitor_capture_id: int, adjustments: dict | None = None
+    ) -> tuple[list[tuple[int, int, int]] | None, Image.Image | None]:
+        """
+        Captures the entire monitor, uses Pillow to efficiently resize to the 16x4
+        pad grid, applies color adjustments, and returns the list of 64 colors.
+        """
+        if not sct_instance:
+            return None, None
+        current_adjustments = ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()
+        if adjustments:
+            current_adjustments.update(adjustments)
+        try:
+            monitor_bbox = sct_instance.monitors[monitor_capture_id]
+            # --- FIX: Grab the full resolution image (mss v10 compatible) ---
+            sct_img = sct_instance.grab(monitor_bbox)
+            # Convert to a Pillow Image
+            pil_img_raw = Image.frombytes(
+                "RGB", sct_img.size, sct_img.rgb, "raw", "BGR")
+            b, g, r = pil_img_raw.split()
+            thumbnail = Image.merge("RGB", (r, g, b))
+            # --- FIX: Re-introduce the resize step using Pillow's optimized method ---
+            thumbnail = thumbnail.resize(
+                (ScreenSamplerCore.NUM_GRID_COLS, ScreenSamplerCore.NUM_GRID_ROWS),
+                resample=Image.Resampling.LANCZOS  # High quality downsampling
+            )
+            if current_adjustments['brightness'] != 1.0:
+                enhancer = ImageEnhance.Brightness(thumbnail)
+                thumbnail = enhancer.enhance(current_adjustments['brightness'])
+            if current_adjustments['contrast'] != 1.0:
+                enhancer = ImageEnhance.Contrast(thumbnail)
+                thumbnail = enhancer.enhance(current_adjustments['contrast'])
+            if current_adjustments['saturation'] != 1.0:
+                enhancer = ImageEnhance.Color(thumbnail)
+                thumbnail = enhancer.enhance(current_adjustments['saturation'])
+            img_np = np.array(thumbnail)
+            pad_colors_tuples = [tuple(p) for p in img_np.reshape(-1, 3)]
+            hue_shift_degrees = current_adjustments.get('hue_shift', 0)
+            if hue_shift_degrees != 0:
+                pad_colors_final = [ScreenSamplerCore._apply_hue_shift(
+                    c, hue_shift_degrees) for c in pad_colors_tuples]
+            else:
+                pad_colors_final = pad_colors_tuples
+            return pad_colors_final, None
+        except Exception as e:
+            print(f"ScreenSamplerCore: Error in thumbnail sampling: {e}")
+            return None, None
+
+    @staticmethod
+    def capture_and_palette_sample(
+        sct_instance, monitor_capture_id: int, adjustments: dict | None = None
+    ) -> tuple[list[tuple[int, int, int]] | None, Image.Image | None]:
+        """
+        Captures the screen, uses Pillow to downsample, finds the 5 most dominant
+        colors, and creates a smooth gradient across the pads.
+        """
+        if not sct_instance or not COLORTHIEF_AVAILABLE:
+            if not COLORTHIEF_AVAILABLE:
+                print("Palette mode unavailable: colorthief library missing.")
+            return None, None
+        current_adjustments = ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy()
+        if adjustments:
+            current_adjustments.update(adjustments)
+        try:
+            monitor_bbox = sct_instance.monitors[monitor_capture_id]
+            # --- FIX: Grab the full resolution image (mss v10 compatible) ---
+            sct_img = sct_instance.grab(monitor_bbox)
+            # Convert to a Pillow Image
+            pil_img_raw = Image.frombytes(
+                "RGB", sct_img.size, sct_img.rgb, "raw", "BGR")
+            b, g, r = pil_img_raw.split()
+            thumbnail = Image.merge("RGB", (r, g, b))
+            # --- FIX: Re-introduce the resize step using Pillow's optimized method ---
+            thumbnail = thumbnail.resize(
+                (150, 84), resample=Image.Resampling.LANCZOS)
+            if current_adjustments['brightness'] != 1.0:
+                thumbnail = ImageEnhance.Brightness(thumbnail).enhance(
+                    current_adjustments['brightness'])
+            if current_adjustments['contrast'] != 1.0:
+                thumbnail = ImageEnhance.Contrast(thumbnail).enhance(
+                    current_adjustments['contrast'])
+            if current_adjustments['saturation'] != 1.0:
+                thumbnail = ImageEnhance.Color(thumbnail).enhance(
+                    current_adjustments['saturation'])
+            from io import BytesIO
+            with BytesIO() as f:
+                thumbnail.save(f, format='PNG')
+                f.seek(0)
+                color_thief = ColorThief(f)
+                palette = color_thief.get_palette(color_count=5, quality=10)
+            if not palette or len(palette) < 5:
+                avg_color = np.array(thumbnail).mean(axis=(0, 1)).astype(int)
+                return [tuple(avg_color)] * 64, None
+            tl, tr, bl, br, c = [np.array(color) for color in palette]
+            x = np.linspace(0, 1, ScreenSamplerCore.NUM_GRID_COLS)
+            y = np.linspace(0, 1, ScreenSamplerCore.NUM_GRID_ROWS)
+            xv, yv = np.meshgrid(x, y)
+            top_interp = (1 - xv[..., np.newaxis]) * \
+                tl + xv[..., np.newaxis] * tr
+            bottom_interp = (1 - xv[..., np.newaxis]) * \
+                bl + xv[..., np.newaxis] * br
+            corner_gradient = (1 - yv[..., np.newaxis]) * \
+                top_interp + yv[..., np.newaxis] * bottom_interp
+            center_dist = np.sqrt((xv - 0.5)**2 + (yv - 0.4)**2)
+            center_weight = 1 - np.clip(center_dist * 1.5, 0, 1)
+            final_gradient_np = (
+                1 - center_weight[..., np.newaxis]) * corner_gradient + center_weight[..., np.newaxis] * c
+            final_gradient_np = np.clip(final_gradient_np, 0, 255).astype(int)
+            pad_colors_tuples = [tuple(p)
+                                for p in final_gradient_np.reshape(-1, 3)]
+            hue_shift_degrees = current_adjustments.get('hue_shift', 0)
+            if hue_shift_degrees != 0:
+                pad_colors_final = [ScreenSamplerCore._apply_hue_shift(
+                    c, hue_shift_degrees) for c in pad_colors_tuples]
+            else:
+                pad_colors_final = pad_colors_tuples
+            return pad_colors_final, None
+        except Exception as e:
+            print(f"ScreenSamplerCore: Error in palette sampling: {e}")
+            import traceback
+            traceback.print_exc()
+            return None, None
 
 if __name__ == '__main__':
     print("ScreenSamplerCore: Main example for GR 그리드 샘플링 started.")

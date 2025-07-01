@@ -928,13 +928,13 @@ class MainWindow(QMainWindow):
             self.screen_sampler_manager.sampling_activity_changed.connect(self._on_sampler_activity_changed)
             self.screen_sampler_manager.sampling_activity_changed.connect(self._on_sampler_activity_changed_for_knobs)
             self.screen_sampler_manager.new_sequence_from_recording_ready.connect(self._handle_load_sequence_request)
-            self.screen_sampler_manager.sampler_monitor_changed.connect(self._on_sampler_monitor_cycled_for_oled)
+            # self.screen_sampler_manager.sampler_monitor_changed.connect(self._on_sampler_monitor_cycled_for_oled) # <<< REMOVED
+            self.screen_sampler_manager.sampler_monitor_display_name_changed.connect(self.screen_sampler_manager.ui_manager.set_monitor_display_name) # <<< NEW
             self.screen_sampler_manager.sampler_adjustments_changed.connect(self._on_sampler_adjustments_updated_for_knobs)
         # AnimatorManagerWidget Signals
         if self.animator_manager:
             if self.animator_manager.sequence_controls_widget and self.animator_manager.sequence_controls_widget.speed_slider:
-                self.animator_manager.sequence_controls_widget.speed_slider.valueChanged.connect(
-                    self._on_speed_slider_changed)
+                self.animator_manager.sequence_controls_widget.speed_slider.valueChanged.connect(self._on_speed_slider_changed)
             self.animator_manager.selection_changed.connect(self._on_animator_selection_changed)
             self.animator_manager.active_frame_data_for_display.connect(self._handle_animator_frame_for_display_with_fx)
             self.animator_manager.playback_status_update.connect(self.status_bar.showMessage)
@@ -953,23 +953,20 @@ class MainWindow(QMainWindow):
                 self.hardware_input_manager.request_animator_stop.connect(self._handle_hardware_animator_stop_request)
             self.hardware_input_manager.grid_left_pressed.connect(self._handle_grid_left_pressed)
             self.hardware_input_manager.grid_right_pressed.connect(self._handle_grid_right_pressed)
-            self.hardware_input_manager.select_encoder_turned.connect(
-                self._handle_select_encoder_turned)
+            self.hardware_input_manager.select_encoder_turned.connect(self._handle_select_encoder_turned)
             self.hardware_input_manager.select_encoder_pressed.connect(self._handle_select_encoder_pressed)
+            # --- Hardware button remapping connections ---
+            self.hardware_input_manager.request_cycle_sampler_mode.connect(self._on_request_cycle_sampler_mode) # <<< NEW
             self.hardware_input_manager.request_toggle_screen_sampler.connect(self._on_request_toggle_screen_sampler)
             self.hardware_input_manager.request_cycle_sampler_monitor.connect(self._on_request_cycle_sampler_monitor)
-            self.hardware_input_manager.fx_toggle_requested.connect(
-                self._handle_fx_toggle_request)
-            self.hardware_input_manager.visualizer_toggle_requested.connect(
-                lambda: self._handle_visualizer_toggle_request(not self.is_visualizer_active))
+            self.hardware_input_manager.visualizer_toggle_requested.connect(lambda: self._handle_visualizer_toggle_request(not self.is_visualizer_active)) # <<< NEW: STEP button triggers this now
+            self.hardware_input_manager.fx_toggle_requested.connect(self._handle_fx_toggle_request) # <<< NEW: ALT button triggers this now
+            if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
+                self.hardware_input_manager.oled_browser_activate_pressed.connect(self._open_oled_customizer_dialog)
             if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_next'):
                 self.hardware_input_manager.request_cycle_active_oled_graphic_next.connect(self._handle_cycle_active_oled_next_request)
             if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_prev'):
                 self.hardware_input_manager.request_cycle_active_oled_graphic_prev.connect(self._handle_cycle_active_oled_prev_request)
-            if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
-                # --- THIS IS THE FIX ---
-                # The BROWSER button now opens the customizer dialog directly.
-                self.hardware_input_manager.oled_browser_activate_pressed.connect(self._open_oled_customizer_dialog)
         # OLEDDisplayManager Signals
         if self.oled_display_manager:
             if self.akai_controller:
@@ -3755,25 +3752,13 @@ class MainWindow(QMainWindow):
         self.screen_sampler_manager.cycle_target_monitor()
         # OLED feedback will be handled by connecting to screen_sampler_manager.sampler_monitor_changed
 
-    def _on_sampler_monitor_cycled_for_oled(self, new_monitor_name: str):
-        """Shows a temporary OLED message when the sampler monitor is cycled."""
-        if not self.oled_display_manager:
-            return
-        display_name_part = new_monitor_name
-        # Attempt to shorten "Monitor X (WxH)" to just "Monitor X" or "X"
-        match = re.match(r"(Monitor\s*\d+)", display_name_part)
-        if match:
-            display_name_part = match.group(1)
-        elif "Monitor" in display_name_part and "(" in display_name_part:
-            try:
-                display_name_part = display_name_part.split("(")[0].strip()
-            except:
-                pass
-        self.oled_display_manager.show_system_message(
-            text=f"Monitor: {display_name_part}",
-            duration_ms=2000,
-            scroll_if_needed=True
-        )
+    def _on_request_cycle_sampler_mode(self):
+        """Cycles to the next available sampling mode."""
+        if not self.screen_sampler_manager or not self.akai_controller.is_connected():
+            self.status_bar.showMessage("Sampler unavailable or controller disconnected.", 2000)
+            return        
+        # This signal is now directly connected to the manager's cycle_sampling_mode
+        self.screen_sampler_manager.cycle_sampling_mode()
 
     def _update_sampler_oled_feedback(self):
         """
@@ -3838,7 +3823,7 @@ class MainWindow(QMainWindow):
         if self.akai_controller.is_connected() or self.akai_controller.is_input_connected():
             # --- DISCONNECT LOGIC ---
             if self.oled_display_manager and self.akai_controller.is_connected():
-                self.oled_display_manager.full_reset() # <<< ADD THIS LINE
+                self.oled_display_manager.full_reset()
                 self.oled_display_manager.clear_display_content()
             self.akai_controller.disconnect()
         else:
@@ -3856,7 +3841,9 @@ class MainWindow(QMainWindow):
                 if self.akai_controller.is_input_connected() and self.akai_controller.in_port_name_used:
                     status_msg += f" | Input: {self.akai_controller.in_port_name_used}"
                 self.status_bar.showMessage(status_msg, 2500)
-                # --- Create the default blank sequence upon successful connection ---
+                # --- NEW: Populate monitors immediately after connection ---
+                if self.screen_sampler_manager: self.screen_sampler_manager.populate_monitor_list_for_ui(force_fetch=True)
+                # Create the default blank sequence upon successful connection
                 if self.animator_manager:
                     self.animator_manager.create_new_sequence(prompt_save=False)
                 self._load_and_apply_active_graphic()

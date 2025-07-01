@@ -8,6 +8,7 @@ FIRE_BUTTON_GRID_RIGHT = 0x23
 FIRE_ENCODER_SELECT_PRESS_NOTE = 0x19 # Note value for select encoder press (renamed for clarity)
 FIRE_ENCODER_SELECT_TURN_CC = 0x76 
 FIRE_BUTTON_FX_TOGGLE_STEP = 0x2C  # Physical "STEP" button
+FIRE_BUTTON_ALT = 0x31  # Physical "ALT" button (used for FX toggle)
 
 FIRE_BUTTON_PATTERN_UP = 0x1F   # Physical "PATTERN UP" button note
 FIRE_BUTTON_PATTERN_DOWN = 0x20 # Physical "PATTERN DOWN" button note
@@ -25,6 +26,7 @@ FIRE_ENCODER_2_CC = 0x11 # Physical Knob 2 (Pan/Saturation)
 FIRE_ENCODER_3_CC = 0x12 # Physical Knob 3 (Filter/Contrast)
 FIRE_ENCODER_4_CC = 0x13 # Physical Knob 4 (Resonance/Hue)
 
+
 class HardwareInputManager(QObject):
     # Signals for animator/navigation
     request_animator_play_pause = pyqtSignal()
@@ -32,16 +34,21 @@ class HardwareInputManager(QObject):
     grid_left_pressed = pyqtSignal()
     grid_right_pressed = pyqtSignal()
     select_encoder_pressed = pyqtSignal()
-    select_encoder_turned = pyqtSignal(int) # delta: +1, -1, +2, -2 for select encoder
-    # signal for fx toggle --- note button on bottom
+    # delta: +1, -1, +2, -2 for select encoder
+    select_encoder_turned = pyqtSignal(int)
+    # fx_toggle_requested = pyqtSignal() # <<< REMOVE THIS OLD SIGNAL
+    # <<< Re-add, it was deleted in previous version for some reason
     fx_toggle_requested = pyqtSignal()
     # Signals for Sampler Control
     request_toggle_screen_sampler = pyqtSignal()
     request_cycle_sampler_monitor = pyqtSignal()
+    # visualizer_toggle_requested = pyqtSignal() # <<< REMOVE THIS OLD SIGNAL
+    # <<< Re-add, it was deleted in previous version for some reason
     visualizer_toggle_requested = pyqtSignal()
-    physical_encoder_rotated = pyqtSignal(int, int) # encoder_id (1-4), delta (+1 or -1)
-    oled_browser_activate_pressed = pyqtSignal() # Keep if BROWSER button still has a role
-    # Add new signals for direct cycling of active OLED graphic
+    request_cycle_sampler_mode = pyqtSignal()  # <<< NEW SIGNAL
+    # encoder_id (1-4), delta (+1 or -1)
+    physical_encoder_rotated = pyqtSignal(int, int)
+    oled_browser_activate_pressed = pyqtSignal()
     request_cycle_active_oled_graphic_next = pyqtSignal()
     request_cycle_active_oled_graphic_prev = pyqtSignal()
 
@@ -69,35 +76,33 @@ class HardwareInputManager(QObject):
     def _handle_generic_button_event(self, note_number: int, is_pressed: bool):
         if not is_pressed:
             return  # Process only on press
-        # --- Standard Button Handling (Keep your existing logic for these) ---
+
         if note_number == FIRE_BUTTON_GRID_LEFT:
             self.grid_left_pressed.emit()
         elif note_number == FIRE_BUTTON_GRID_RIGHT:
             self.grid_right_pressed.emit()
-        elif note_number == FIRE_ENCODER_SELECT_PRESS_NOTE:  # Renamed constant
+        elif note_number == FIRE_ENCODER_SELECT_PRESS_NOTE:
             self.select_encoder_pressed.emit()
         elif note_number == HW_BUTTON_SAMPLER_TOGGLE:
             self.request_toggle_screen_sampler.emit()
         elif note_number == HW_BUTTON_MONITOR_CYCLE:
             self.request_cycle_sampler_monitor.emit()
+        # --- NEW: NOTE button cycles sampler modes ---
         elif note_number == FIRE_BUTTON_NOTE:
+            self.request_cycle_sampler_mode.emit()
+        # --- NEW: STEP button toggles Audio Visualizer ---
+        # This is the STEP button (0x2C)
+        elif note_number == FIRE_BUTTON_FX_TOGGLE_STEP:
             self.visualizer_toggle_requested.emit()
-        # Physical PATTERN UP button (0x1F)
+        # --- NEW: ALT button toggles Color FX ---
+        elif note_number == FIRE_BUTTON_ALT:  # This is the ALT button (0x31)
+            self.fx_toggle_requested.emit()
         elif note_number == FIRE_BUTTON_PATTERN_UP:
             self.request_cycle_active_oled_graphic_next.emit()
-        # Physical PATTERN DOWN button (0x20)
         elif note_number == FIRE_BUTTON_PATTERN_DOWN:
             self.request_cycle_active_oled_graphic_prev.emit()
-        # Physical BROWSER button (0x21)
         elif note_number == FIRE_BUTTON_BROWSER:
-            # --- THIS IS THE FIX ---
-            # The incorrect sampler toggle signal has been removed.
-            # This button now ONLY emits the signal to open the OLED customizer.
-            if hasattr(self, 'oled_browser_activate_pressed'):
-                self.oled_browser_activate_pressed.emit()
-        # FX on or off
-        elif note_number == FIRE_BUTTON_FX_TOGGLE_STEP:
-            self.fx_toggle_requested.emit()
+            self.oled_browser_activate_pressed.emit()
 
     def _handle_control_change_event(self, control_cc: int, value: int):
         delta = 0
