@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QPushButton, QWidget,
     QSizePolicy, QSpacerItem, QSplitter, QApplication, QGroupBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QImage, QPixmap, QFont
 from PIL import Image
 
@@ -48,7 +48,8 @@ class CapturePreviewDialog(QDialog):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle("👁️ Visual Sampler Configuration")
-        self.setMinimumSize(850, 600)
+        # old fixed line commented out for now
+        # self.setFixedSize(850, 420)
         # --- UI Element Declarations ---
         self.monitor_view_widget: MonitorViewWidget | None = None
         self.cycle_monitor_button: QPushButton | None = None
@@ -108,52 +109,35 @@ class CapturePreviewDialog(QDialog):
         self.preview_image_label.setStyleSheet("background-color: #282828; border: 1px solid #444;")
         right_panel_layout.addWidget(self.preview_image_label, 1)
         # Helper function to create a slider row
-
         def create_slider_row(label_text, min_val, max_val, initial_val):
-            layout = QHBoxLayout()
-            label = QLabel(label_text)
-            label.setMinimumWidth(70)
-            slider = QSlider(Qt.Orientation.Horizontal)
-            slider.setRange(min_val, max_val)
-            slider.setValue(initial_val)
-            value_label = QLabel()
-            value_label.setMinimumWidth(55)
-            reset_button = QPushButton("⟳")
-            reset_button.setFixedSize(24, 24)
-            reset_button.setObjectName("ResetButton")
-            layout.addWidget(label)
-            layout.addWidget(slider)
-            layout.addWidget(value_label)
-            layout.addWidget(reset_button)
-            return layout, slider, value_label, reset_button
+            layout = QHBoxLayout(); label = QLabel(label_text); label.setMinimumWidth(70); slider = QSlider(Qt.Orientation.Horizontal); slider.setRange(min_val, max_val); slider.setValue(initial_val); value_label = QLabel(); value_label.setMinimumWidth(55); reset_button = QPushButton("⟳"); reset_button.setFixedSize(24, 24); reset_button.setObjectName("ResetButton"); layout.addWidget(label); layout.addWidget(slider); layout.addWidget(value_label); layout.addWidget(reset_button); return layout, slider, value_label, reset_button
         # Color Adjustments Group
         adjustments_group = QGroupBox("Color Adjustments")
         adjustments_layout = QVBoxLayout(adjustments_group)
-        bri_row_layout, self.brightness_slider, self.brightness_value_label, self.brightness_reset_button = \
-            create_slider_row("Brightness:", SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL, self._factor_to_slider(self.current_params['adjustments']['brightness']))
+        bri_row_layout, self.brightness_slider, self.brightness_value_label, self.brightness_reset_button = create_slider_row("Brightness:", SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL, self._factor_to_slider(self.current_params['adjustments']['brightness']))
         adjustments_layout.addLayout(bri_row_layout)
-        sat_row_layout, self.saturation_slider, self.saturation_value_label, self.saturation_reset_button = \
-            create_slider_row("Saturation:", SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL, self._factor_to_slider(self.current_params['adjustments']['saturation']))
+        sat_row_layout, self.saturation_slider, self.saturation_value_label, self.saturation_reset_button = create_slider_row("Saturation:", SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL, self._factor_to_slider(self.current_params['adjustments']['saturation']))
         adjustments_layout.addLayout(sat_row_layout)
-        con_row_layout, self.contrast_slider, self.contrast_value_label, self.contrast_reset_button = \
-            create_slider_row("Contrast:", SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL, self._factor_to_slider(self.current_params['adjustments']['contrast']))
+        con_row_layout, self.contrast_slider, self.contrast_value_label, self.contrast_reset_button = create_slider_row("Contrast:", SLIDER_MIN_FACTOR_VAL, SLIDER_MAX_FACTOR_VAL, self._factor_to_slider(self.current_params['adjustments']['contrast']))
         adjustments_layout.addLayout(con_row_layout)
-        hue_row_layout, self.hue_slider, self.hue_value_label, self.hue_reset_button = \
-            create_slider_row("Hue Shift:", SLIDER_MIN_HUE, SLIDER_MAX_HUE, int(round(self.current_params['adjustments']['hue_shift'])))
+        hue_row_layout, self.hue_slider, self.hue_value_label, self.hue_reset_button = create_slider_row("Hue Shift:", SLIDER_MIN_HUE, SLIDER_MAX_HUE, int(round(self.current_params['adjustments']['hue_shift'])))
         adjustments_layout.addLayout(hue_row_layout)
         right_panel_layout.addWidget(adjustments_group)
-        right_panel_layout.addStretch(0)
+        right_panel_layout.addStretch(0) # Revert to 0 stretch
         splitter.addWidget(right_panel_widget)
+        # Set a reasonable default split between the panels
         splitter.setSizes([self.width() * 3 // 5, self.width() * 2 // 5])
 
     def _connect_signals(self):
         # View signals
         self.monitor_view_widget.region_selection_changed.connect(
             self._on_region_or_monitor_changed_in_view)
-        # --- MODIFIED: Connect button directly to the view widget's method ---
+        # --- The monitor_changed connection is no longer needed ---
+        # self.monitor_view_widget.monitor_changed.connect(self._on_monitor_changed_for_resize)
+        # Connect button directly to the view widget's method
         self.cycle_monitor_button.clicked.connect(
             self.monitor_view_widget.cycle_to_next_monitor)
-        # Slider signals (no snapping slider anymore)
+        # Slider signals
         self.saturation_slider.valueChanged.connect(
             self._on_adjustment_slider_changed)
         self.contrast_slider.valueChanged.connect(
@@ -162,7 +146,7 @@ class CapturePreviewDialog(QDialog):
             self._on_adjustment_slider_changed)
         self.hue_slider.valueChanged.connect(
             self._on_adjustment_slider_changed)
-        # Reset button signals (no snapping reset anymore)
+        # Reset button signals
         self.brightness_reset_button.clicked.connect(
             self._on_reset_brightness_clicked)
         self.saturation_reset_button.clicked.connect(
@@ -185,11 +169,6 @@ class CapturePreviewDialog(QDialog):
         self.saturation_value_label.setText(f"{adj.get('saturation', DEFAULT_SATURATION_FACTOR):.2f}x")
         self.contrast_value_label.setText(f"{adj.get('contrast', DEFAULT_CONTRAST_FACTOR):.2f}x")
         self.hue_value_label.setText(f"{int(round(adj.get('hue_shift', DEFAULT_HUE_SHIFT))):+d}°")
-
-    def _on_region_or_monitor_changed_in_view(self, monitor_id: int, region_rect_percentage: dict):
-        self.current_params['monitor_id'] = monitor_id
-        self.current_params['region_rect_percentage'] = region_rect_percentage.copy()
-        self._emit_sampling_parameters_changed()
 
     def _on_adjustment_slider_changed(self):
         self.current_params['adjustments']['saturation'] = self._slider_to_factor(self.saturation_slider.value())
@@ -300,6 +279,61 @@ class CapturePreviewDialog(QDialog):
             print(f"CapturePreviewDialog: Error updating preview: {e}")
             self.preview_image_label.setText("Preview Error.")
             self.preview_image_label.setPixmap(QPixmap())
+
+    # --- Resizing Logic (V3 - Decoupled & Centered) ---
+    def _release_size_constraints(self):
+        """
+        This is the "UNLOCK" part of the slingshot. It gives control back to the user.
+        """
+        print("DEBUG: UNLOCKING window. User can now resize.")
+        self.setMinimumSize(0, 0)
+        self.setMaximumSize(16777215, 16777215)  # QWIDGETSIZE_MAX
+
+    def _snap_window_to_compact_size(self):
+        """
+        This is the "LOCK & RELEASE" maneuver. It commands the window to snap
+        to a single, consistent, compact size, then immediately unlocks it.
+        """
+        print("DEBUG: SNAPPING window to compact size.")
+        COMPACT_SIZE = QSize(850, 420)
+        self.setFixedSize(COMPACT_SIZE)
+        QTimer.singleShot(0, self._release_size_constraints)
+
+    def force_initial_layout_and_size(self):
+        """
+        Ensures the dialog opens at the correct size AND the content is
+        correctly laid out and centered from the very beginning.
+        """
+        # 1. Snap the window to its initial compact size.
+        self._snap_window_to_compact_size()
+        # 2. Force a full refresh of the dialog's contents *after* the resize.
+        #    This ensures the MonitorViewWidget knows its final container size
+        #    and can center its content correctly.
+        QTimer.singleShot(
+            10, lambda: self.set_current_parameters_from_main(self.current_params))
+
+    def showEvent(self, event):
+        """
+        Overrides the show event to trigger the initial layout and size logic.
+        """
+        super().showEvent(event)
+        QTimer.singleShot(0, self.force_initial_layout_and_size)
+
+    def _on_region_or_monitor_changed_in_view(self, monitor_id: int, region_rect_percentage: dict):
+        # --- DECOUPLING LOGIC: This is the fix for the feedback loop ---
+        monitor_has_changed = (monitor_id != self.current_params['monitor_id'])
+        # Update the internal state regardless of what changed.
+        self.current_params['monitor_id'] = monitor_id
+        self.current_params['region_rect_percentage'] = region_rect_percentage.copy(
+        )
+        # Emit the signal so the backend sampler gets the new region/monitor info.
+        self._emit_sampling_parameters_changed()
+        # --- Only snap the window size IF the monitor actually changed ---
+        if monitor_has_changed:
+            print(
+                f"DEBUG: Monitor changed from {not monitor_id} to {monitor_id}. Triggering snap.")
+            # This call will snap the window back to the compact size and unlock it.
+            self._snap_window_to_compact_size()
 
     # --- Window Event Handlers ---
     def closeEvent(self, event):

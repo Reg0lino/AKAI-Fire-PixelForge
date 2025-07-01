@@ -100,7 +100,7 @@ except ImportError as e:
 SAMPLER_PREFS_FILENAME = "sampler_user_prefs.json"
 APP_NAME_FOR_CONFIG = "AKAI_Fire_RGB_Controller"
 APP_AUTHOR_FOR_CONFIG = "YourProjectAuthorName"  # Replace if needed
-DEFAULT_SAMPLING_FPS = 10
+DEFAULT_SAMPLING_FPS = 20
 
 
 class ScreenSamplerManager(QObject):
@@ -113,6 +113,7 @@ class ScreenSamplerManager(QObject):
     sampler_monitor_changed = pyqtSignal(str)
     # Emits the full 'adjustments' dictionary
     sampler_adjustments_changed = pyqtSignal(dict)
+    sampler_parameters_updated_externally = pyqtSignal(dict)
 
     def __init__(self,
                 presets_base_path: str,
@@ -512,7 +513,6 @@ class ScreenSamplerManager(QObject):
                 "Enable sampler to cycle monitors.", 2000)
             return
         if not self.screen_sampler_monitor_list_cache:
-            # Try to get monitors if cache is empty
             self.populate_monitor_list_for_ui(force_fetch=True)
             if not self.screen_sampler_monitor_list_cache:
                 self.sampler_status_update.emit(
@@ -521,9 +521,7 @@ class ScreenSamplerManager(QObject):
         if len(self.screen_sampler_monitor_list_cache) <= 1:
             self.sampler_status_update.emit(
                 "Only one monitor available.", 2000)
-            # Optionally, still emit current monitor name if needed for OLED refresh
-            current_monitor_id = self.current_sampler_params.get(
-                'monitor_id', 1)
+            current_monitor_id = self.current_sampler_params.get('monitor_id', 1)
             current_monitor_info = next(
                 (m for m in self.screen_sampler_monitor_list_cache if m['id'] == current_monitor_id), None)
             if current_monitor_info:
@@ -531,32 +529,20 @@ class ScreenSamplerManager(QObject):
                     'name_for_ui', f"Monitor {current_monitor_id}"))
             return
         current_monitor_id = self.current_sampler_params.get('monitor_id', 1)
-        current_idx = -1
-        for i, monitor in enumerate(self.screen_sampler_monitor_list_cache):
-            if monitor['id'] == current_monitor_id:
-                current_idx = i
-                break
-        next_idx = (
-            current_idx + 1) % len(self.screen_sampler_monitor_list_cache)
+        current_idx = next((i for i, m in enumerate(self.screen_sampler_monitor_list_cache) if m['id'] == current_monitor_id), -1)
+        next_idx = (current_idx + 1) % len(self.screen_sampler_monitor_list_cache)
         new_monitor_info = self.screen_sampler_monitor_list_cache[next_idx]
         new_monitor_id = new_monitor_info['id']
         self.current_sampler_params['monitor_id'] = new_monitor_id
-        # Update the UI ComboBox to reflect the new selection
         if GUI_IMPORTS_OK and hasattr(self.ui_manager, 'set_selected_monitor_ui'):
             self.ui_manager.set_selected_monitor_ui(new_monitor_id)
-        # Apply preferences for the newly selected monitor
         self._apply_prefs_for_current_monitor()
-        # If sampling is active, restart it with the new monitor settings
         if self.is_sampling_thread_active:
-            self._synchronize_and_control_sampling_thread(
-                True)  # True to (re)start sampling
-        new_monitor_name = new_monitor_info.get(
-            'name_for_ui', f"Monitor {new_monitor_id}")
-        self.sampler_status_update.emit(
-            f"Sampler switched to: {new_monitor_name}", 2500)
-        self.sampler_monitor_changed.emit(
-            new_monitor_name)  # Emit signal for OLED update
-        # print(f"SSM TRACE: Cycled monitor to ID: {new_monitor_id}, Name: {new_monitor_name}") # Optional
+            self._synchronize_and_control_sampling_thread(True)
+        new_monitor_name = new_monitor_info.get('name_for_ui', f"Monitor {new_monitor_id}")
+        self.sampler_status_update.emit(f"Sampler switched to: {new_monitor_name}", 2500)
+        self.sampler_monitor_changed.emit(new_monitor_name)
+        self.sampler_parameters_updated_externally.emit(self.current_sampler_params)
 
     def _show_capture_preview_dialog(self):
         if not GUI_IMPORTS_OK:
@@ -565,46 +551,29 @@ class ScreenSamplerManager(QObject):
             self.populate_monitor_list_for_ui(force_fetch=True)
             if not self.screen_sampler_monitor_list_cache:
                 if hasattr(self.ui_manager, 'isEnabled') and self.ui_manager.isEnabled():
-                    QMessageBox.warning(
-                        self.ui_manager, "Monitor Info", "No monitor data for sampler config.")
+                    QMessageBox.warning(self.ui_manager, "Monitor Info", "No monitor data for sampler config.")
                 else:
-                    self.sampler_status_update.emit(
-                        "Cannot open preview: No monitor data.", 3000)
+                    self.sampler_status_update.emit("Cannot open preview: No monitor data.", 3000)
                 return
         if not self.capture_preview_dialog:
-            self.capture_preview_dialog = CapturePreviewDialog(
-                parent=self.ui_manager if isinstance(self.ui_manager, QObject) else None)
-            self.capture_preview_dialog.sampling_parameters_changed.connect(
-                self._handle_dialog_full_params_changed)
-            self.capture_preview_dialog.dialog_closed.connect(
-                self._on_capture_preview_dialog_closed)
-        # 1. Apply preferences for the currently selected monitor to self.current_sampler_params
-        # This ensures self.current_sampler_params has the latest loaded/saved state for this monitor.
+            self.capture_preview_dialog = CapturePreviewDialog(parent=self.ui_manager if isinstance(self.ui_manager, QObject) else None)
+            self.capture_preview_dialog.sampling_parameters_changed.connect(self._handle_dialog_full_params_changed)
+            self.capture_preview_dialog.dialog_closed.connect(self._on_capture_preview_dialog_closed)
+            # Connect the manager's update signal to the dialog's parameter setting slot.
+            self.sampler_parameters_updated_externally.connect(self.capture_preview_dialog.set_current_parameters_from_main)
         self._apply_prefs_for_current_monitor()
-        # print(f"DEBUG SSM._show_capture_preview_dialog: AFTER apply_prefs, current_sampler_params BEING PASSED IS: monitor_id={self.current_sampler_params.get('monitor_id')}, region={self.current_sampler_params.get('region_rect_percentage')}, adjustments={self.current_sampler_params.get('adjustments')}")
-        # 2. Inform the dialog about all available monitors and which one is currently targeted.
-        #    The dialog uses this to set up its MonitorViewWidget.
         if hasattr(self.capture_preview_dialog, 'set_initial_monitor_data'):
             self.capture_preview_dialog.set_initial_monitor_data(
                 self.screen_sampler_monitor_list_cache,
                 self.current_sampler_params['monitor_id']
             )
-        # else:
-        #     print("CRITICAL WARNING (SSM._show_capture_preview_dialog): capture_preview_dialog missing 'set_initial_monitor_data'")
-        # 3. Pass the specific parameters (including region and adjustments for the target monitor)
-        #    to the dialog so it can set its sliders and the MonitorViewWidget's selection box.
+            
         if hasattr(self.capture_preview_dialog, 'set_current_parameters_from_main'):
-            self.capture_preview_dialog.set_current_parameters_from_main(
-                self.current_sampler_params)
-        # else:
-        #     print("CRITICAL WARNING (SSM._show_capture_preview_dialog): capture_preview_dialog missing 'set_current_parameters_from_main'")
+            self.capture_preview_dialog.set_current_parameters_from_main(self.current_sampler_params)
+            
         if self._last_processed_pil_image:
             if hasattr(self.capture_preview_dialog, 'update_preview_image'):
-                self.capture_preview_dialog.update_preview_image(
-                    self._last_processed_pil_image)
-            else:
-                print(
-                    "WARNING (SSM._show_capture_preview_dialog): capture_preview_dialog missing 'update_preview_image'")
+                self.capture_preview_dialog.update_preview_image(self._last_processed_pil_image)
         self.capture_preview_dialog.show()
         self.capture_preview_dialog.activateWindow()
         self.capture_preview_dialog.raise_()

@@ -31,12 +31,13 @@ class ResizeHandle(Enum):
 
 class MonitorViewWidget(QWidget):
     region_selection_changed = pyqtSignal(int, dict)
+    monitor_changed = pyqtSignal(dict)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setMinimumSize(300, 200)
         self.setSizePolicy(QSizePolicy.Policy.Expanding,
-                        QSizePolicy.Policy.Expanding)
+                            QSizePolicy.Policy.Expanding)
         self.setMouseTracking(True)
         self.all_monitors_original_info: list[dict] = []
         self.target_monitor_mss_id: int | None = None
@@ -56,20 +57,16 @@ class MonitorViewWidget(QWidget):
         """Cycles to the next available monitor and updates the view."""
         if not self.all_monitors_original_info or len(self.all_monitors_original_info) <= 1:
             return  # Nothing to cycle to
-
         current_idx = -1
         if self.target_monitor_mss_id is not None:
             for i, monitor in enumerate(self.all_monitors_original_info):
                 if monitor['id'] == self.target_monitor_mss_id:
                     current_idx = i
                     break
-
         next_idx = (current_idx + 1) % len(self.all_monitors_original_info)
         new_target_id = self.all_monitors_original_info[next_idx]['id']
-
         # This will set the new monitor and recalculate everything
         self.set_target_monitor_and_update_view(new_target_id)
-
         # This signal tells the manager about the change so it can update the sampling thread
         self._emit_selection_changed()
 
@@ -110,7 +107,6 @@ class MonitorViewWidget(QWidget):
                 self._reset_scaled_rects()
         else:
             self.target_monitor_mss_id = target_mss_id
-
         self._recalculate_scales_and_selection_rect()
         self.update()
 
@@ -245,7 +241,6 @@ class MonitorViewWidget(QWidget):
         painter.setBrush(DEFAULT_MONITOR_BG_COLOR)
         painter.setPen(QPen(ACTIVE_MONITOR_BORDER_COLOR, 2))
         painter.drawRect(self.target_monitor_scaled_rect)
-
         mon_text = f"Target: {target_mon_orig_info.get('name', f'ID {self.target_monitor_mss_id}')}\n" \
             f"{target_mon_orig_info['width']}x{target_mon_orig_info['height']}"
         painter.setPen(self.palette().text().color())
@@ -272,7 +267,6 @@ class MonitorViewWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.target_monitor_mss_id is None or self.target_monitor_scaled_rect.isNull():
                 return
-
             self._active_interaction = self._get_handle_at_pos(pos)
             if self._active_interaction != ResizeHandle.NONE:
                 self._drag_start_mouse_pos = pos
@@ -329,7 +323,6 @@ class MonitorViewWidget(QWidget):
                 new_rect.setRight(new_right)
             self.selection_rect_scaled = new_rect.normalized()
             self._clamp_selection_rect_to_current_monitor_view()
-
         self._update_logical_state_from_scaled_rect()
         self.update()
         self._emit_selection_changed()
@@ -405,7 +398,6 @@ class MonitorViewWidget(QWidget):
         if perc_y + perc_h > 1.0:
             perc_h = 1.0 - perc_y
         return self.target_monitor_mss_id, {'x': perc_x, 'y': perc_y, 'width': perc_w, 'height': perc_h}
-
 
 if __name__ == '__main__':
     import sys
