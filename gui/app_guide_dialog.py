@@ -204,7 +204,7 @@ class AppGuideDialog(QDialog):
             ("BROWSER", "Open the OLED Customizer dialog."),
             ("PATTERN UP", "Cycle to the NEXT Active OLED Graphic."),
             ("PATTERN DOWN", "Cycle to the PREVIOUS Active OLED Graphic."),
-            ("GRID ▶ / ◀", "Cycle Navigation Focus (e.g., Animator vs. Static Layouts)."),
+            ("GRID ◀ / ▶", "Cycle Navigation Focus (e.g., Animator vs. Static Layouts)."),
             ("SELECT (Turn)", "Scroll through items in the focused panel (e.g., animations, layouts)."),
             ("SELECT (Press)", "Load / Apply the currently highlighted item."),
         ]

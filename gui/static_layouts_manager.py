@@ -49,26 +49,51 @@ class StaticLayoutsManager(QGroupBox):
         buttons_layout.addWidget(self.delete_button)
         layout.addLayout(buttons_layout)
         self.layouts_combo.currentIndexChanged.connect(self._on_combo_selection_changed)
-        self.set_enabled_state(False)
 
     def set_enabled_state(self, enabled: bool):
-        is_list_populated = bool(self.loaded_layouts) and self.layouts_combo.count() > 1 # Count > 1 means more than just placeholder
-        self.layouts_combo.setEnabled(enabled and is_list_populated)
-        is_valid_selection = enabled and self.layouts_combo.currentIndex() > 0 and \
-                            self.layouts_combo.currentText() != "No static layouts found"
-        self.apply_button.setEnabled(is_valid_selection)
-        self.save_button.setEnabled(enabled)
+        """
+        Updates the enabled state of the buttons based on the parent groupbox's
+        state and the selection in the layouts combo box.
+        The layouts_combo itself is enabled/disabled by the QGroupBox parent.
+        """
+        # The QComboBox (self.layouts_combo) will inherit its enabled state
+        # directly from the QGroupBox (self). So, we do NOT set its enabled state here.
+        is_list_populated = bool(
+            self.loaded_layouts) and self.layouts_combo.count() > 1
+        is_valid_selection = self.layouts_combo.currentIndex() > 0 and \
+            self.layouts_combo.currentText() != "No static layouts found"
+        # Apply button depends on:
+        # 1. The overall groupbox being enabled (checked by self.isEnabled())
+        # 2. A valid layout being selected
+        self.apply_button.setEnabled(self.isEnabled() and is_valid_selection)
+        # Save button depends on:
+        # 1. The overall groupbox being enabled
+        self.save_button.setEnabled(self.isEnabled())
+        # Delete button depends on:
+        # 1. The overall groupbox being enabled
+        # 2. A valid layout being selected
+        # 3. The selected layout being a "user" layout
         can_delete = False
-        if is_valid_selection:
+        if self.isEnabled() and is_valid_selection:
             current_layout_name = self.layouts_combo.currentText()
             if current_layout_name in self.loaded_layouts:
-                can_delete = self.loaded_layouts[current_layout_name].get("type") == "user"
+                can_delete = self.loaded_layouts[current_layout_name].get(
+                    "type") == "user"
         self.delete_button.setEnabled(can_delete)
-        if enabled and not is_list_populated and self.layouts_combo.itemText(0) == "--- Select Static Layout ---":
-            self.layouts_combo.clear() # Clear "--- Select ---"
-            self.layouts_combo.addItem("No static layouts found") # Add the specific message
-            self.layouts_combo.setEnabled(False) # Disable if truly no layouts
-            
+        # Handle the "No static layouts found" display state.
+        # This state should only be displayed if the list is truly empty (after refresh)
+        # and the widget is enabled.
+        if self.isEnabled() and not is_list_populated and \
+            self.layouts_combo.itemText(0) != "No static layouts found":
+            # Avoid triggering _on_combo_selection_changed prematurely
+            self.layouts_combo.blockSignals(True)
+            self.layouts_combo.clear()
+            self.layouts_combo.addItem("No static layouts found")
+            self.layouts_combo.blockSignals(False)
+            # The QComboBox itself is enabled/disabled by the QGroupBox parent.
+            # So, if self.isEnabled() is True but no layouts, it'll show "No static layouts found"
+            # and still be clickable (but only to show the one disabled item).
+            # This is standard Qt behavior.
 
     def _get_layouts_dir_path(self, layout_type="user") -> str:
         # This method now directly returns the full path passed during __init__
@@ -163,16 +188,11 @@ class StaticLayoutsManager(QGroupBox):
         self._on_combo_selection_changed(self.layouts_combo.currentIndex())
 
     def _on_combo_selection_changed(self, index: int):
-        is_list_populated = bool(self.loaded_layouts) and self.layouts_combo.count() > 1
-        is_valid_selection = index > 0 and \
-                            (not is_list_populated or self.layouts_combo.itemText(index) != "No static layouts found")
-        self.apply_button.setEnabled(is_valid_selection and self.isEnabled()) # Also check if groupbox is enabled
-        can_delete = False
-        if is_valid_selection and self.isEnabled():
-            current_layout_name = self.layouts_combo.currentText()
-            if current_layout_name in self.loaded_layouts:
-                can_delete = self.loaded_layouts[current_layout_name].get("type") == "user"
-        self.delete_button.setEnabled(can_delete)
+        """
+        Handles selection changes in the combo box. Recalculates button enabled states.
+        """
+        # Re-evaluate all button states based on the current selection and groupbox enabled state.
+        self.set_enabled_state(self.isEnabled())
 
     def get_navigation_item_count(self) -> int:
         """Returns the number of actual items in the layouts combo box (excluding placeholder)."""
