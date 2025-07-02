@@ -210,8 +210,8 @@ MW_ANIMATOR_FPS_KNOB_MAX_SLIDER_VAL = _MW_SLIDER_IDX_FOR_LINEAR_START + \
 MW_ANIMATOR_SPEED_KNOB_STEP = 1
 
 # --- Constants ---
-INITIAL_WINDOW_WIDTH = 1100
-INITIAL_WINDOW_HEIGHT = 900
+INITIAL_WINDOW_WIDTH = 1050
+INITIAL_WINDOW_HEIGHT = 880
 PRESETS_BASE_DIR_NAME = "presets"
 APP_NAME = "AKAI_Fire_RGB_Controller"
 APP_AUTHOR = "Reg0lino"
@@ -522,7 +522,7 @@ class MainWindow(QMainWindow):
         # This will hold the left and right panels.
         self.main_app_layout = QHBoxLayout(self.central_widget_main) # Set layout directly on central_widget_main
         self.main_app_layout.setSpacing(10)
-        self.main_app_layout.setContentsMargins(5, 5, 5, 5) # Small margins around the entire app content
+        self.main_app_layout.setContentsMargins(2, 2, 2, 2) # Small margins around the entire app content
         # print(f"MW DEBUG: _init_ui_layout - Main app layout (QHBoxLayout) created: {self.main_app_layout}")
         # 3. --- Left Panel Setup ---
         # Create a QWidget to act as the container for the left panel's content
@@ -530,8 +530,8 @@ class MainWindow(QMainWindow):
         self.left_panel_widget.setObjectName("LeftPanelWidget") # For styling if needed
         # Create a QVBoxLayout for the left panel's content
         self.left_panel_layout = QVBoxLayout(self.left_panel_widget) # Set layout on the left_panel_widget
-        self.left_panel_layout.setContentsMargins(0, 0, 0, 0) # No margins within the left panel itself
-        self.left_panel_layout.setSpacing(8) # Spacing between items in the left panel
+        self.left_panel_layout.setContentsMargins(2, 2, 2, 2) # margins
+        self.left_panel_layout.setSpacing(5) # Spacing between items in the left panel
         # Add the left_panel_widget (which now has its QVBoxLayout) to the main_app_layout
         self.main_app_layout.addWidget(self.left_panel_widget, 2)  # Stretch factor 2 (takes 2/3 of available width)
         # print(f"MW DEBUG: _init_ui_layout - Left panel widget and layout created, added to main layout. Layout: {self.left_panel_layout}")
@@ -3259,7 +3259,7 @@ class MainWindow(QMainWindow):
         # for on_speed_slider_changed might not have the final FPS value immediately.
         if self.oled_display_manager:
             final_fps = self._slider_raw_value_to_fps_for_knob(clamped_val)
-            feedback_text = f"Speed: {final_fps:.1f} FPS"
+            feedback_text = f"Spd: {final_fps:.1f} FPS"
             self.oled_display_manager.show_system_message(text=feedback_text, duration_ms=1200)
 
     def _create_edit_actions(self):
@@ -3533,7 +3533,7 @@ class MainWindow(QMainWindow):
     def _show_about_dialog(self):
         """Displays the application's About box."""
         QMessageBox.about(self, "About Akai Fire PixelForge",
-            "<h2>Akai Fire PixelForge v1.6.0</h2>"
+            "<h2>Akai Fire PixelForge v1.8.0</h2>"
             "<p>Developed by <b>Reg0lino</b> with extensive AI assistance from Google's Gemini models.</p>"
             "<p>This application transforms the Akai Fire controller into a versatile tool for pixel art, animation, and real-time visualizations.</p>"
             "<p>For more information, visit the project on GitHub.</p>"
@@ -3550,11 +3550,11 @@ class MainWindow(QMainWindow):
             self.OLED_NAVIGATION_FOCUS_OPTIONS)) % len(self.OLED_NAVIGATION_FOCUS_OPTIONS)
         self.current_oled_nav_target_name = self.OLED_NAVIGATION_FOCUS_OPTIONS[new_focus_idx]
         self._update_current_oled_nav_target_widget()
-        nav_target_display_name = "Unknown Panel"
+        nav_target_display_name = "Unknown"
         if self.current_oled_nav_target_name == "animator":
-            nav_target_display_name = "Animator Focus"  # Or just "Animator"
+            nav_target_display_name = "Animator" 
         elif self.current_oled_nav_target_name == "static_layouts":
-            nav_target_display_name = "Layouts Focus"  # Or just "Static Layouts"
+            nav_target_display_name = "Static"  
         if self.oled_display_manager:
             self.oled_display_manager.show_system_message(
                 text=nav_target_display_name,

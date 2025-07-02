@@ -471,16 +471,18 @@ class OLEDDisplayManager(QObject):
         self._render_and_send_active_graphic_text_frame()
 
     def _display_hardcoded_app_default_message(self):
-        print(f"OLED Mgr INFO: Displaying hardcoded app default message using '{self.TOMTHUMB_FAMILY_NAME}' @ {self.FEEDBACK_FONT_SIZE_PX}px.")
-        print(f"  Current self.global_text_item_scroll_delay_ms BEFORE setting _active_graphic_text_step_delay_ms: {self.global_text_item_scroll_delay_ms}") #<<< DEBUG
+        print(
+            f"OLED Mgr INFO: Displaying hardcoded app default message using '{self.TOMTHUMB_FAMILY_NAME}' @ {self.FEEDBACK_FONT_SIZE_PX}px.")
+        # Removed the problematic debug print line:
+        # print(f"  Current self.global_text_item_scroll_delay_ms BEFORE setting _active_graphic_text_step_delay_ms: {self.global_text_item_scroll_delay_ms}") #<<< DEBUG
         default_item_data_simulated = {
             "item_name": "AppDefaultMessage", "item_type": "text",
             "text_content": self.APP_DEFAULT_OLED_MESSAGE_TEXT,
-            "font_family": self.TOMTHUMB_FAMILY_NAME, 
+            "font_family": self.TOMTHUMB_FAMILY_NAME,
             "font_size_px": self.FEEDBACK_FONT_SIZE_PX,
             "animation_style": "scroll_left", "alignment": "left",
             "animation_params": {
-                "speed_override_ms": None, # This means it should use global
+                "speed_override_ms": None,  # This means it should use global
                 "pause_at_ends_ms": self.DEFAULT_TEXT_ITEM_SCROLL_RESTART_DELAY_MS
             }
         }
@@ -490,17 +492,20 @@ class OLEDDisplayManager(QObject):
         self._active_graphic_text_font_family = default_item_data_simulated["font_family"]
         self._active_graphic_text_font_size_px = default_item_data_simulated["font_size_px"]
         self._active_graphic_text_alignment = default_item_data_simulated["alignment"]
-        self._active_graphic_text_scroll_if_needed = (default_item_data_simulated["animation_style"] == "scroll_left")
+        self._active_graphic_text_scroll_if_needed = (
+            default_item_data_simulated["animation_style"] == "scroll_left")
         anim_params = default_item_data_simulated["animation_params"]
-        # Explicitly check global_text_item_scroll_delay_ms
-        delay_to_use_for_default_msg = self.global_text_item_scroll_delay_ms
+        # Explicitly check global_default_scroll_delay_ms (correct name)
+        delay_to_use_for_default_msg = self.global_default_scroll_delay_ms
         if delay_to_use_for_default_msg is None:
-            print("ODM WARNING (_display_hardcoded_app_default_message): self.global_text_item_scroll_delay_ms is None! Using fallback.")
-            delay_to_use_for_default_msg = self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS # Fallback
+            print("ODM WARNING (_display_hardcoded_app_default_message): self.global_default_scroll_delay_ms is None! Using fallback.")
+            delay_to_use_for_default_msg = self.DEFAULT_TEXT_ITEM_SCROLL_STEP_DELAY_MS  # Fallback
         self._active_graphic_text_step_delay_ms = anim_params.get("speed_override_ms") \
             if anim_params.get("speed_override_ms") is not None \
-            else delay_to_use_for_default_msg # Use the checked/fallback value
-        print(f"  Set _active_graphic_text_step_delay_ms FOR DEFAULT MSG to: {self._active_graphic_text_step_delay_ms}") #<<< DEBUG
+            else delay_to_use_for_default_msg
+        # <<< DEBUG (This print is now correct)
+        print(
+            f"  Set _active_graphic_text_step_delay_ms FOR DEFAULT MSG to: {self._active_graphic_text_step_delay_ms}")
         self._active_graphic_text_restart_delay_ms = anim_params.get(
             "pause_at_ends_ms", self.DEFAULT_TEXT_ITEM_SCROLL_RESTART_DELAY_MS
         )

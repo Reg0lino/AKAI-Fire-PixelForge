@@ -91,18 +91,18 @@ class ScreenSamplerUIManager(QGroupBox):
         settings_layout.setSpacing(8)
         # --- NEW MONITOR DISPLAY & CYCLE BUTTON ---
         monitor_layout_row = QHBoxLayout()
-        monitor_layout_row.addWidget(QLabel("Monitor:"))
-        self.current_monitor_label = QLabel("Not Selected")  # <<< NEW LABEL
+        monitor_layout_row.addWidget(QLabel("🖥️"))
+        self.current_monitor_label = QLabel("Loading Monitors...")
         self.current_monitor_label.setToolTip("Currently selected monitor.")
         self.current_monitor_label.setStyleSheet(
             "QLabel { background-color: #282828; border: 1px solid #444; padding: 4px; border-radius: 3px; }")
         self.current_monitor_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         monitor_layout_row.addWidget(self.current_monitor_label, 2)
-        self.cycle_monitor_button = QPushButton("Cycle")  # <<< NEW BUTTON
+        self.cycle_monitor_button = QPushButton("⟳")  # <<< NEW BUTTON
         self.cycle_monitor_button.setToolTip(
             "Cycle to the next available monitor.")
-        self.cycle_monitor_button.setFixedWidth(60)  # Compact button
+        self.cycle_monitor_button.setFixedWidth(30)  # Compact button
         monitor_layout_row.addWidget(self.cycle_monitor_button)
         monitor_layout_row.addWidget(QLabel("Mode:"))
         self.sampling_mode_combo = QComboBox()
@@ -297,8 +297,8 @@ class ScreenSamplerUIManager(QGroupBox):
 
     def set_overall_enabled_state(self, enabled: bool):
         """
-        Enable/disable the entire group box. Now also handles the state
-        of the Monitor Name label and Cycle button directly, without referring to the old combo.
+        Enable/disable the entire group box. Now ensures the monitor label
+        is only set to "Disabled" when appropriate, not overwritten on enable.
         """
         self.setEnabled(enabled)
         if self.enable_sampling_button:
@@ -308,15 +308,13 @@ class ScreenSamplerUIManager(QGroupBox):
         # Explicitly control the monitor label and cycle button
         if self.current_monitor_label:
             self.current_monitor_label.setEnabled(enabled)
-            # Ensure it shows "Not Selected" or similar if disabled
+            # --- FIX: Only set text to "Disabled" when disabling ---
             if not enabled:
                 self.current_monitor_label.setText("Disabled")
-            else:
-                # Temporarily set to loading when enabled
-                self.current_monitor_label.setText("Loading...")
+            # If enabling, we no longer set it to "Loading...";
+            # populate_monitor_list_for_ui will set the correct name later.
         if self.cycle_monitor_button:
             self.cycle_monitor_button.setEnabled(enabled)
-        # Mode combo is already enabled/disabled by its own logic, no change needed here.
         if not enabled:
             if self.enable_sampling_button and self.enable_sampling_button.isChecked():
                 self.enable_sampling_button.setChecked(False)
@@ -325,8 +323,6 @@ class ScreenSamplerUIManager(QGroupBox):
             self.update_record_button_ui(is_recording=False, can_record=False)
             if self.recording_status_label:
                 self.recording_status_label.setText("Sampler Disabled.")
-        # Removed the `elif enabled and self.monitor_combo...` block as it's no longer needed.
-        # Initial population is now strictly handled by main_window.py on connect.
 
     def force_disable_sampling_ui(self):
         """Called by ScreenSamplerManager if sampling needs to be stopped externally."""
