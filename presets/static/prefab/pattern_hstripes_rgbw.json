@@ -1,5 +1,5 @@
 {
-    "name": "Pattern - Horizontal Stripes RGBW",
+    "name": "Pattern Horizontal Stripes RGBW",
     "description": "Horizontal stripes: Row 1 Red, Row 2 Green, Row 3 Blue, Row 4 White. (4x16)",
     "colors": [
         "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000",
