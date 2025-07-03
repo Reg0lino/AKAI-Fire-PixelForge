@@ -131,7 +131,6 @@ class StaticLayoutsManager(QGroupBox):
         found_any = False
         for type_id, abs_dir, prefix in layout_sources:
             if not os.path.isdir(abs_dir): continue
-            
             for filepath in glob.glob(os.path.join(abs_dir, "*.json")):
                 filename_no_ext = os.path.splitext(os.path.basename(filepath))[0]
                 display_name = ""
@@ -162,7 +161,6 @@ class StaticLayoutsManager(QGroupBox):
             self.layouts_combo.addItems(sorted_keys)
         # else: # "---Select Static Layout---" is already there
             # self.layouts_combo.addItem("No static layouts found") # This state handled by set_enabled_state
-
         target_select_idx = 0 # Default to "--- Select ---"
         if select_name:
             # If select_name is a raw_name, we need to find its display_name form

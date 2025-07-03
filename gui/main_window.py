@@ -211,7 +211,7 @@ MW_ANIMATOR_SPEED_KNOB_STEP = 1
 
 # --- Constants ---
 INITIAL_WINDOW_WIDTH = 1050
-INITIAL_WINDOW_HEIGHT = 880
+INITIAL_WINDOW_HEIGHT = 860
 PRESETS_BASE_DIR_NAME = "presets"
 APP_NAME = "AKAI_Fire_RGB_Controller"
 APP_AUTHOR = "Reg0lino"
@@ -521,7 +521,7 @@ class MainWindow(QMainWindow):
         # 2. Create the main application layout (QHBoxLayout) for the central widget
         # This will hold the left and right panels.
         self.main_app_layout = QHBoxLayout(self.central_widget_main) # Set layout directly on central_widget_main
-        self.main_app_layout.setSpacing(10)
+        self.main_app_layout.setSpacing(2)
         self.main_app_layout.setContentsMargins(2, 2, 2, 2) # Small margins around the entire app content
         # print(f"MW DEBUG: _init_ui_layout - Main app layout (QHBoxLayout) created: {self.main_app_layout}")
         # 3. --- Left Panel Setup ---
@@ -541,8 +541,8 @@ class MainWindow(QMainWindow):
         self.right_panel_widget.setObjectName("RightPanelWidget")
         # Create a QVBoxLayout for the right panel's content
         self.right_panel_layout_v = QVBoxLayout(self.right_panel_widget) # Set layout on the right_panel_widget
-        # self.right_panel_layout_v.setContentsMargins(0,0,0,0) # Optional: if you want margins inside right panel
-        # self.right_panel_layout_v.setSpacing(8)               # Optional: spacing for items in right panel
+        self.right_panel_layout_v.setContentsMargins(0,0,0,2) # Optional: if you want margins inside right panel
+        self.right_panel_layout_v.setSpacing(4) # Optional: spacing for items in right panel
         # Set size constraints for the right panel
         self.right_panel_widget.setMinimumWidth(380) 
         self.right_panel_widget.setMaximumWidth(420) 

@@ -60,7 +60,7 @@ class PrimarySecondaryColorWell(QWidget):
     def _init_ui(self):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(10)
         well_container = QWidget()
         well_container.setFixedSize(48, 48)
         self.secondary_well = ClickableColorLabel(
@@ -192,7 +192,7 @@ class ColorPickerManager(QGroupBox):
     # --- UI Creation ---
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(8)
+        main_layout.setSpacing(10)
         # --- Top Row: Color Wells & Input Fields ---
         top_controls_layout = QHBoxLayout()
         top_controls_layout.setSpacing(10)
@@ -346,7 +346,6 @@ class ColorPickerManager(QGroupBox):
         """Handles changes from text inputs. This is a master override for the pickers."""
         new_color = QColor()
         current_active_color = self._primary_color if self._active_well == 'primary' else self._secondary_color
-
         if self.sender() == self.hex_input:
             hex_val = self.hex_input.text()
             if not hex_val.startswith("#"):
@@ -362,11 +361,9 @@ class ColorPickerManager(QGroupBox):
             except ValueError:
                 self._update_text_inputs_from_color(current_active_color)
                 return
-
         if not new_color.isValid():
             self._update_text_inputs_from_color(current_active_color)
             return
-
         # Set internal color and emit
         if self._active_well == 'primary':
             self._primary_color = new_color
@@ -374,7 +371,6 @@ class ColorPickerManager(QGroupBox):
         else:
             self._secondary_color = new_color
             self.secondary_color_changed.emit(new_color)
-
         # Update all other UI elements, including the pickers
         self._update_text_inputs_from_color(new_color)
         self._update_color_wells_display()
@@ -414,7 +410,6 @@ class ColorPickerManager(QGroupBox):
         else:
             self._secondary_color = black_color
             self.secondary_color_changed.emit(black_color)
-
         self._update_text_inputs_from_color(black_color)
         self._update_color_wells_display()
         self._update_pickers_from_color(black_color)
@@ -461,7 +456,6 @@ class ColorPickerManager(QGroupBox):
         text_color = "#000000" if luminance > 0.5 else "#FFFFFF"
         self.hex_input.setStyleSheet(
             f"background-color: {color.name()}; color: {text_color};")
-        
 
     # --- Swatch Management ---
     def _on_swatch_clicked(self, swatch_button: 'ColorSwatchButton'):
@@ -636,7 +630,6 @@ class ColorPickerManager(QGroupBox):
 # =================================================================================
 #  HELPER WIDGET: ColorSwatchButton
 # =================================================================================
-
 
 class ColorSwatchButton(QPushButton):
     rightClicked = pyqtSignal(QPoint)

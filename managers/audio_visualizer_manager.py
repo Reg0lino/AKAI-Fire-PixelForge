@@ -373,7 +373,7 @@ class AudioVisualizerManager(QObject):
                 "spectrum_grow_downwards", False)
             self._dvu_smoothed_spec_band_powers = np.zeros(
                 len(self.dvu_spec_band_colors))  # Reset smoothed powers
-            print(f"AVM DEBUG (_apply_settings_for_current_mode): Dual VU operational settings (incl. spectrum) applied.")
+            # print(f"AVM DEBUG (_apply_settings_for_current_mode): Dual VU operational settings (incl. spectrum) applied.")
 
     def refresh_audio_devices(self):
         if self.is_capturing:
@@ -480,9 +480,9 @@ class AudioVisualizerManager(QObject):
             QTimer.singleShot(200, self.start_capture)
 
     def start_capture(self):
-        print(f"AVM DEBUG (start_capture): Called. is_capturing: {self.is_capturing}, selected_device_index: {self.selected_device_index}") # DIAGNOSTIC
+        # print(f"AVM DEBUG (start_capture): Called. is_capturing: {self.is_capturing}, selected_device_index: {self.selected_device_index}") # DIAGNOSTIC
         if self.is_capturing:
-            print("AVM INFO (start_capture): Capture already in progress.")
+            # print("AVM INFO (start_capture): Capture already in progress.")
             return False
         if self.selected_device_index is None:
             self.capture_error.emit("No audio device selected to start capture.")
@@ -502,7 +502,7 @@ class AudioVisualizerManager(QObject):
             self.capture_error.emit(err_msg)
             print(f"AVM ERROR (start_capture): {err_msg}")
             return False
-        print(f"AVM INFO (start_capture): Preparing: Device='{device_info['name']}', Index={self.selected_device_index}, Rate={rate}, Ch={channels}") # DIAGNOSTIC
+        # print(f"AVM INFO (start_capture): Preparing: Device='{device_info['name']}', Index={self.selected_device_index}, Rate={rate}, Ch={channels}") # DIAGNOSTIC
         if self.audio_thread and self.audio_thread.isRunning():
             print("AVM WARN (start_capture): Old audio thread still running. Attempting stop again.")
             self.audio_thread.stop()
@@ -511,7 +511,7 @@ class AudioVisualizerManager(QObject):
                 self.audio_thread.terminate()
                 self.audio_thread.wait()
             self.audio_thread = None
-        print(f"AVM DEBUG (start_capture): Creating new AudioProcessingThread instance.") # DIAGNOSTIC
+        # print(f"AVM DEBUG (start_capture): Creating new AudioProcessingThread instance.") # DIAGNOSTIC
         self.audio_thread = AudioProcessingThread(
             device_index=self.selected_device_index, rate=rate, channels=channels,
             chunk_size=DEFAULT_CHUNK_SIZE, format_pa=DEFAULT_FORMAT, parent=self
@@ -519,7 +519,7 @@ class AudioVisualizerManager(QObject):
         self.audio_thread.fft_data_ready.connect(self._process_audio_data)
         self.audio_thread.error_occurred.connect(self._handle_audio_thread_error)
         self.audio_thread.finished.connect(self._on_audio_thread_finished)
-        print(f"AVM DEBUG (start_capture): Attempting to start audio_thread...") # DIAGNOSTIC
+        # print(f"AVM DEBUG (start_capture): Attempting to start audio_thread...") # DIAGNOSTIC
         self.audio_thread.start()
         QTimer.singleShot(100, self._check_thread_started_status)
         return True
@@ -568,13 +568,13 @@ class AudioVisualizerManager(QObject):
             self.audio_thread = None
 
     def stop_capture(self):
-        print(
-            f"AVM DEBUG (stop_capture): Called. self.is_capturing (before stop): {self.is_capturing}, audio_thread exists: {self.audio_thread is not None}")
+        # print(
+        #     f"AVM DEBUG (stop_capture): Called. self.is_capturing (before stop): {self.is_capturing}, audio_thread exists: {self.audio_thread is not None}")
         current_thread_instance = self.audio_thread # Capture the current instance
         was_capturing_logically = self.is_capturing # Store initial logical state
         # If we don't think we are capturing AND the thread instance is already gone or not running
         if not self.is_capturing and (current_thread_instance is None or not current_thread_instance.isRunning()):
-            print("AVM INFO (stop_capture): Capture not logically active and thread already stopped/gone.")
+            # print("AVM INFO (stop_capture): Capture not logically active and thread already stopped/gone.")
             self.is_capturing = False  # Ensure state is false
             if self.audio_thread is not None: # Defensive: if self.audio_thread was somehow still set
                 try:
@@ -584,14 +584,14 @@ class AudioVisualizerManager(QObject):
                 except (TypeError, RuntimeError): pass
                 self.audio_thread = None
             if was_capturing_logically: # If we thought it was on but it wasn't really
-                print("AVM DEBUG (stop_capture): Emitting capture_stopped_signal (was logically capturing but thread was off).")
+                # print("AVM DEBUG (stop_capture): Emitting capture_stopped_signal (was logically capturing but thread was off).")
                 self.capture_stopped_signal.emit()
             return
         # At this point, either self.is_capturing is True, or the thread might still be running.
         if current_thread_instance is not None: # Check if we had a thread instance
-            print(f"AVM DEBUG (stop_capture): audio_thread isRunning: {current_thread_instance.isRunning()}")
+            # print(f"AVM DEBUG (stop_capture): audio_thread isRunning: {current_thread_instance.isRunning()}")
             if current_thread_instance.isRunning():
-                print(f"AVM DEBUG (stop_capture): Calling current_thread_instance.stop()")
+                # print(f"AVM DEBUG (stop_capture): Calling current_thread_instance.stop()")
                 current_thread_instance.stop() # Signal the thread to stop
                 # Wait for the thread to finish, but only if it's still the same instance
                 # and hasn't been set to None by its own finished signal yet.
@@ -600,8 +600,8 @@ class AudioVisualizerManager(QObject):
                     print("AVM WARN (stop_capture): Audio thread did not finish gracefully within timeout, terminating.")
                     current_thread_instance.terminate() # Force terminate if stuck
                     current_thread_instance.wait(500)   # Wait a bit after terminate
-                elif self.audio_thread == current_thread_instance: # It finished gracefully or was already finished
-                    print("AVM INFO (stop_capture): Audio thread finished or was already stopped.")
+                # elif self.audio_thread == current_thread_instance: # It finished gracefully or was already finished
+                    # print("AVM INFO (stop_capture): Audio thread finished or was already stopped.")
                 # If self.audio_thread became None during the wait, _on_audio_thread_finished handled it.
             # Disconnect signals from the specific instance we worked with,
             # but only if self.audio_thread is still pointing to it (or was before it became None)
@@ -624,14 +624,14 @@ class AudioVisualizerManager(QObject):
         # This can happen if terminate was used. So, nullify it here.
         if self.audio_thread == current_thread_instance:
             self.audio_thread = None
-            print("AVM DEBUG (stop_capture): Explicitly set self.audio_thread to None after operations.")
+            # print("AVM DEBUG (stop_capture): Explicitly set self.audio_thread to None after operations.")
         if self.is_capturing: # If we logically thought we were capturing
             self.is_capturing = False
             self._smoothed_band_powers = np.zeros(NUMBER_OF_BANDS) # Reset visual state
-            print("AVM INFO (stop_capture): Audio capture stopped and thread resources potentially released.")
+            # print("AVM INFO (stop_capture): Audio capture stopped and thread resources potentially released.")
             self.capture_stopped_signal.emit()
         elif was_capturing_logically and not self.is_capturing: # If it was logically on, and now it's confirmed off
-            print("AVM DEBUG (stop_capture): Emitting capture_stopped_signal (was logically capturing, now confirmed off).")
+            # print("AVM DEBUG (stop_capture): Emitting capture_stopped_signal (was logically capturing, now confirmed off).")
             self.capture_stopped_signal.emit()
 
     def _on_audio_thread_finished(self):
@@ -668,10 +668,10 @@ class AudioVisualizerManager(QObject):
         # resources are cleaned, and capture_stopped_signal is emitted.
         # Check if it's already in the process of stopping to avoid recursion if stop_capture itself causes an error.
         if self.is_capturing or (self.audio_thread and self.audio_thread.isRunning()):
-            print("AVM DEBUG (_handle_audio_thread_error): Calling stop_capture due to thread error.")
+            # print("AVM DEBUG (_handle_audio_thread_error): Calling stop_capture due to thread error.")
             self.stop_capture() # This will set self.is_capturing = False and emit capture_stopped_signal
         else:
-            print("AVM DEBUG (_handle_audio_thread_error): Thread error received, but capture already seems stopped.")
+            # print("AVM DEBUG (_handle_audio_thread_error): Thread error received, but capture already seems stopped.")
             # Ensure state is false and signal is emitted if it wasn't already
             if self.is_capturing: # Should not happen if logic above is correct
                 self.is_capturing = False

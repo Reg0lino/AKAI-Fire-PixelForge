@@ -130,7 +130,7 @@ class AnimatorManagerWidget(QWidget):
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0,0,0,0)
-        main_layout.setSpacing(5)
+        main_layout.setSpacing(4)
         self.animator_studio_group_box = QGroupBox("🎬 Animator Studio")
         self.animator_studio_group_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed) # Fixed vertical
         animator_studio_layout = QVBoxLayout(self.animator_studio_group_box)
@@ -158,7 +158,7 @@ class AnimatorManagerWidget(QWidget):
         main_layout.addWidget(separator_line)
         self.sequence_timeline_widget = SequenceTimelineWidget()
         self.sequence_timeline_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        desired_min_timeline_height = 60 # Try this first (e.g., 2 rows * 50px/row + 20px padding/spacing)
+        desired_min_timeline_height = 80 # Try this first (e.g., 2 rows * 50px/row + 20px padding/spacing)
         self.sequence_timeline_widget.setMinimumHeight(desired_min_timeline_height)
         main_layout.addWidget(self.sequence_timeline_widget) # Stretch factor for this widget is handled by its size policy now
         self.sequence_controls_widget = SequenceControlsWidget()
