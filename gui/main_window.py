@@ -5,7 +5,8 @@ from PyQt6.QtGui import (
 )
 from .visualizer_settings_dialog import VisualizerSettingsDialog
 from .audio_visualizer_ui_manager import AudioVisualizerUIManager
-from .gif_export_dialog import GifExportDialog
+from .gif_export_dialog import GifExportDialog #oled gif import
+from gui.gif_import_dialog import GifImportDialog # gif to pad import
 from appdirs import user_config_dir
 import sys
 import json
@@ -181,6 +182,8 @@ from managers.audio_visualizer_manager import AudioVisualizerManager
 from hardware.akai_fire_controller import AkaiFireController
 from managers.oled_display_manager import OLEDDisplayManager
 from managers.hardware_input_manager import HardwareInputManager
+# Near other model/animator imports
+from animator.model import AnimationFrame # <<< ADD THIS LINE
 
 try:
     from ..animator.controls_widget import ICON_COPY, ICON_CUT, ICON_DUPLICATE, ICON_DELETE, ICON_ADD_BLANK
@@ -945,6 +948,8 @@ class MainWindow(QMainWindow):
             self.animator_manager.clipboard_state_changed.connect(self._on_animator_clipboard_state_changed)
             self.animator_manager.request_sampler_disable.connect(self._handle_request_sampler_disable)
             self.animator_manager.request_load_sequence_with_prompt.connect(self._handle_animator_request_load_prompt)
+            if hasattr(self.animator_manager, 'gif_import_button'):
+                self.animator_manager.gif_import_button.clicked.connect(self._open_gif_import_dialog)
         # HardwareInputManager Signals
         if self.hardware_input_manager:
             self.hardware_input_manager.physical_encoder_rotated.connect(self._on_physical_encoder_rotated)
@@ -1294,6 +1299,34 @@ class MainWindow(QMainWindow):
             self.audio_visualizer_ui_manager.update_enable_button_appearance(
                 self.is_visualizer_active)
         self._update_global_ui_interaction_states()  # Update all UI states
+
+    def _open_gif_import_dialog(self):
+        """
+        Opens the GIF Import dialog and handles the returned processed GIF sequence.
+        """
+        dialog = GifImportDialog(parent=self)
+        dialog.gif_import_requested.connect(self._handle_gif_import_request)
+        dialog.exec() # Show dialog as modal
+        dialog.deleteLater() # Ensure dialog is properly deleted after closing
+
+    def _handle_gif_import_request(self, processed_gif_sequence: list, final_delay_ms: int, sequence_name: str):
+        """
+        Handles the signal from GifImportDialog, importing the processed GIF
+        data into the Animator Studio.
+        """
+        if not self.animator_manager:
+            self.status_bar.showMessage("Animator Studio not available for GIF import.", 3000)
+            return
+        # Prepare data for AnimatorManagerWidget
+        frames_for_animator = []
+        for pad_colors_hex, _ in processed_gif_sequence: # We will use the common final_delay_ms for all frames
+            frames_for_animator.append(AnimationFrame(colors=pad_colors_hex))
+        # Pass to animator manager, handling unsaved changes
+        # Reusing the existing sequence loading logic, which handles prompts.
+        self.animator_manager.import_sequence_from_gif_data(
+            frames_for_animator, final_delay_ms, sequence_name
+        )
+        self.status_bar.showMessage(f"GIF '{sequence_name}' imported successfully!", 3000)
 
     def _open_visualizer_settings_dialog(self):
         if not self.audio_visualizer_manager or not self.audio_visualizer_ui_manager:

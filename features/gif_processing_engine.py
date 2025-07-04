@@ -1,0 +1,274 @@
+# AKAI_Fire_PixelForge/features/gif_processing_engine.py
+import io
+import os
+import requests
+import numpy as np
+from PIL import Image, ImageSequence, ImageEnhance
+
+# Constants for the target pad grid
+NUM_GRID_ROWS = 4
+NUM_GRID_COLS = 16
+PAD_BUTTON_WIDTH = 40  # From interactive_pad_grid.py
+PAD_BUTTON_HEIGHT = 50  # From interactive_pad_grid.py
+
+# Calculate the effective display aspect ratio of the entire pad grid
+# This is (total_width_of_pads / total_height_of_pads)
+# where total_width_of_pads = NUM_GRID_COLS * PAD_BUTTON_WIDTH
+# and total_height_of_pads = NUM_GRID_ROWS * PAD_BUTTON_HEIGHT
+DISPLAY_GRID_ASPECT_RATIO = (
+    NUM_GRID_COLS * PAD_BUTTON_WIDTH) / (NUM_GRID_ROWS * PAD_BUTTON_HEIGHT)
+# For 16x4 pads (40x50px each) -> (16*40) / (4*50) = 640 / 200 = 3.2
+
+
+class GifProcessingEngine:
+    """
+    Handles downloading, parsing, and processing GIF frames for display on the 4x16 pads.
+    Applies "Display-Aspect-Ratio-Corrected Smart Fill" and optional color adjustments.
+    """
+
+    def __init__(self):
+        self.original_frames_pil: list[Image.Image] = []
+        self.original_frame_delays_ms: list[int] = []
+        self.original_gif_loop_count: int = 0
+        self.original_gif_dimensions: tuple[int, int] = (0, 0)
+        self.sequence_name: str = "Imported GIF"
+
+    def load_gif_from_source(self, source_path_or_url: str):
+        """
+        Loads a GIF from a local path or URL, extracting all frames and metadata.
+        Resets previous GIF data.
+        """
+        print(f"GIF_ENGINE: Attempting to load GIF from: {source_path_or_url}")
+        self.original_frames_pil = []
+        self.original_frame_delays_ms = []
+        self.original_gif_loop_count = 0
+        self.original_gif_dimensions = (0, 0)
+        self.sequence_name = "Imported GIF"  # Default name
+        gif_data = None
+        is_url = source_path_or_url.startswith(
+            'http://') or source_path_or_url.startswith('https://')
+        try:
+            if is_url:
+                print("GIF_ENGINE: Downloading from URL...")
+                response = requests.get(source_path_or_url)
+                response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+                gif_data = io.BytesIO(response.content)
+                self.sequence_name = os.path.basename(
+                    source_path_or_url).split('.')[0] or "Web GIF"
+            else:
+                print(f"GIF_ENGINE: Loading local file: {source_path_or_url}")
+                with open(source_path_or_url, 'rb') as f:
+                    gif_data = io.BytesIO(f.read())
+                self.sequence_name = os.path.basename(
+                    source_path_or_url).split('.')[0] or "Local GIF"
+            with Image.open(gif_data) as img:
+                if not getattr(img, 'is_animated', False):
+                    raise ValueError("Provided file is not an animated GIF.")
+                self.original_gif_dimensions = img.size
+                self.original_gif_loop_count = img.info.get(
+                    'loop', 1)  # Default loop to 1 if not specified
+                print(
+                    f"GIF_ENGINE: Original GIF dimensions: {self.original_gif_dimensions}, Loop count: {self.original_gif_loop_count}")
+                # Use ImageSequence.Iterator to correctly extract all frames
+                for i, frame in enumerate(ImageSequence.Iterator(img)):
+                    # Convert to RGB to handle palette GIFs and ensure consistency
+                    # Make sure to copy the frame, as ImageSequence.Iterator provides a reference to the current frame.
+                    self.original_frames_pil.append(
+                        frame.copy().convert("RGB"))
+                    # Duration is in milliseconds
+                    # Default to 100ms if no duration found
+                    delay = frame.info.get('duration', 100)
+                    self.original_frame_delays_ms.append(delay)
+                    print(f"GIF_ENGINE: Extracted frame {i}, delay: {delay}ms")
+            # If no frames found (e.g., corrupted GIF), raise an error
+            if not self.original_frames_pil:
+                raise ValueError(
+                    "No frames could be extracted from the GIF. It might be corrupted or empty.")
+            print(
+                f"GIF_ENGINE: Successfully extracted {len(self.original_frames_pil)} frames.")
+        except requests.exceptions.RequestException as e:
+            raise IOError(f"Failed to download GIF from URL: {e}")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Local GIF file not found: {e}")
+        except ValueError as e:  # Catch specific ValueError from Image.open or internal checks
+            raise ValueError(f"Invalid GIF file or format: {e}")
+        except Exception as e:  # Catch any other unexpected errors
+            import traceback
+            traceback.print_exc()
+            raise Exception(
+                f"An unexpected error occurred while loading GIF: {e}")
+
+    def get_first_frame_pil(self) -> Image.Image | None:
+        """Returns the first original PIL frame for preview display."""
+        return self.original_frames_pil[0] if self.original_frames_pil else None
+
+    def get_original_gif_info(self) -> dict:
+        """Returns metadata about the loaded GIF."""
+        if not self.original_frames_pil:
+            return {'frames': 0, 'width': 0, 'height': 0, 'loop': 'N/A', 'avg_delay_ms': 0, 'fps': 0.0}
+        total_delay = sum(self.original_frame_delays_ms)
+        frame_count = len(self.original_frame_delays_ms)
+        avg_delay_ms = total_delay / frame_count if frame_count > 0 else 0
+        fps = 1000 / avg_delay_ms if avg_delay_ms > 0 else 0
+        # Convert loop count of 0 to the user-friendly "Infinite" display string
+        loop_display = "Infinite" if self.original_gif_loop_count == 0 else str(
+            self.original_gif_loop_count)
+        return {
+            'frames': len(self.original_frames_pil),
+            'width': self.original_gif_dimensions[0],
+            'height': self.original_gif_dimensions[1],
+            'loop': loop_display,
+            'avg_delay_ms': int(round(avg_delay_ms)),
+            'fps': round(fps, 2)
+        }
+
+    def process_frames_for_pads(self,
+                                # {'x', 'y', 'width', 'height'}
+                                region_rect_percentage: dict,
+                                # {'brightness', 'saturation', 'contrast', 'hue_shift'}
+                                adjustments: dict
+                                ) -> list[tuple[list[str], int]]:
+        """
+        Processes all original GIF frames based on region and adjustments,
+        returning a list of (processed_hex_colors_for_64_pads, original_delay_ms) tuples.
+        """
+        if not self.original_frames_pil:
+            return []
+        processed_sequence_data = []
+        for i, original_frame_pil in enumerate(self.original_frames_pil):
+            # 1. Apply Cropping based on region_rect_percentage
+            # Region is percentage of original GIF dimensions
+            orig_w, orig_h = original_frame_pil.size
+            crop_x = int(region_rect_percentage['x'] * orig_w)
+            crop_y = int(region_rect_percentage['y'] * orig_h)
+            crop_w = int(region_rect_percentage['width'] * orig_w)
+            crop_h = int(region_rect_percentage['height'] * orig_h)
+            # Ensure crop dimensions are at least 1x1 to avoid errors
+            crop_w = max(1, crop_w)
+            crop_h = max(1, crop_h)
+            cropped_frame = original_frame_pil.crop(
+                (crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
+            # 2. Apply "Display-Aspect-Ratio-Corrected Smart Fill"
+            #    Resize the cropped frame to an intermediate size that matches the final DISPLAY aspect ratio (3.2).
+            #    Then, extract the NUM_GRID_COLS x NUM_GRID_ROWS pixels from this intermediate image.
+            # Intermediate size needs to be larger than target (16x4) for good resampling.
+            # Let's target a resolution that has the 3.2 aspect ratio, e.g., 64x20 (which is 4x the pad grid display aspect)
+            intermediate_width_target = 64
+            intermediate_height_target = int(
+                intermediate_width_target / DISPLAY_GRID_ASPECT_RATIO)
+            # Ensure height is at least 1 and is even for simpler division later if needed
+            intermediate_height_target = max(1, intermediate_height_target)
+            if intermediate_height_target % 2 != 0:
+                intermediate_height_target += 1
+            # Resize the cropped frame to this intermediate aspect-corrected size
+            # This will distort the *image's* aspect ratio to match our *display* aspect ratio
+            # For abstract patterns, this is usually acceptable.
+            final_pad_image_pil = cropped_frame.resize(
+                (intermediate_width_target, intermediate_height_target),
+                resample=Image.Resampling.LANCZOS
+            )
+            # Now, extract the 4x16 grid of colors from this image.
+            # We treat the intermediate_width_target x intermediate_height_target image as a source.
+            # Since it's already aspect-ratio corrected for the pads, we just need to sample
+            # a NUM_GRID_COLS x NUM_GRID_ROWS grid of pixels.
+            # The simplest way is to resize it one last time to 16x4 for direct pixel extraction.
+            final_pad_image_pil = final_pad_image_pil.resize(
+                (NUM_GRID_COLS, NUM_GRID_ROWS),
+                resample=Image.Resampling.LANCZOS  # Still use high quality for final pixel
+            )
+            # 3. Apply Color Adjustments (Brightness, Saturation, Contrast, Hue Shift)
+            #    These will be applied to the 16x4 PIL image.
+            if adjustments.get('brightness', 1.0) != 1.0:
+                enhancer = ImageEnhance.Brightness(final_pad_image_pil)
+                final_pad_image_pil = enhancer.enhance(
+                    adjustments['brightness'])
+            if adjustments.get('contrast', 1.0) != 1.0:
+                enhancer = ImageEnhance.Contrast(final_pad_image_pil)
+                final_pad_image_pil = enhancer.enhance(adjustments['contrast'])
+            if adjustments.get('saturation', 1.0) != 1.0:
+                enhancer = ImageEnhance.Color(final_pad_image_pil)
+                final_pad_image_pil = enhancer.enhance(
+                    adjustments['saturation'])
+            # Convert to numpy array for fast pixel access and optional hue shift
+            img_np = np.array(final_pad_image_pil)
+            # Extract 64 RGB tuples (list of (R, G, B))
+            pad_colors_rgb_tuples = [tuple(p) for p in img_np.reshape(-1, 3)]
+            # Apply Hue Shift (requires colorsys, outside Pillow)
+            hue_shift_degrees = adjustments.get('hue_shift', 0)
+            if hue_shift_degrees != 0:
+                pad_colors_final_rgb = [self._apply_hue_shift(
+                    c, hue_shift_degrees) for c in pad_colors_rgb_tuples]
+            else:
+                pad_colors_final_rgb = pad_colors_rgb_tuples
+            # Convert final RGB tuples to hex color strings
+            pad_colors_hex = [
+                '#{:02x}{:02x}{:02x}'.format(r, g, b)
+                for r, g, b in pad_colors_final_rgb
+            ]
+            processed_sequence_data.append(
+                (pad_colors_hex, self.original_frame_delays_ms[i]))
+        return processed_sequence_data
+
+    @staticmethod
+    def _apply_hue_shift(rgb_tuple: tuple[int, int, int], hue_shift_degrees: int) -> tuple[int, int, int]:
+        """Applies hue shift to an RGB tuple. (Copied from ScreenSamplerCore)"""
+        import colorsys  # Local import to avoid circular dependency / keep function self-contained
+        if hue_shift_degrees == 0:
+            return rgb_tuple
+        r_norm, g_norm, b_norm = rgb_tuple[0] / \
+            255.0, rgb_tuple[1]/255.0, rgb_tuple[2]/255.0
+        h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+        h_shifted = (h + (hue_shift_degrees / 360.0)) % 1.0
+        if h_shifted < 0:
+            h_shifted += 1.0
+        r_fin_norm, g_fin_norm, b_fin_norm = colorsys.hsv_to_rgb(
+            h_shifted, s, v)
+        return (int(r_fin_norm*255), int(g_fin_norm*255), int(b_fin_norm*255))
+
+# Example usage (for standalone testing of this module)
+if __name__ == '__main__':
+    engine = GifProcessingEngine()
+    # Replace with a small, testable GIF URL
+    test_gif_url = "https://i.giphy.com/media/v1.gif"
+    # Replace with a local path if preferred
+    test_local_gif = "path/to/your/test.gif"
+
+    try:
+        # Test loading from URL
+        print(f"--- Testing URL Load: {test_gif_url} ---")
+        engine.load_gif_from_source(test_gif_url)
+        info = engine.get_original_gif_info()
+        print(f"Loaded GIF: {engine.sequence_name}")
+        print(
+            f"Dimensions: {info['width']}x{info['height']}, Frames: {info['frames']}, FPS: {info['fps']:.2f}")
+
+        # Test processing with a region and adjustments
+        # Center 50%
+        test_region = {'x': 0.25, 'y': 0.25, 'width': 0.5, 'height': 0.5}
+        test_adjustments = {'brightness': 1.2,
+                            'saturation': 1.5, 'contrast': 1.1, 'hue_shift': 30}
+
+        print("\n--- Processing frames for pads ---")
+        processed_data = engine.process_frames_for_pads(
+            test_region, test_adjustments)
+        print(f"Processed {len(processed_data)} frames.")
+        if processed_data:
+            print(
+                f"First frame pads (first 5 colors): {processed_data[0][0][:5]}")
+            print(f"First frame delay: {processed_data[0][1]}ms")
+            # You can add code here to save processed frames as individual images or a GIF for visual inspection
+            # e.g., Image.frombytes("RGB", (16,4), bytes.fromhex(processed_data[0][0][0][1:] * 64)).save("processed_frame_0.png")
+
+        print("\n--- Testing First Frame Preview ---")
+        first_frame_pil = engine.get_first_frame_pil()
+        if first_frame_pil:
+            print(
+                f"First frame PIL size: {first_frame_pil.size}, Mode: {first_frame_pil.mode}")
+            # first_frame_pil.show() # Uncomment to view the first frame
+
+    except (IOError, FileNotFoundError, ValueError) as e:
+        print(f"ERROR: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        import traceback
+        traceback.print_exc()
