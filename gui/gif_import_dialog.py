@@ -2,12 +2,15 @@
 import sys
 import os
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QGroupBox, 
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QGroupBox, QWidget,
     QFileDialog, QProgressBar, QDialogButtonBox, QSizePolicy, QSlider, QCheckBox, QComboBox, QSpacerItem, QMessageBox, QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer, QUrl
 from PyQt6.QtGui import QImage, QPixmap, QFont
-from PIL import Image
+from PIL import Image, ImageSequence, ImageEnhance, ImageColor, ImageDraw
+from PIL.ImageQt import ImageQt
+from .gif_region_selector import GifRegionSelectorLabel
+from .pad_preview_widget import PadPreviewWidget
 import json
 import requests  
 # Import the new GIF Processing Engine
@@ -21,11 +24,9 @@ except ImportError as e:
         def __init__(self): pass
         def load_gif_from_source(
             self, src): raise Exception("Engine not loaded")
-
         def get_first_frame_pil(self): return None
         def get_original_gif_info(self): return {
             'frames': 0, 'width': 0, 'height': 0, 'loop': 0, 'avg_delay_ms': 0, 'fps': 0}
-
         def process_frames_for_pads(self, region, adjustments): return []
     NUM_GRID_ROWS = 4
     NUM_GRID_COLS = 16
@@ -40,24 +41,28 @@ DEFAULT_SATURATION_FACTOR = 1.75
 DEFAULT_CONTRAST_FACTOR = 1.0
 DEFAULT_HUE_SHIFT = 0
 
-MIN_DIALOG_HEIGHT = 855 # -------- HEIGHT VARIABLE TODO********
+MIN_DIALOG_HEIGHT = 810 # <-- HEIGHT VARIABLE
 
 class GifImportDialog(QDialog):
     # processed_frames_data, delay_ms, sequence_name
+    preview_pads_updated = pyqtSignal(list)  # Emits a list of 64 hex colors
     gif_import_requested = pyqtSignal(list, int, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("📥 Import GIF Animation")
-        self.setMinimumSize(800, MIN_DIALOG_HEIGHT)
-        # --- NEW ATTRIBUTES FOR PATH PERSISTENCE ---
+        self.setMinimumSize(950, 780)
         self.config_file_path = self._get_user_config_path(
             'gif_import_settings.json')
         self.last_used_browse_path = self._load_last_path()
         self.gif_engine = GifProcessingEngine()
-        # Cache of PIL frames for live preview
+        # --- ATTRIBUTES FOR TWO-PASS SYSTEM ---
+        # Full-res original frames
+        self.original_pil_frames: list[Image.Image] = []
+        # New: Small, downscaled frames for UI
+        self.preview_pil_frames: list[Image.Image] = []
         self.current_gif_frames_pil: list[Image.Image] = []
-        self.current_gif_frame_delays_ms: list[int] = []  # Cache of delays
+        self.current_gif_frame_delays_ms: list[int] = []
         self.current_preview_frame_index = 0
         self.current_preview_timer = QTimer(self)
         self.current_preview_timer.timeout.connect(self._update_preview_frame)
@@ -78,7 +83,6 @@ class GifImportDialog(QDialog):
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
-        # --- GIF Source Group ---
         source_group = QGroupBox("GIF Source")
         source_layout = QHBoxLayout(source_group)
         self.url_input = QLineEdit()
@@ -89,24 +93,30 @@ class GifImportDialog(QDialog):
         source_layout.addWidget(self.local_file_button)
         source_layout.addWidget(self.load_gif_button)
         main_layout.addWidget(source_group)
-        # --- Main Content Area (GIF Display, Preview, Settings) ---
         content_layout = QHBoxLayout()
         main_layout.addLayout(content_layout)
-        # --- Left Panel: GIF Frame Display (with Region Selection Concept) ---
-        self.gif_display_label = QLabel(
+        left_panel_widget = QWidget()
+        left_panel_widget.setFixedWidth(500)
+        left_panel_widget.setFixedHeight(450)
+        left_panel_v_layout = QVBoxLayout(left_panel_widget)
+        left_panel_v_layout.setContentsMargins(0, 0, 0, 0)
+        self.gif_display_label = GifRegionSelectorLabel(
             "Load a GIF to see its first frame here...")
         self.gif_display_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # Adequate size for a scaled GIF frame
-        self.gif_display_label.setMinimumSize(320, 240)
+        # --- FIX: Import QSizePolicy and use the correct reference ---
+        from PyQt6.QtWidgets import QSizePolicy
         self.gif_display_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.gif_display_label.setStyleSheet(
             "background-color: #282828; border: 1px solid #444;")
-        content_layout.addWidget(self.gif_display_label, 3)  # Takes more space
-        # --- Right Panel: Controls and Live Preview ---
-        controls_panel_layout = QVBoxLayout()
-        content_layout.addLayout(controls_panel_layout, 2)  # Takes less space
-        # --- Original GIF Info ---
+        left_panel_v_layout.addWidget(self.gif_display_label)
+        self.full_gif_button = QPushButton("Select Full GIF")
+        left_panel_v_layout.addWidget(self.full_gif_button)
+        content_layout.addWidget(left_panel_widget)
+        right_panel_widget = QWidget()
+        controls_panel_layout = QVBoxLayout(right_panel_widget)
+        right_panel_widget.setMinimumWidth(400)
+        content_layout.addWidget(right_panel_widget)
         info_group = QGroupBox("Original GIF Info")
         info_layout = QVBoxLayout(info_group)
         self.info_width_height = QLabel("Dimensions: N/A")
@@ -116,16 +126,6 @@ class GifImportDialog(QDialog):
         info_layout.addWidget(self.info_frames_loop)
         info_layout.addWidget(self.info_avg_delay_fps)
         controls_panel_layout.addWidget(info_group)
-        # --- Region Selection Controls (Simple Sliders for now, will enhance later if desired) ---
-        region_group = QGroupBox("Region Selection")
-        region_layout = QVBoxLayout(region_group)
-        # Reusing the idea of sliders for region, but for now fixed to full GIF.
-        # This will be replaced by an actual draggable widget if it's high priority.
-        # For this version, we will have fixed values and just a "Full GIF" button.
-        self.full_gif_button = QPushButton("Select Full GIF")
-        region_layout.addWidget(self.full_gif_button)
-        controls_panel_layout.addWidget(region_group)
-        # --- Color Adjustments Group ---
         adj_group = QGroupBox("Color Adjustments")
         adj_layout = QVBoxLayout(adj_group)
 
@@ -159,10 +159,8 @@ class GifImportDialog(QDialog):
             "Hue Shift:", SLIDER_MIN_HUE, SLIDER_MAX_HUE, int(round(DEFAULT_HUE_SHIFT)))
         adj_layout.addLayout(hue_row_layout)
         controls_panel_layout.addWidget(adj_group)
-        # --- Animation Options Group ---
         anim_options_group = QGroupBox("Animation Options")
         anim_options_layout = QVBoxLayout(anim_options_group)
-        # FPS Override
         fps_override_layout = QHBoxLayout()
         self.override_fps_checkbox = QCheckBox("Override GIF Speed")
         fps_override_layout.addWidget(self.override_fps_checkbox)
@@ -170,24 +168,18 @@ class GifImportDialog(QDialog):
         fps_override_layout.addWidget(self.original_fps_label)
         anim_options_layout.addLayout(fps_override_layout)
         self.playback_fps_slider = QSlider(Qt.Orientation.Horizontal)
-        self.playback_fps_slider.setRange(1, 90)  # 1 to 90 FPS
-        self.playback_fps_slider.setValue(20)  # Default to 20 FPS
+        self.playback_fps_slider.setRange(1, 90)
+        self.playback_fps_slider.setValue(20)
         self.playback_fps_label = QLabel("20 FPS")
         playback_fps_h_layout = QHBoxLayout()
         playback_fps_h_layout.addWidget(self.playback_fps_slider)
         playback_fps_h_layout.addWidget(self.playback_fps_label)
         anim_options_layout.addLayout(playback_fps_h_layout)
         controls_panel_layout.addWidget(anim_options_group)
-        # --- Live Pad Preview ---
         live_preview_group = QGroupBox("Live Pad Preview")
         live_preview_layout = QVBoxLayout(live_preview_group)
-        self.pad_preview_label = QLabel("Processed frames will play here...")
-        self.pad_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.pad_preview_label.setMinimumSize(
-            NUM_GRID_COLS * 15, NUM_GRID_ROWS * 15)  # Example scaled size
-        self.pad_preview_label.setStyleSheet(
-            "background-color: #000000; border: 1px solid #444;")
-        live_preview_layout.addWidget(self.pad_preview_label)
+        self.pad_preview_widget = PadPreviewWidget()
+        live_preview_layout.addWidget(self.pad_preview_widget)
         preview_controls_layout = QHBoxLayout()
         self.play_preview_button = QPushButton("Play Preview")
         self.pause_preview_button = QPushButton("Pause Preview")
@@ -195,8 +187,7 @@ class GifImportDialog(QDialog):
         preview_controls_layout.addWidget(self.pause_preview_button)
         live_preview_layout.addLayout(preview_controls_layout)
         controls_panel_layout.addWidget(live_preview_group)
-        controls_panel_layout.addStretch(1)  # Push everything up
-        # --- Sequence Name & Dialog Buttons ---
+        controls_panel_layout.addStretch(1)
         name_layout = QHBoxLayout()
         name_layout.addWidget(QLabel("Sequence Name:"))
         self.sequence_name_input = QLineEdit()
@@ -216,28 +207,22 @@ class GifImportDialog(QDialog):
     def _connect_signals(self):
         self.local_file_button.clicked.connect(self._browse_local_gif)
         self.load_gif_button.clicked.connect(self._load_gif_from_input)
-        self.full_gif_button.clicked.connect(self._select_full_gif_region)
-        # Color Adjustment Sliders
-        self.brightness_slider.valueChanged.connect(
-            self._on_adjustment_changed)
-        self.saturation_slider.valueChanged.connect(
-            self._on_adjustment_changed)
+        # --- UPDATED REGION CONNECTIONS ---
+        self.full_gif_button.clicked.connect(self.gif_display_label.set_full_region)
+        self.gif_display_label.region_changed.connect(self._on_region_changed)
+        # Color Adjustment Sliders 
+        self.brightness_slider.valueChanged.connect(self._on_adjustment_changed)
+        self.saturation_slider.valueChanged.connect(self._on_adjustment_changed)
         self.contrast_slider.valueChanged.connect(self._on_adjustment_changed)
         self.hue_slider.valueChanged.connect(self._on_adjustment_changed)
-        self.brightness_reset_button.clicked.connect(lambda: self.brightness_slider.setValue(
-            self._factor_to_slider(DEFAULT_BRIGHTNESS_FACTOR)))
-        self.saturation_reset_button.clicked.connect(lambda: self.saturation_slider.setValue(
-            self._factor_to_slider(DEFAULT_SATURATION_FACTOR)))
-        self.contrast_reset_button.clicked.connect(lambda: self.contrast_slider.setValue(
-            self._factor_to_slider(DEFAULT_CONTRAST_FACTOR)))
-        self.hue_reset_button.clicked.connect(
-            lambda: self.hue_slider.setValue(DEFAULT_HUE_SHIFT))
-        # Animation Options
-        self.override_fps_checkbox.toggled.connect(
-            self._on_override_fps_toggled)
-        self.playback_fps_slider.valueChanged.connect(
-            self._on_playback_fps_changed)
-        # Preview Controls
+        self.brightness_reset_button.clicked.connect(lambda: self.brightness_slider.setValue(self._factor_to_slider(DEFAULT_BRIGHTNESS_FACTOR)))
+        self.saturation_reset_button.clicked.connect(lambda: self.saturation_slider.setValue(self._factor_to_slider(DEFAULT_SATURATION_FACTOR)))
+        self.contrast_reset_button.clicked.connect(lambda: self.contrast_slider.setValue(self._factor_to_slider(DEFAULT_CONTRAST_FACTOR)))
+        self.hue_reset_button.clicked.connect(lambda: self.hue_slider.setValue(DEFAULT_HUE_SHIFT))
+        # Animation Options 
+        self.override_fps_checkbox.toggled.connect(self._on_override_fps_toggled)
+        self.playback_fps_slider.valueChanged.connect(self._on_playback_fps_changed)
+        # Preview Controls 
         self.play_preview_button.clicked.connect(self._play_preview)
         self.pause_preview_button.clicked.connect(self._pause_preview)
 
@@ -338,60 +323,81 @@ class GifImportDialog(QDialog):
             return
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("Loading GIF...")
-        self.set_ui_elements_enabled(False)  # Disable controls during load
+        self.set_ui_elements_enabled(False)
+        self.info_width_height.setText("Dimensions: N/A")
+        self.info_frames_loop.setText("Frames: N/A, Loop: N/A")
+        self.info_avg_delay_fps.setText("Delay: N/A, FPS: N/A")
+        self.original_fps_label.setText("Original: N/A")
+        self.gif_display_label.setText("Loading...")
+        QApplication.processEvents()
         try:
             self.gif_engine.load_gif_from_source(source)
             info = self.gif_engine.get_original_gif_info()
-            # Cache original frames and delays for live preview
-            self.current_gif_frames_pil = self.gif_engine.original_frames_pil
-            self.current_gif_frame_delays_ms = self.gif_engine.original_frame_delays_ms
-            # Update info labels
             self.info_width_height.setText(
                 f"Dimensions: {info['width']}x{info['height']}")
             self.info_frames_loop.setText(
-                f"Frames: {info['frames']}, Loop: {'Infinite' if info['loop'] == 0 else info['loop']}")
+                f"Frames: {info['frames']}, Loop: {info['loop']}")
+            self.info_avg_delay_fps.setText(
+                f"Delay: {info['avg_delay_ms']}ms, FPS: {info['fps']:.1f}")
             self.original_fps_label.setText(
                 f"Original: {info['fps']:.1f} FPS ({info['avg_delay_ms']}ms)")
+            self.original_pil_frames = self.gif_engine.original_frames_pil
+            self.current_gif_frame_delays_ms = self.gif_engine.original_frame_delays_ms
+            self.preview_pil_frames = []
+            max_preview_width = 480
+            for frame in self.original_pil_frames:
+                if frame.width > max_preview_width:
+                    aspect_ratio = frame.height / frame.width
+                    new_height = int(max_preview_width * aspect_ratio)
+                    self.preview_pil_frames.append(frame.resize(
+                        (max_preview_width, new_height), Image.Resampling.LANCZOS))
+                else:
+                    self.preview_pil_frames.append(frame)
             self.sequence_name_input.setText(self.gif_engine.sequence_name)
-            # Display first frame
-            first_frame_pil = self.gif_engine.get_first_frame_pil()
-            if first_frame_pil:
-                # Scale first frame to fit label, maintaining aspect ratio
-                scaled_pixmap = self._convert_pil_to_scaled_pixmap(
-                    first_frame_pil, self.gif_display_label.size())
-                self.gif_display_label.setPixmap(scaled_pixmap)
-                self.gif_display_label.setText("")  # Clear "Loading..." text
-            self._select_full_gif_region()  # Default to full GIF selection
-            self._update_pad_preview()  # Update preview with initial adjustments
+            if self.preview_pil_frames:
+                q_image = ImageQt(self.preview_pil_frames[0])
+                self.gif_display_label.setPixmap(QPixmap.fromImage(q_image))
+            # --- FIX: Call the new pre-processing method ---
+            self._pre_process_all_preview_frames()
             self.set_ui_elements_enabled(True)
             self.progress_bar.setValue(100)
             self.progress_bar.setFormat("GIF Loaded!")
-            self._play_preview()  # Auto-play preview on load
-        except (IOError, ValueError, requests.exceptions.RequestException) as e:
-            self.gif_display_label.setText(f"Error loading GIF: {e}")
-            self.progress_bar.setValue(0)
-            self.progress_bar.setFormat("Error")
-            self.set_ui_elements_enabled(False)  # Keep disabled on error
+            self._play_preview()
         except Exception as e:
-            self.gif_display_label.setText(
-                f"An unexpected error occurred: {e}")
+            error_message = f"Error loading GIF: {e}"
+            self.gif_display_label.setText(error_message)
             self.progress_bar.setValue(0)
             self.progress_bar.setFormat("Error")
-            self.set_ui_elements_enabled(False)  # Keep disabled on error
+            self.set_ui_elements_enabled(False)
+            print(error_message)
 
-    def _convert_pil_to_scaled_pixmap(self, pil_image: Image.Image, target_size: QSize) -> QPixmap:
-        if pil_image.mode != "RGB":
-            pil_image = pil_image.convert("RGB")
-        image_data_bytes = pil_image.tobytes("raw", "RGB")
-        q_image = QImage(image_data_bytes, pil_image.width, pil_image.height,
-                         pil_image.width * 3, QImage.Format.Format_RGB888)
-        pixmap = QPixmap.fromImage(q_image)
-        return pixmap.scaled(target_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    def _pre_process_all_preview_frames(self):
+        """
+        Processes all lightweight preview frames at once with the current settings.
+        This populates self.processed_preview_frames for fast playback.
+        """
+        if not self.preview_pil_frames:
+            self.processed_preview_frames = []
+            return
+        # This call processes the entire list of small frames and is still fast
+        processed_sequence = self.gif_engine.process_frames_for_pads(
+            self.region_rect_percentage,
+            self.adjustments,
+            source_frames=self.preview_pil_frames
+        )
+        # Store just the hex color lists
+        self.processed_preview_frames = [frame_data[0]
+                                        for frame_data in processed_sequence]
 
     def _select_full_gif_region(self):
         self.region_rect_percentage = {
             'x': 0.0, 'y': 0.0, 'width': 1.0, 'height': 1.0}
         self._update_pad_preview()  # Trigger preview update
+
+    def _on_region_changed(self, region_dict: dict):
+        self.region_rect_percentage = region_dict
+        self._pre_process_all_preview_frames()  # Re-process with new region
+        self._update_pad_preview()
 
     def _on_adjustment_changed(self):
         self.adjustments['brightness'] = self._slider_to_factor(
@@ -402,7 +408,8 @@ class GifImportDialog(QDialog):
             self.contrast_slider.value())
         self.adjustments['hue_shift'] = float(self.hue_slider.value())
         self._update_adjustment_value_labels()
-        self._update_pad_preview()  # Update preview based on new adjustments
+        self._pre_process_all_preview_frames()  # Re-process with new adjustments
+        self._update_pad_preview()
 
     def _on_override_fps_toggled(self, checked: bool):
         self.playback_fps_slider.setEnabled(checked)
@@ -414,72 +421,53 @@ class GifImportDialog(QDialog):
         self._update_pad_preview()  # Preview speed will change
 
     def _update_preview_frame(self):
-        """Advances the live pad preview to the next frame."""
-        if not self.current_gif_frames_pil:
+        if not self.processed_preview_frames:
+            self.pad_preview_widget.set_colors(None)
             return
         self.current_preview_frame_index = (
-            self.current_preview_frame_index + 1) % len(self.current_gif_frames_pil)
-        # Get the current frame and apply processing *for the preview*.
-        # The processing engine will handle the necessary aspect ratio correction and color adjustments.
-        temp_processed_sequence = self.gif_engine.process_frames_for_pads(
-            self.region_rect_percentage,
-            self.adjustments
-        )
-        if temp_processed_sequence:
-            # We only need the current frame from the processed sequence
-            current_pad_colors_hex = temp_processed_sequence[self.current_preview_frame_index][0]
-            # Convert hex colors to a PIL Image (16x4 pixels) for display
-            # Create a blank 16x4 image
-            pad_preview_pil = Image.new('RGB', (NUM_GRID_COLS, NUM_GRID_ROWS))
-            pixels = pad_preview_pil.load()
-            for i, hex_color in enumerate(current_pad_colors_hex):
-                r, g, b = Image.new('RGB', (1, 1), hex_color).getpixel(
-                    (0, 0))  # Convert hex to RGB tuple
-                row, col = divmod(i, NUM_GRID_COLS)
-                pixels[col, row] = (r, g, b)  # PIL uses (x,y) not (row,col)
-            # Scale up the 16x4 image for display in the QLabel
-            scaled_pixmap = self._convert_pil_to_scaled_pixmap(
-                pad_preview_pil, self.pad_preview_label.size())
-            self.pad_preview_label.setPixmap(scaled_pixmap)
-            self.pad_preview_label.setText("")  # Clear "Loading..." text
-            # Adjust timer interval for live preview playback
-            if self.override_fps_checkbox.isChecked():
-                fps = self.playback_fps_slider.value()
-                delay_ms = int(1000 / fps) if fps > 0 else 100
-                self.current_preview_timer.setInterval(delay_ms)
-            else:
-                original_delay_ms = self.current_gif_frame_delays_ms[self.current_preview_frame_index]
-                self.current_preview_timer.setInterval(original_delay_ms)
+            self.current_preview_frame_index + 1) % len(self.processed_preview_frames)
+        current_pad_colors_hex = self.processed_preview_frames[self.current_preview_frame_index]
+        self.preview_pads_updated.emit(current_pad_colors_hex)
+        # Convert hex colors to RGB tuples for the preview widget
+        rgb_tuples = []
+        for hex_color in current_pad_colors_hex:
+            try:
+                rgb_tuples.append(ImageColor.getrgb(hex_color))
+            except (ValueError, TypeError):
+                rgb_tuples.append((0, 0, 0))  # Black on error
+        self.pad_preview_widget.set_colors(rgb_tuples)
+        if self.override_fps_checkbox.isChecked():
+            fps = self.playback_fps_slider.value()
+            delay_ms = int(1000 / fps) if fps > 0 else 100
+            self.current_preview_timer.setInterval(delay_ms)
         else:
-            self.pad_preview_label.setText(
-                "Preview Error: No processed frames.")
-            self._pause_preview()
+            original_delay_ms = self.current_gif_frame_delays_ms[self.current_preview_frame_index]
+            self.current_preview_timer.setInterval(original_delay_ms)
 
     def _update_pad_preview(self):
-        """Triggers a re-render of the current preview frame based on settings."""
-        # This will recalculate the current frame based on new settings.
-        # It's called when adjustments change.
+        """
+        Triggers a re-render of the current preview frame based on settings.
+        Now uses the downscaled preview frames for performance.
+        """
+        # This is now just a trigger. _update_preview_frame does the real work.
         if self._is_preview_playing:
-            # If playing, the timer will call _update_preview_frame automatically.
-            # We just need to restart the timer to apply potential speed changes.
-            self.current_preview_timer.stop()
-            # Small delay to re-evaluate speed
+            if self.current_preview_timer.isActive():
+                self.current_preview_timer.stop()
             self.current_preview_timer.start(1)
         else:
-            # If not playing, just render the current frame statically (first frame).
-            self.current_preview_frame_index = 0  # Show first frame statically
-            self._update_preview_frame()  # Force update of just the current frame
+            self.current_preview_frame_index = 0
+            self._update_preview_frame()
 
     def _play_preview(self):
-        if not self.current_gif_frames_pil:
+        if not self.preview_pil_frames:
             return
         if not self._is_preview_playing:
             self._is_preview_playing = True
             self.play_preview_button.setEnabled(False)
             self.pause_preview_button.setEnabled(True)
-            # Start with a small initial delay to immediately show first frame
-            self.current_preview_timer.start(1)
-            self._update_preview_frame()  # Show first frame immediately
+            # --- Reset index to -1 so the first tick advances to 0 ---
+            self.current_preview_frame_index = -1 
+            self.current_preview_timer.start(1) # Start with a small delay
 
     def _pause_preview(self):
         if self._is_preview_playing:
@@ -492,41 +480,34 @@ class GifImportDialog(QDialog):
             self._update_preview_frame()
 
     def _on_accept(self):
-        if not self.current_gif_frames_pil:
+        # --- Check the definitive list of original frames ---
+        if not self.original_pil_frames:
             QMessageBox.warning(self, "Import Error",
                                 "Please load a GIF before importing.")
             return
-
         sequence_name = self.sequence_name_input.text().strip()
         if not sequence_name:
-            sequence_name = self.gif_engine.sequence_name  # Fallback to original GIF name
-
-        # Process ALL frames for the final output
-        self.progress_bar.setFormat("Processing frames...")
+            sequence_name = self.gif_engine.sequence_name
+        self.progress_bar.setFormat("Processing frames for final import...")
         self.progress_bar.setValue(0)
-        QApplication.processEvents()  # Update UI
-
+        QApplication.processEvents()
+        # Use the full-resolution original frames for the final output
         processed_gif_sequence = self.gif_engine.process_frames_for_pads(
             self.region_rect_percentage,
-            self.adjustments
+            self.adjustments,
+            source_frames=self.original_pil_frames  # Explicitly use originals
         )
-
-        # Determine the final playback delay for the entire sequence
-        final_delay_ms = 0
         if self.override_fps_checkbox.isChecked():
             fps = self.playback_fps_slider.value()
             final_delay_ms = int(1000 / fps) if fps > 0 else 100
         else:
             final_delay_ms = self.gif_engine.get_original_gif_info().get('avg_delay_ms', 100)
-
         self.progress_bar.setValue(100)
         self.progress_bar.setFormat("Ready for Import!")
-        QApplication.processEvents()  # Update UI
-
+        QApplication.processEvents()
         self.gif_import_requested.emit(
             processed_gif_sequence, final_delay_ms, sequence_name)
         self.accept()
-
 
 # For standalone testing
 if __name__ == '__main__':

@@ -1430,6 +1430,20 @@ class AnimatorManagerWidget(QWidget):
             self.playback_status_update.emit(
                 "Please select a sequence from the dropdown to load.", 2000)
 
+    def refresh_display(self):
+        """
+        Forces a refresh of the main pad grid display based on the
+        currently selected edit frame in the active model.
+        """
+        if not self.active_sequence_model:
+            # If no model, emit empty colors to clear the grid
+            self.active_frame_data_for_display.emit(['#000000'] * 64)
+            return
+        edit_idx = self.active_sequence_model.get_current_edit_frame_index()
+        colors = self.active_sequence_model.get_frame_colors(edit_idx)
+        # Emit the colors of the current frame to be displayed
+        self.active_frame_data_for_display.emit(colors if colors else ['#000000'] * 64)
+
     def action_delete_sequence(self):
         """Handles deleting the currently selected sequence file."""
         current_data = self.sequence_selection_combo.currentData()

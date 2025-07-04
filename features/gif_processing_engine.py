@@ -123,61 +123,26 @@ class GifProcessingEngine:
         }
 
     def process_frames_for_pads(self,
-                                # {'x', 'y', 'width', 'height'}
                                 region_rect_percentage: dict,
-                                # {'brightness', 'saturation', 'contrast', 'hue_shift'}
-                                adjustments: dict
+                                adjustments: dict,
+                                source_frames: list[Image.Image] | None = None
                                 ) -> list[tuple[list[str], int]]:
-        """
-        Processes all original GIF frames based on region and adjustments,
-        returning a list of (processed_hex_colors_for_64_pads, original_delay_ms) tuples.
-        """
-        if not self.original_frames_pil:
+        frames_to_process = source_frames if source_frames is not None else self.original_frames_pil
+        if not frames_to_process:
             return []
         processed_sequence_data = []
-        for i, original_frame_pil in enumerate(self.original_frames_pil):
-            # 1. Apply Cropping based on region_rect_percentage
-            # Region is percentage of original GIF dimensions
+        for i, original_frame_pil in enumerate(frames_to_process):
             orig_w, orig_h = original_frame_pil.size
             crop_x = int(region_rect_percentage['x'] * orig_w)
             crop_y = int(region_rect_percentage['y'] * orig_h)
             crop_w = int(region_rect_percentage['width'] * orig_w)
             crop_h = int(region_rect_percentage['height'] * orig_h)
-            # Ensure crop dimensions are at least 1x1 to avoid errors
             crop_w = max(1, crop_w)
             crop_h = max(1, crop_h)
             cropped_frame = original_frame_pil.crop(
                 (crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
-            # 2. Apply "Display-Aspect-Ratio-Corrected Smart Fill"
-            #    Resize the cropped frame to an intermediate size that matches the final DISPLAY aspect ratio (3.2).
-            #    Then, extract the NUM_GRID_COLS x NUM_GRID_ROWS pixels from this intermediate image.
-            # Intermediate size needs to be larger than target (16x4) for good resampling.
-            # Let's target a resolution that has the 3.2 aspect ratio, e.g., 64x20 (which is 4x the pad grid display aspect)
-            intermediate_width_target = 64
-            intermediate_height_target = int(
-                intermediate_width_target / DISPLAY_GRID_ASPECT_RATIO)
-            # Ensure height is at least 1 and is even for simpler division later if needed
-            intermediate_height_target = max(1, intermediate_height_target)
-            if intermediate_height_target % 2 != 0:
-                intermediate_height_target += 1
-            # Resize the cropped frame to this intermediate aspect-corrected size
-            # This will distort the *image's* aspect ratio to match our *display* aspect ratio
-            # For abstract patterns, this is usually acceptable.
             final_pad_image_pil = cropped_frame.resize(
-                (intermediate_width_target, intermediate_height_target),
-                resample=Image.Resampling.LANCZOS
-            )
-            # Now, extract the 4x16 grid of colors from this image.
-            # We treat the intermediate_width_target x intermediate_height_target image as a source.
-            # Since it's already aspect-ratio corrected for the pads, we just need to sample
-            # a NUM_GRID_COLS x NUM_GRID_ROWS grid of pixels.
-            # The simplest way is to resize it one last time to 16x4 for direct pixel extraction.
-            final_pad_image_pil = final_pad_image_pil.resize(
-                (NUM_GRID_COLS, NUM_GRID_ROWS),
-                resample=Image.Resampling.LANCZOS  # Still use high quality for final pixel
-            )
-            # 3. Apply Color Adjustments (Brightness, Saturation, Contrast, Hue Shift)
-            #    These will be applied to the 16x4 PIL image.
+                (NUM_GRID_COLS, NUM_GRID_ROWS), resample=Image.Resampling.LANCZOS)
             if adjustments.get('brightness', 1.0) != 1.0:
                 enhancer = ImageEnhance.Brightness(final_pad_image_pil)
                 final_pad_image_pil = enhancer.enhance(
@@ -189,24 +154,19 @@ class GifProcessingEngine:
                 enhancer = ImageEnhance.Color(final_pad_image_pil)
                 final_pad_image_pil = enhancer.enhance(
                     adjustments['saturation'])
-            # Convert to numpy array for fast pixel access and optional hue shift
-            img_np = np.array(final_pad_image_pil)
-            # Extract 64 RGB tuples (list of (R, G, B))
+            img_np = np.array(final_pad_image_pil.convert("RGB"))
             pad_colors_rgb_tuples = [tuple(p) for p in img_np.reshape(-1, 3)]
-            # Apply Hue Shift (requires colorsys, outside Pillow)
             hue_shift_degrees = adjustments.get('hue_shift', 0)
             if hue_shift_degrees != 0:
                 pad_colors_final_rgb = [self._apply_hue_shift(
                     c, hue_shift_degrees) for c in pad_colors_rgb_tuples]
             else:
                 pad_colors_final_rgb = pad_colors_rgb_tuples
-            # Convert final RGB tuples to hex color strings
-            pad_colors_hex = [
-                '#{:02x}{:02x}{:02x}'.format(r, g, b)
-                for r, g, b in pad_colors_final_rgb
-            ]
-            processed_sequence_data.append(
-                (pad_colors_hex, self.original_frame_delays_ms[i]))
+            pad_colors_hex = ['#{:02x}{:02x}{:02x}'.format(
+                r, g, b) for r, g, b in pad_colors_final_rgb]
+            delay = self.original_frame_delays_ms[i] if i < len(
+                self.original_frame_delays_ms) else 100
+            processed_sequence_data.append((pad_colors_hex, delay))
         return processed_sequence_data
 
     @staticmethod

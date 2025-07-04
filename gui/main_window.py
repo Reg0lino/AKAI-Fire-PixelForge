@@ -1301,13 +1301,18 @@ class MainWindow(QMainWindow):
         self._update_global_ui_interaction_states()  # Update all UI states
 
     def _open_gif_import_dialog(self):
-        """
-        Opens the GIF Import dialog and handles the returned processed GIF sequence.
-        """
+        if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
+            self.screen_sampler_manager.stop_sampling_thread()
+        if self.animator_manager and self.animator_manager.active_sequence_model.get_is_playing():
+            self.animator_manager.action_stop()
         dialog = GifImportDialog(parent=self)
         dialog.gif_import_requested.connect(self._handle_gif_import_request)
-        dialog.exec() # Show dialog as modal
-        dialog.deleteLater() # Ensure dialog is properly deleted after closing
+        dialog.preview_pads_updated.connect(self._on_gif_preview_pads_updated)
+        dialog.exec()
+        # ---  Tell the animator to refresh itself, don't micromanage it ---
+        if self.animator_manager:
+            self.animator_manager.refresh_display()
+        dialog.deleteLater()
 
     def _handle_gif_import_request(self, processed_gif_sequence: list, final_delay_ms: int, sequence_name: str):
         """
@@ -2245,6 +2250,13 @@ class MainWindow(QMainWindow):
             self._load_and_apply_active_graphic()  # This calls set_active_graphic on ODM
         self._scan_available_oled_items()  # Refresh library cache
 
+    def _on_gif_preview_pads_updated(self, colors_hex: list):
+        """Receives pad colors from the GIF import dialog's live preview."""
+        if self.akai_controller and self.akai_controller.is_connected():
+            # Use the master apply method, but only update hardware, not the main GUI grid
+            self.apply_colors_to_main_pad_grid(
+                colors_hex, update_hw=True, update_gui=False)
+
     def _toggle_doom_mode(self):
         if not DOOM_MODULE_LOADED:
             QMessageBox.warning(self, "Feature Unavailable",
@@ -3052,37 +3064,27 @@ class MainWindow(QMainWindow):
         elif mouse_button == Qt.MouseButton.RightButton:
             self._apply_secondary_color_to_pad(row, col, update_model=True)
 
-    def apply_colors_to_main_pad_grid(self, final_colors_hex: list | None, update_hw: bool = True, bypass_global_brightness: bool = False):
+    def apply_colors_to_main_pad_grid(self, final_colors_hex: list | None, update_hw: bool = True, bypass_global_brightness: bool = False, update_gui: bool = True):
         """
-        The definitive method for updating the grid. It takes a list of FINAL
-        display colors and applies them to both the UI grid and the hardware.
-        Args:
-            final_colors_hex: A list of 64 hex color strings.
-            update_hw: If True, sends the colors to the hardware.
-            bypass_global_brightness: If True, ignores the main brightness knob. Used for
-                                        sampler/visualizer output which have their own brightness.
+        The definitive method for updating the grid.
+        Can now selectively update hardware and/or the main GUI grid.
         """
-        if not hasattr(self, 'pad_grid_frame') or not self.pad_grid_frame:
-            return
         colors_to_apply = final_colors_hex if (final_colors_hex and isinstance(final_colors_hex, list) and len(final_colors_hex) == 64) else [QColor("black").name()] * 64
-        # 1. Update the GUI grid with the final display colors
-        for i, hex_str in enumerate(colors_to_apply):
-            r, c = divmod(i, 16)
-            current_color = QColor(hex_str if (hex_str and isinstance(hex_str, str)) else "#000000")
-            if not current_color.isValid():
-                current_color = QColor("black")
-            self.pad_grid_frame.update_pad_gui_color(r, c, current_color.red(), current_color.green(), current_color.blue())
-        # 2. Update the hardware (if requested)
-        if not (update_hw and self.akai_controller and self.akai_controller.is_connected()):
-            return
-        hw_batch = []
-        for i, hex_str in enumerate(colors_to_apply):
-            r, c = divmod(i, 16)
-            current_color = QColor(hex_str)
-            hw_batch.append((i, current_color.red(), current_color.green(), current_color.blue()))
-        if hw_batch:
-            # Use the bypass flag to control hardware brightness application
-            self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=bypass_global_brightness)
+        # 1. Update the GUI grid if requested
+        if update_gui and hasattr(self, 'pad_grid_frame') and self.pad_grid_frame:
+            for i, hex_str in enumerate(colors_to_apply):
+                r, c = divmod(i, 16)
+                current_color = QColor(hex_str if (hex_str and isinstance(hex_str, str)) else "#000000")
+                if not current_color.isValid(): current_color = QColor("black")
+                self.pad_grid_frame.update_pad_gui_color(r, c, current_color.red(), current_color.green(), current_color.blue())
+        # 2. Update the hardware if requested
+        if update_hw and self.akai_controller and self.akai_controller.is_connected():
+            hw_batch = []
+            for i, hex_str in enumerate(colors_to_apply):
+                current_color = QColor(hex_str)
+                hw_batch.append((i, current_color.red(), current_color.green(), current_color.blue()))
+            if hw_batch:
+                self.akai_controller.set_multiple_pads_color(hw_batch, bypass_global_brightness=bypass_global_brightness)
 
     def _on_animator_selection_changed(self, selected_indices: list):
         """
