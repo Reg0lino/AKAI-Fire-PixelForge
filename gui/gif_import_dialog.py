@@ -104,7 +104,7 @@ class GifImportDialog(QDialog):
         main_layout.addLayout(content_layout)
         left_panel_widget = QWidget()
         left_panel_widget.setFixedWidth(500)
-        left_panel_widget.setFixedHeight(450)
+        left_panel_widget.setFixedHeight(620)
         left_panel_v_layout = QVBoxLayout(left_panel_widget)
         left_panel_v_layout.setContentsMargins(0, 0, 0, 0)
         self.gif_display_label = GifRegionSelectorLabel(

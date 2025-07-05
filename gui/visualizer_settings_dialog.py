@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSignal, Qt, QPointF
 from PyQt6.QtGui import QColor, QPainter, QLinearGradient, QBrush, QIcon
 
-# --- Project-specific Imports for get_resource_path ---
 try:
     from ..utils import get_resource_path
 except ImportError:
@@ -19,11 +18,9 @@ except ImportError:
         def get_resource_path(relative_path):  # Basic fallback
             print("VSD WARNING: Using basic fallback get_resource_path.")
             return relative_path
-# --- End Project-specific Imports ---
 
 DIALOG_NUMBER_OF_SPECTRUM_BARS = 8
 COLOR_PROFILE_CONFIG_FILENAME = "visualizer_color_profiles.json"
-
 
 class ColorGradientButton(QPushButton):
     def __init__(self, initial_color=QColor("gray"), parent=None):
@@ -53,10 +50,8 @@ class ColorGradientButton(QPushButton):
         painter.setPen(QColor(50, 50, 50))
         painter.drawRect(rect.adjusted(0, 0, -1, -1))
 
-
 class VisualizerSettingsDialog(QDialog):
     all_settings_applied = pyqtSignal(dict)
-
     DEFAULT_SPECTRUM_BAR_COLORS_HEX = [
         QColor(Qt.GlobalColor.red).name(), QColor(Qt.GlobalColor.yellow).name(), QColor(
             Qt.GlobalColor.green).name(), QColor(Qt.GlobalColor.cyan).name(),
@@ -66,7 +61,6 @@ class VisualizerSettingsDialog(QDialog):
     ]
     DEFAULT_SENSITIVITY_SLIDER = 50
     DEFAULT_SMOOTHING_SLIDER = 20
-
     PREFAB_PALETTES = {
         "classic_spectrum_bars": {
             "rainbow": {"band_colors": ["#FF0000", "#FF7F00", "#FFFF00", "#00FF00", "#0000FF", "#4B0082", "#9400D3", "#FF00FF"], "sensitivity": 50, "smoothing": 20, "grow_downwards": False},
@@ -112,7 +106,7 @@ class VisualizerSettingsDialog(QDialog):
     }
 
     def __init__(self, current_mode_key: str, all_current_settings: dict | None, config_save_path_func, parent=None):
-        print(f"VSD TRACE: __init__ ENTERED. ID: {id(self)}") # DIAGNOSTIC
+        # print(f"VSD TRACE: __init__ ENTERED. ID: {id(self)}") # DIAGNOSTIC
         super().__init__(parent)
         self.current_mode_key_on_open = current_mode_key
         self.config_save_path_func = config_save_path_func
@@ -215,12 +209,11 @@ class VisualizerSettingsDialog(QDialog):
         self._last_saved_sb_palette_name: str | None = None # For internal use
         self._last_saved_dvu_scheme_name: str | None = None # For internal use
         self.color_profiles = {}
-        
         self._init_ui()
         self._load_color_profiles()
         self._populate_ui_from_settings()
         self._select_initial_tab()
-        print(f"VSD TRACE: __init__ EXITED. ID: {id(self)}") # DIAGNOSTIC
+        # print(f"VSD TRACE: __init__ EXITED. ID: {id(self)}") # DIAGNOSTIC
 
     def _get_color_profile_filepath(self) -> str:
         filepath = self.config_save_path_func(COLOR_PROFILE_CONFIG_FILENAME)
@@ -302,7 +295,7 @@ class VisualizerSettingsDialog(QDialog):
                 else:
                     button.setColor(QColor(self.DEFAULT_SPECTRUM_BAR_COLORS_HEX[i % len(self.DEFAULT_SPECTRUM_BAR_COLORS_HEX)]))
         if hasattr(self, 'sb_palette_combobox') and self.sb_palette_combobox is not None:
-            print(f"VSD TRACE (_populate_ui_from_settings): Preparing to call _update_sb_palette_combobox. self.sb_palette_combobox IS: {self.sb_palette_combobox}")
+            # print(f"VSD TRACE (_populate_ui_from_settings): Preparing to call _update_sb_palette_combobox. self.sb_palette_combobox IS: {self.sb_palette_combobox}")
             self._update_sb_palette_combobox()
         else:
             print("VSD ERROR (_populate_ui_from_settings): self.sb_palette_combobox is None or does not exist before calling update.")
@@ -346,7 +339,6 @@ class VisualizerSettingsDialog(QDialog):
             sens_val = int(dvu_settings.get("spectrum_sensitivity", 50))
             self.dvu_spectrum_sensitivity_slider.setValue(sens_val)
             self._on_dvu_spectrum_sensitivity_changed(sens_val)
-        
         if self.dvu_spectrum_smoothing_slider:
             smooth_val = int(dvu_settings.get("spectrum_smoothing", 20))
             self.dvu_spectrum_smoothing_slider.setValue(smooth_val)
@@ -356,7 +348,7 @@ class VisualizerSettingsDialog(QDialog):
             self.dvu_spectrum_grow_downwards_checkbox.setChecked(grow_down_spec)
         # --- CRITICAL CHECK FOR DVU COMBOBOX ---
         if hasattr(self, 'dvu_scheme_combobox') and self.dvu_scheme_combobox is not None:
-            print(f"VSD TRACE (_populate_ui_from_settings): Preparing to call _update_dvu_scheme_combobox. self.dvu_scheme_combobox IS: {self.dvu_scheme_combobox} (ID: {id(self.dvu_scheme_combobox)})")
+            # print(f"VSD TRACE (_populate_ui_from_settings): Preparing to call _update_dvu_scheme_combobox. self.dvu_scheme_combobox IS: {self.dvu_scheme_combobox} (ID: {id(self.dvu_scheme_combobox)})")
             self._update_dvu_scheme_combobox()
         else:
             print(f"VSD ERROR (_populate_ui_from_settings): self.dvu_scheme_combobox IS STILL None or does not exist before calling update. self ID: {id(self)}")
@@ -594,7 +586,6 @@ class VisualizerSettingsDialog(QDialog):
                 self.sb_palette_combobox.addItem(f"{profile_name} (User)", userData={
                                                 "name": profile_name, "type": "user_sb"})
                 user_profile_count += 1
-
         # Add Prefab Palettes for classic_spectrum_bars
         prefabs_sb = self.PREFAB_PALETTES.get("classic_spectrum_bars", {})
         if prefabs_sb:
@@ -698,7 +689,7 @@ class VisualizerSettingsDialog(QDialog):
         self.accept()
 
     def _on_sb_palette_combobox_changed(self):
-        print(f"VSD TRACE: _on_sb_palette_combobox_changed called.")
+        # print(f"VSD TRACE: _on_sb_palette_combobox_changed called.")
         if not (hasattr(self, 'sb_palette_combobox') and self.sb_palette_combobox and
                 hasattr(self, 'sb_delete_palette_button') and self.sb_delete_palette_button and
                 hasattr(self, 'sb_load_palette_button') and self.sb_load_palette_button):
@@ -706,40 +697,40 @@ class VisualizerSettingsDialog(QDialog):
                 "VSD WARN: Combobox or buttons not fully initialized for _on_sb_palette_combobox_changed.")
             return
         selected_data = self.sb_palette_combobox.currentData()
-        print(f"  Selected data: {selected_data}")
+        # print(f"  Selected data: {selected_data}")
         can_delete = False
         if selected_data and isinstance(selected_data, dict) and selected_data.get("type") == "user_sb":
             can_delete = True
         self.sb_delete_palette_button.setEnabled(can_delete)
-        print(f"  Delete button enabled: {can_delete}")
+        # print(f"  Delete button enabled: {can_delete}")
         can_load = False
         if selected_data and isinstance(selected_data, dict) and selected_data.get("type") in ["user_sb", "prefab_sb"]:
             can_load = True
         self.sb_load_palette_button.setEnabled(can_load)
-        print(f"  Load button enabled: {can_load}")
+        # print(f"  Load button enabled: {can_load}")
 
     def _load_selected_sb_palette_from_combobox(self):
-        print("VSD TRACE: _load_selected_sb_palette_from_combobox called.")
+        # print("VSD TRACE: _load_selected_sb_palette_from_combobox called.")
         if not hasattr(self, 'sb_palette_combobox') or not self.sb_palette_combobox:
             print("  Load failed: sb_palette_combobox not found.")
             return
         selected_item_data = self.sb_palette_combobox.currentData()
-        print(f"  Selected item data from combobox: {selected_item_data}")
+        # print(f"  Selected item data from combobox: {selected_item_data}")
         if not selected_item_data or not isinstance(selected_item_data, dict):
-            print("  Load failed: No valid data in selected combobox item.")
+            # print("  Load failed: No valid data in selected combobox item.")
             return
         profile_type = selected_item_data.get("type")
         active_mode_key = "classic_spectrum_bars"
         settings_to_apply = None
         if profile_type == "user_sb":  # Specifically for Spectrum Bars user profiles
             profile_name = selected_item_data.get("name")
-            print(f"  Loading USER_SB profile: '{profile_name}'")
+            # print(f"  Loading USER_SB profile: '{profile_name}'")
             if profile_name and profile_name in self.color_profiles:
                 # User profiles are now structured: self.color_profiles[profile_name][mode_key]
                 if active_mode_key in self.color_profiles[profile_name]:
                     settings_to_apply = self.color_profiles[profile_name][active_mode_key]
-                    print(
-                        f"    Found settings for '{profile_name}' under '{active_mode_key}': {settings_to_apply}")
+                    # print(
+                    #     f"    Found settings for '{profile_name}' under '{active_mode_key}': {settings_to_apply}")
                 else:
                     QMessageBox.warning(
                         self, "Load Error", f"Profile '{profile_name}' does not contain settings for Spectrum Bars.")
@@ -750,11 +741,11 @@ class VisualizerSettingsDialog(QDialog):
                 return
         elif profile_type == "prefab_sb":  # Specifically for Spectrum Bars prefab profiles
             prefab_key = selected_item_data.get("key")
-            print(f"  Loading PREFAB_SB profile with key: '{prefab_key}'")
+            # print(f"  Loading PREFAB_SB profile with key: '{prefab_key}'")
             if prefab_key and active_mode_key in self.PREFAB_PALETTES and prefab_key in self.PREFAB_PALETTES[active_mode_key]:
                 settings_to_apply = self.PREFAB_PALETTES[active_mode_key][prefab_key]
-                print(
-                    f"    Found prefab settings for '{prefab_key}': {settings_to_apply}")
+                # print(
+                #     f"    Found prefab settings for '{prefab_key}': {settings_to_apply}")
             else:
                 QMessageBox.warning(self, "Load Error",
                                     f"Could not find prefab: {prefab_key}")
@@ -763,8 +754,8 @@ class VisualizerSettingsDialog(QDialog):
             print(f"  Load failed: Invalid profile_type '{profile_type}'.")
             return
         if settings_to_apply:
-            print(
-                f"  Applying settings to dialog's working copy and UI: {settings_to_apply}")
+            # print(
+            #     f"  Applying settings to dialog's working copy and UI: {settings_to_apply}")
             # Ensure it's a copy before modifying
             loaded_settings_copy = settings_to_apply.copy()
             # --- CRITICAL: Ensure all expected keys exist in loaded_settings_copy before applying to UI ---
@@ -786,35 +777,35 @@ class VisualizerSettingsDialog(QDialog):
                     csb_defaults_ui["band_colors"])
             # Update the dialog's working copy
             self.all_settings[active_mode_key] = loaded_settings_copy
-            print(
-                f"    Dialog's self.all_settings['{active_mode_key}'] updated to: {self.all_settings[active_mode_key]}")
+            # print(
+            #     f"    Dialog's self.all_settings['{active_mode_key}'] updated to: {self.all_settings[active_mode_key]}")
             # Update UI elements from the newly loaded settings in self.all_settings[active_mode_key]
             # (which is now loaded_settings_copy)
             if self.sb_sensitivity_slider:
                 sens_val = self.all_settings[active_mode_key].get(
                     "sensitivity")
                 self.sb_sensitivity_slider.setValue(sens_val)
-                print(f"    Sensitivity slider set to: {sens_val}")
+                # print(f"    Sensitivity slider set to: {sens_val}")
             if self.sb_smoothing_slider:
                 smooth_val = self.all_settings[active_mode_key].get(
                     "smoothing")
                 self.sb_smoothing_slider.setValue(smooth_val)
-                print(f"    Smoothing slider set to: {smooth_val}")
+                # print(f"    Smoothing slider set to: {smooth_val}")
             if self.sb_grow_downwards_checkbox:
                 grow_val = self.all_settings[active_mode_key].get(
                     "grow_downwards")
                 self.sb_grow_downwards_checkbox.setChecked(grow_val)
-                print(f"    Grow downwards checkbox set to: {grow_val}")
+                # print(f"    Grow downwards checkbox set to: {grow_val}")
             loaded_colors_for_ui = self.all_settings[active_mode_key].get(
                 "band_colors")
-            print(f"    Applying band colors: {loaded_colors_for_ui}")
+            # print(f"    Applying band colors: {loaded_colors_for_ui}")
             for i, btn in enumerate(self.sb_color_buttons):
                 color_to_set = QColor(loaded_colors_for_ui[i]) if i < len(loaded_colors_for_ui) else QColor(
                     self.DEFAULT_SPECTRUM_BAR_COLORS_HEX[i % len(self.DEFAULT_SPECTRUM_BAR_COLORS_HEX)])
                 btn.setColor(color_to_set)
                 # print(f"      Bar {i} color set to: {color_to_set.name()}")
-            print(
-                f"  VSD INFO: Loaded preset '{self.sb_palette_combobox.currentText()}' to Spectrum Bars tab.")
+            # print(
+            #     f"  VSD INFO: Loaded preset '{self.sb_palette_combobox.currentText()}' to Spectrum Bars tab.")
         else:
             print("  Load failed: settings_to_apply was None.")
 
@@ -1068,7 +1059,7 @@ class VisualizerSettingsDialog(QDialog):
         pr_row = 0
         scheme_palette_layout_grid.addWidget(QLabel("Scheme Preset:"), pr_row, 0, Qt.AlignmentFlag.AlignRight)
         self.dvu_scheme_combobox = QComboBox()
-        print(f"VSD TRACE (_create_dual_vu_settings_tab): self.dvu_scheme_combobox CREATED (ID: {id(self.dvu_scheme_combobox)})") # DIAGNOSTIC
+        # print(f"VSD TRACE (_create_dual_vu_settings_tab): self.dvu_scheme_combobox CREATED (ID: {id(self.dvu_scheme_combobox)})") # DIAGNOSTIC
         self.dvu_scheme_combobox.setToolTip("Select a saved user scheme or a built-in prefab scheme.")
         self.dvu_scheme_combobox.currentIndexChanged.connect(self._on_dvu_scheme_combobox_changed)
         scheme_palette_layout_grid.addWidget(self.dvu_scheme_combobox, pr_row, 1, 1, 2)
@@ -1139,13 +1130,13 @@ class VisualizerSettingsDialog(QDialog):
             state == Qt.CheckState.Checked.value)
 
     def _update_dvu_scheme_combobox(self):
-        print(f"VSD TRACE: _update_dvu_scheme_combobox ENTERED. Current self ID: {id(self)}")
+        # print(f"VSD TRACE: _update_dvu_scheme_combobox ENTERED. Current self ID: {id(self)}")
         dvu_combo_attr = getattr(self, 'dvu_scheme_combobox', 'ATTRIBUTE_DOES_NOT_EXIST')
         if dvu_combo_attr == 'ATTRIBUTE_DOES_NOT_EXIST':
-            print(f"  VSD TRACE (_update_dvu_scheme_combobox): self.dvu_scheme_combobox attribute DOES NOT EXIST on self (ID: {id(self)}). Returning.")
+            # print(f"  VSD TRACE (_update_dvu_scheme_combobox): self.dvu_scheme_combobox attribute DOES NOT EXIST on self (ID: {id(self)}). Returning.")
             return
         elif self.dvu_scheme_combobox is None: # This refers to the attribute value after getattr confirmed existence
-            print(f"  VSD TRACE (_update_dvu_scheme_combobox): self.dvu_scheme_combobox IS None on self (ID: {id(self)}). Returning.")
+            # print(f"  VSD TRACE (_update_dvu_scheme_combobox): self.dvu_scheme_combobox IS None on self (ID: {id(self)}). Returning.")
             return
         else:
             print(f"  VSD TRACE (_update_dvu_scheme_combobox): self.dvu_scheme_combobox EXISTS and is NOT None. Object: {self.dvu_scheme_combobox} (ID: {id(self.dvu_scheme_combobox)})")
@@ -1207,29 +1198,29 @@ class VisualizerSettingsDialog(QDialog):
                     break
         self.dvu_scheme_combobox.blockSignals(False)
         self._on_dvu_scheme_combobox_changed() # This will also print its own trace
-        print(f"VSD TRACE: _update_dvu_scheme_combobox EXITED. Current self ID: {id(self)}")
+        # print(f"VSD TRACE: _update_dvu_scheme_combobox EXITED. Current self ID: {id(self)}")
 
     def _on_dvu_scheme_combobox_changed(self):
-        print(f"VSD TRACE: _on_dvu_scheme_combobox_changed called.")
+        # print(f"VSD TRACE: _on_dvu_scheme_combobox_changed called.")
         if not (hasattr(self, 'dvu_scheme_combobox') and self.dvu_scheme_combobox and
                 hasattr(self, 'dvu_delete_scheme_button') and self.dvu_delete_scheme_button and
                 hasattr(self, 'dvu_load_scheme_button') and self.dvu_load_scheme_button):
-            print("VSD WARN: DVU Combobox or buttons not fully initialized.")
+            # print("VSD WARN: DVU Combobox or buttons not fully initialized.")
             return
         selected_data = self.dvu_scheme_combobox.currentData()
-        print(f"  DVU Selected data: {selected_data}")
+        # print(f"  DVU Selected data: {selected_data}")
         can_delete = bool(selected_data and isinstance(
             selected_data, dict) and selected_data.get("type") == "user_dvu")
         self.dvu_delete_scheme_button.setEnabled(can_delete)
-        print(f"  DVU Delete button enabled: {can_delete}")
+        # print(f"  DVU Delete button enabled: {can_delete}")
         can_load = bool(selected_data and isinstance(
             selected_data, dict) and selected_data.get("type") in ["user_dvu", "prefab_dvu"])
         self.dvu_load_scheme_button.setEnabled(can_load)
-        print(f"  DVU Load button enabled: {can_load}")
+        # print(f"  DVU Load button enabled: {can_load}")
 
     def _load_selected_dvu_scheme_from_combobox(self):
         # Similar to _load_selected_sb_palette_from_combobox but for "dual_vu_spectrum"
-        print("VSD TRACE: _load_selected_dvu_scheme_from_combobox called.")
+        # print("VSD TRACE: _load_selected_dvu_scheme_from_combobox called.")
         if not (hasattr(self, 'dvu_scheme_combobox') and self.dvu_scheme_combobox):
             return
         selected_item_data = self.dvu_scheme_combobox.currentData()
@@ -1269,7 +1260,6 @@ class VisualizerSettingsDialog(QDialog):
             if "spectrum_band_colors" in loaded_settings_copy:  # Ensure list is copied
                 loaded_settings_copy["spectrum_band_colors"] = list(
                     loaded_settings_copy["spectrum_band_colors"])
-
             self.all_settings[active_mode_key] = loaded_settings_copy
             self._populate_ui_from_settings()  # Re-populate the whole tab, this is simplest
             print(
@@ -1279,19 +1269,16 @@ class VisualizerSettingsDialog(QDialog):
         active_mode_key = "dual_vu_spectrum"
         if not (hasattr(self, 'dvu_scheme_name_edit') and self.dvu_scheme_name_edit):
             return
-
         name = self.dvu_scheme_name_edit.text().strip()
         if not name:
             QMessageBox.warning(self, "Save Scheme Error",
                                 "Please enter a name for the scheme.")
             return
-
         if name in self.color_profiles and active_mode_key in self.color_profiles.get(name, {}):
             if QMessageBox.question(self, "Overwrite Scheme?", f"Scheme '{name}' already exists for Dual VU. Overwrite it?",
                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                     QMessageBox.StandardButton.No) == QMessageBox.StandardButton.No:
                 return
-
         # Collect current settings from ALL UI elements on the "dual_vu_spectrum" tab
         current_dvu_settings_from_ui = {
             "vu_low_color": self.dvu_low_color_button.getColor().name() if self.dvu_low_color_button else QColor(Qt.GlobalColor.green).name(),
@@ -1305,58 +1292,49 @@ class VisualizerSettingsDialog(QDialog):
             "spectrum_smoothing": self.dvu_spectrum_smoothing_slider.value() if self.dvu_spectrum_smoothing_slider else 20,
             "spectrum_grow_downwards": self.dvu_spectrum_grow_downwards_checkbox.isChecked() if self.dvu_spectrum_grow_downwards_checkbox else False
         }
-
         # Update self.all_settings (dialog's working copy) for this mode
         self.all_settings[active_mode_key] = current_dvu_settings_from_ui.copy()
-
         # Update self.color_profiles (which is saved to JSON)
         if name not in self.color_profiles:
             self.color_profiles[name] = {}
         # Ensure it's a dict if name exists
         elif not isinstance(self.color_profiles.get(name), dict):
             self.color_profiles[name] = {}
-
         self.color_profiles[name][active_mode_key] = current_dvu_settings_from_ui.copy(
         )
-
         self._save_color_profiles()  # Save all profiles to JSON
-
         # --- CRITICAL CHANGE HERE ---
         # Store the name of the profile we just saved so _update_dvu_scheme_combobox can select it.
         self._last_saved_dvu_scheme_name = name
         self._update_dvu_scheme_combobox()  # Refresh ComboBox
         self._last_saved_dvu_scheme_name = None  # Clear the temp variable
-
         self.dvu_scheme_name_edit.clear()
-        print(f"VSD INFO: Scheme '{name}' for Dual VU & Spectrum saved.")
+        # print(f"VSD INFO: Scheme '{name}' for Dual VU & Spectrum saved.")
 
     def _delete_selected_dvu_scheme_from_combobox(self):
         # Similar to _delete_selected_sb_palette_from_combobox
         if not (hasattr(self, 'dvu_scheme_combobox') and self.dvu_scheme_combobox):
             return
-
         selected_item_data = self.dvu_scheme_combobox.currentData()
         if not (selected_item_data and isinstance(selected_item_data, dict) and selected_item_data.get("type") == "user_dvu"):
             QMessageBox.information(
                 self, "Delete Scheme", "Please select a user-saved Dual VU scheme to delete.")
             return
-
         profile_name = selected_item_data.get("name")
         display_text = self.dvu_scheme_combobox.currentText()
         active_mode_key = "dual_vu_spectrum"
-
         if QMessageBox.question(self, "Confirm Deletion", f"Delete scheme: '{display_text}'?",
                                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                 QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             if profile_name in self.color_profiles and isinstance(self.color_profiles[profile_name], dict) and \
-               active_mode_key in self.color_profiles[profile_name]:
+                active_mode_key in self.color_profiles[profile_name]:
                 del self.color_profiles[profile_name][active_mode_key]
                 if not self.color_profiles[profile_name]:
                     del self.color_profiles[profile_name]
                 self._save_color_profiles()
                 self._update_dvu_scheme_combobox()
-                print(
-                    f"VSD INFO: Scheme '{profile_name}' (Dual VU part) deleted.")
+                # print(
+                #     f"VSD INFO: Scheme '{profile_name}' (Dual VU part) deleted.")
             else:
                 QMessageBox.warning(self, "Delete Error",
                                     f"Scheme '{profile_name}' not found.")
@@ -1372,10 +1350,9 @@ class VisualizerSettingsDialog(QDialog):
         self.all_settings["dual_vu_spectrum"] = dvu_defaults_ui.copy()
         self.all_settings["dual_vu_spectrum"]["spectrum_band_colors"] = list(
             self.all_settings["dual_vu_spectrum"]["spectrum_band_colors"])
-
         # Re-populate the UI for this tab from the reset self.all_settings
         self._populate_ui_from_settings()  # This will refresh the current tab
-        print("VSD INFO: Dual VU & Spectrum settings reset to defaults.")
+        # print("VSD INFO: Dual VU & Spectrum settings reset to defaults.")
 
     def _on_dvu_color_changed(self, color_type: str):
         button_to_update: ColorGradientButton | None = None

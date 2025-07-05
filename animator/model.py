@@ -62,7 +62,8 @@ class SequenceModel(QObject):
         """Sets the modified flag to True."""
         if not self.is_modified:
             self.is_modified = True
-            # print(f"DEBUG: SequenceModel '{self.name}' marked as modified.")
+            print(f"DEBUG: SequenceModel '{self.name}' marked as modified.")
+            self.properties_changed.emit()
 
     def _push_undo_state(self):
         # if len(self.frames) == 0 and not self._undo_stack :

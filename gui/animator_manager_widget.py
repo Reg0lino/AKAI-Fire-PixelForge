@@ -305,49 +305,6 @@ class AnimatorManagerWidget(QWidget):
         new_index = self.active_sequence_model.add_blank_frame(at_index=index + 1)
         self.sequence_timeline_widget.select_items_by_indices([new_index])
 
-    def set_active_sequence_model(self, model: SequenceModel | None):
-        """
-        Sets the active sequence model and updates the UI accordingly.
-        This is a central method for managing the currently loaded animation.
-        """
-        print(f"AMW DEBUG: set_active_sequence_model called for: {model.name if model else 'None'}") # For debugging
-        # Stop any active playback if a new model is being set
-        if self.active_sequence_model and self.active_sequence_model.get_is_playing():
-            self.action_stop() # This will stop playback cleanly
-        self.active_sequence_model = model
-        
-        if self.active_sequence_model:
-            # Connect the model's signals to the UI manager for updates
-            self.active_sequence_model.frame_data_changed.connect(self._on_frame_data_changed)
-            self.active_sequence_model.frame_added_or_removed.connect(self._on_frame_count_changed)
-            self.active_sequence_model.playback_position_changed.connect(self._on_playback_position_changed)
-            self.active_sequence_model.current_edit_frame_changed.connect(self._on_current_edit_frame_changed)
-            self.active_sequence_model.sequence_modified_status_changed.connect(self.sequence_modified_status_changed)
-            # Update UI to reflect the new sequence
-            self.sequence_title_label.setText(self.active_sequence_model.name)
-            self.sequence_timeline_widget.set_sequence_model(self.active_sequence_model)
-            # Set timeline to the current edit frame, ensuring UI updates
-            self.sequence_timeline_widget.set_current_edit_frame_index(self.active_sequence_model.get_current_edit_frame_index())
-            # Update undo/redo state for new sequence
-            self._update_undo_redo_actions_state()
-            # Initial frame display for the new sequence
-            current_edit_index = self.active_sequence_model.get_current_edit_frame_index()
-            colors = self.active_sequence_model.get_frame_colors(current_edit_index)
-            self.active_frame_data_for_display.emit(colors) # Emit to MainWindow for display
-            # Update save button state
-            self.save_button.setEnabled(True)
-        else:
-            # No active sequence: reset UI
-            self.sequence_title_label.setText("--- Select Sequence ---")
-            self.sequence_timeline_widget.clear_sequence()
-            self.active_frame_data_for_display.emit([QColor("black").name()] * 64) # Clear pads
-            self.new_button.setEnabled(True)
-            self.save_button.setEnabled(False)
-            self.delete_button.setEnabled(False)
-            self._update_undo_redo_actions_state() # Disable undo/redo
-        # Update button enabled states based on new sequence model
-        self._update_button_enabled_states() # Centralized button state update
-
     def _on_timeline_selection_changed(self, selected_indices: list[int]):
         """
         Handles the new signal from the timeline. Updates the model's edit index
@@ -1043,58 +1000,6 @@ class AnimatorManagerWidget(QWidget):
             print(f"Warning: Unknown sequence dir_type '{dir_type}' in AnimatorManagerWidget. Defaulting to user path.")
             return self.user_sequences_base_path
 
-    def refresh_sequences_list_and_select(self, active_seq_raw_name: str | None = None, active_seq_type_id: str | None = None):
-        """
-        Refreshes the entire sequence list from the filesystem and attempts to re-select
-        the specified sequence. This is the new, consolidated version.
-        """
-        # Block signals to prevent premature triggers
-        self.sequence_selection_combo.blockSignals(True)
-        # Repopulate the entire list
-        self._populate_sequence_dropdown()
-        # Now, try to find and select the correct item
-        target_idx = 0 # Default to "--- Select Sequence ---"
-        if active_seq_raw_name and active_seq_type_id:
-            # Construct the full display name to search for, e.g., "[User] My Sequence"
-            prefix_map = {"User": "[User] ", "Sampler": "[Sampler] ", "Prefab": "[Prefab] "}
-            prefix = prefix_map.get(active_seq_type_id, "")
-            text_to_find = f"{prefix}{active_seq_raw_name}"
-            # Use findText to locate the item
-            found_idx = self.sequence_selection_combo.findText(text_to_find, Qt.MatchFlag.MatchFixedString)
-            if found_idx != -1:
-                target_idx = found_idx
-        # Set the final index
-        self.sequence_selection_combo.setCurrentIndex(target_idx)
-        # Unblock signals and manually call the handler for the new state
-        self.sequence_selection_combo.blockSignals(False)
-        self._on_dropdown_selection_changed(target_idx)
-
-    def _handle_load_sequence_request(self, filepath: str):
-        self.request_sampler_disable.emit()
-        # --- Use the new intelligent check ---
-        if self._is_current_sequence_worth_saving():
-            # This logic is now handled by MainWindow's _handle_animator_request_load_prompt
-            # But we keep a fallback here just in case. The prompt in MainWindow is better.
-            self.request_load_sequence_with_prompt.emit(filepath)
-            return
-        # If not worth saving, proceed directly with the load.
-        self.stop_current_animation_playback()
-        new_model = SequenceModel()
-        if new_model.load_from_file(filepath):
-            self.active_sequence_model = new_model
-            self._connect_signals_for_active_sequence_model()
-            self._update_ui_for_current_sequence()
-            self.playback_status_update.emit(f"Sequence '{self.active_sequence_model.name}' loaded.", 2000)
-            self.refresh_sequences_list_and_select(
-                self.active_sequence_model.name,
-                self._get_type_id_from_filepath(filepath)
-            )
-        else:
-            parent_widget_for_dialog = self.parent() if self.parent() else self
-            QMessageBox.warning(parent_widget_for_dialog, "Load Error", f"Failed to load: {os.path.basename(filepath)}")
-            self.refresh_sequences_list_and_select()
-        self._emit_state_updates()
-
     def _on_load_selected_sequence_button_clicked(self):
         # This method is now effectively replaced by _request_load_selected_sequence_from_main
         # and the logic it triggers in MainWindow.
@@ -1152,26 +1057,6 @@ class AnimatorManagerWidget(QWidget):
             # If no save is needed, just create the new sequence directly
             _create()
 
-    def load_sequence_from_file(self, filepath: str):
-        """Internal method to load a sequence from a file, bypassing any prompts."""
-        self.stop_current_animation_playback()
-        new_model = SequenceModel()
-        if new_model.load_from_file(filepath):
-            self.active_sequence_model = new_model
-            self._connect_signals_for_active_sequence_model()
-            self._update_ui_for_current_sequence()
-            self.playback_status_update.emit(
-                f"Sequence '{self.active_sequence_model.name}' loaded.", 2000)
-            self.refresh_sequences_list_and_select(
-                self.active_sequence_model.name,
-                self._get_type_id_from_filepath(filepath)
-            )
-        else:
-            QMessageBox.warning(
-                self, "Load Error", f"Failed to load: {os.path.basename(filepath)}")
-            self.refresh_sequences_list_and_select()
-        self._emit_state_updates()
-
     def action_new_sequence(self, prompt_save=True):
         """
         Public action called by UI buttons or MainWindow to create a new sequence.
@@ -1197,38 +1082,109 @@ class AnimatorManagerWidget(QWidget):
             # Don't load directly. Call the helper that handles the "Save Changes?" prompt.
             self._handle_load_sequence_request(filepath)
 
+    def _on_load_button_pressed(self):
+        """Handles the 'Load' button click, getting the filepath from the dropdown."""
+        current_data = self.sequence_selection_combo.currentData()
+        if current_data and 'path' in current_data:
+            filepath_to_load = current_data['path']
+            # Delegate to the method that handles the unsaved changes prompt
+            self._handle_load_sequence_request(filepath_to_load)
+        else:
+            self.playback_status_update.emit(
+                "Please select a sequence from the dropdown to load.", 2000)
+
+    def _handle_load_sequence_request(self, filepath: str):
+        """Handles loading, including the save prompt. This is the main entry point for any load request."""
+        def _load():
+            """The actual load action, called after user confirmation."""
+            self.load_sequence_from_file(filepath)
+        if self._is_current_sequence_worth_saving():
+            self._handle_save_prompt(on_confirm_or_discard=_load)
+        else:
+            _load()
+
+    def load_sequence_from_file(self, filepath: str):
+        """Internal method to load a sequence from a file and set it as active."""
+        self.stop_current_animation_playback()
+        new_model = SequenceModel()
+        if new_model.load_from_file(filepath):
+            # The ONLY responsibility of this method is to create the model
+            # and then pass it to the master state controller.
+            self._set_active_sequence_model(new_model)
+        else:
+            QMessageBox.warning(
+                self, "Load Error", f"Failed to load or parse sequence file:\n{filepath}")
+
     def _set_active_sequence_model(self, model: SequenceModel | None):
         """
-        Safely sets a new SequenceModel as the active one.
-        This is the single entry point for changing the animator's sequence,
-        ensuring old signals are disconnected and new ones are connected.
+        Safely sets a new SequenceModel as the active one. This is the single
+        entry point for changing the animator's sequence.
         """
-        # --- Stop any active processes related to the OLD model ---
         if self.active_sequence_model:
-            # Stop playback if it's running
-            if self.active_sequence_model.get_is_playing():
-                self.active_sequence_model.stop_playback()
-            # Disconnect all signals from the old model to prevent memory leaks
             try:
-                self.active_sequence_model.frame_content_updated.disconnect(self._on_model_frame_content_updated)
-                self.active_sequence_model.current_edit_frame_changed.disconnect(self._on_model_edit_frame_changed)
-                self.active_sequence_model.playback_state_changed.disconnect(self._on_model_playback_state_changed)
-                self.active_sequence_model.properties_changed.disconnect(self._on_model_properties_changed)
-                self.active_sequence_model.frames_changed.disconnect(self._on_model_frames_changed)
+                self.active_sequence_model.frame_content_updated.disconnect()
+                self.active_sequence_model.current_edit_frame_changed.disconnect()
+                self.active_sequence_model.playback_state_changed.disconnect()
+                self.active_sequence_model.properties_changed.disconnect()
+                self.active_sequence_model.frames_changed.disconnect()
             except (TypeError, RuntimeError):
-                pass  # Ignore errors if signals were not connected or object is gone
-        # --- Assign the NEW model ---
+                pass
         self.active_sequence_model = model
-        # --- Configure for the NEW model ---
         if self.active_sequence_model:
-            # Connect signals from the new model
-            self.active_sequence_model.frame_content_updated.connect(self._on_model_frame_content_updated)
-            self.active_sequence_model.current_edit_frame_changed.connect(self._on_model_edit_frame_changed)
-            self.active_sequence_model.playback_state_changed.connect(self._on_model_playback_state_changed)
-            self.active_sequence_model.properties_changed.connect(self._on_model_properties_changed)
-            self.active_sequence_model.frames_changed.connect(self._on_model_frames_changed)
-        # --- Update the entire UI to reflect the new state ---
+            self.active_sequence_model.frame_content_updated.connect(
+                self._on_model_frame_content_updated)
+            self.active_sequence_model.current_edit_frame_changed.connect(
+                self._on_model_edit_frame_changed)
+            self.active_sequence_model.playback_state_changed.connect(
+                self._on_model_playback_state_changed)
+            self.active_sequence_model.properties_changed.connect(
+                self._on_model_properties_changed)
+            self.active_sequence_model.frames_changed.connect(
+                self._on_model_frames_changed)
+            # After setting the new model, call the refresh logic with correct arguments.
+            # This is the only place a refresh should be triggered after a model change.
+            self.refresh_sequences_list_and_select(
+                filepath=self.active_sequence_model.loaded_filepath,
+                is_new_unsaved=(not self.active_sequence_model.loaded_filepath)
+            )
         self._update_ui_for_current_sequence()
+
+    def refresh_sequences_list_and_select(self, filepath: str | None = None, is_new_unsaved: bool = False):
+        """
+        Refreshes the sequence dropdown and intelligently selects the correct item
+        based on the current context (new, loaded, or saved).
+        """
+        self.sequence_selection_combo.blockSignals(True)
+        self._populate_sequence_dropdown()
+        target_index = 0  # Default to the first real item if no specific target
+        if is_new_unsaved:
+            placeholder_text = "--- (Unsaved New Sequence) ---"
+            if self.active_sequence_model and self.active_sequence_model.is_modified:
+                placeholder_text = f"* {placeholder_text}"
+            self.sequence_selection_combo.insertItem(
+                0, placeholder_text, userData=None)
+            target_index = 0
+        elif filepath:
+            found_match = False
+            for i in range(self.sequence_selection_combo.count()):
+                item_data = self.sequence_selection_combo.itemData(i)
+                if item_data and 'path' in item_data:
+                    if os.path.normpath(item_data['path']) == os.path.normpath(filepath):
+                        target_index = i
+                        found_match = True
+                        break
+            if not found_match:
+                target_index = 0  # Default to first item if path not found
+        self.sequence_selection_combo.setCurrentIndex(target_index)
+        if self.active_sequence_model and self.active_sequence_model.is_modified:
+            current_item_text = self.sequence_selection_combo.itemText(
+                target_index)
+            if not current_item_text.startswith('*'):
+                self.sequence_selection_combo.setItemText(
+                    target_index, f"* {current_item_text}")
+        self.sequence_selection_combo.blockSignals(False)
+        self._on_dropdown_selection_changed(
+            self.sequence_selection_combo.currentIndex())
 
     def _request_load_selected_sequence_from_main(self):
         """Sends a signal to MainWindow to handle the prompt and load process."""
@@ -1238,40 +1194,54 @@ class AnimatorManagerWidget(QWidget):
             if item_data and "path" in item_data:
                 self.request_load_sequence_with_prompt.emit(item_data["path"])
 
-    def action_save_sequence_as(self):
-        self.request_sampler_disable.emit()
-        if self.active_sequence_model.get_frame_count() == 0:
-            # QMessageBox.information(self, "Save", "No frames to save.") # Needs parent from MW
-            self.playback_status_update.emit("Cannot save: No frames in sequence.", 3000)
-            return False # Indicate save failed or was not possible
-        self.stop_current_animation_playback()
-        suggested_name = self.active_sequence_model.name if self.active_sequence_model.name != "New Sequence" else ""
-        text, ok = QInputDialog.getText(self, "Save Sequence As...", "Sequence Name:", text=suggested_name) # Problematic: self is not QMainWindow
+    def action_save_sequence_as(self) -> bool:
+        """
+        Opens a simple dialog to get a name, then saves the sequence.
+        Restores the more user-friendly QInputDialog workflow.
+        """
+        if not self.active_sequence_model or not self.active_sequence_model.get_frame_count():
+            self.playback_status_update.emit(
+                "Cannot save: No frames in sequence.", 3000)
+            return False
+        current_name = self.active_sequence_model.name
+        # Suggest the current name unless it's the default placeholder
+        suggested_name = current_name if current_name != "New Sequence" else ""
+        text, ok = QInputDialog.getText(
+            self, "Save Sequence As...", "Sequence Name:", text=suggested_name)
         if not (ok and text and text.strip()):
             self.playback_status_update.emit("Save As cancelled.", 2000)
             return False
         raw_name = text.strip()
-        filename_base = self._sanitize_filename(raw_name)
+        # Prevent saving with reserved prefixes
         if raw_name.lower().startswith(("[prefab]", "[sampler]")):
-            # QMessageBox.warning(self, "Save Error", "Cannot start with '[Prefab]' or '[Sampler]'.") # Needs MW parent
-            self.playback_status_update.emit("Save Error: Invalid name prefix.", 3000)
+            QMessageBox.warning(
+                self, "Save Error", "Sequence names cannot begin with '[Prefab]' or '[Sampler]'.")
             return False
-        abs_user_dir = self._get_sequence_dir_path("user")
-        os.makedirs(abs_user_dir, exist_ok=True)
-        filepath = os.path.join(abs_user_dir, f"{filename_base}.json")
+        # Sanitize the name for the filesystem
+        filename_base = "".join(
+            c for c in raw_name if c.isalnum() or c in (' ', '_', '-')).rstrip()
+        filepath = os.path.join(
+            self.user_sequences_base_path, f"{filename_base}.json")
+        # Check for overwrite
         if os.path.exists(filepath):
-            # reply = QMessageBox.question(...) # Needs MW parent
-            # For now, assume overwrite or unique name
-            pass
+            reply = QMessageBox.question(self, "Confirm Overwrite",
+                                        f"A sequence named '{filename_base}.json' already exists. Overwrite it?",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                        QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No:
+                self.playback_status_update.emit("Save As cancelled.", 2000)
+                return False
+        # Update model and save
         self.active_sequence_model.set_name(raw_name)
         if self.active_sequence_model.save_to_file(filepath):
-            self.playback_status_update.emit(f"Sequence '{raw_name}' saved.", 2000)
-            self.refresh_sequences_list_and_select(raw_name, "user")
-            self._emit_state_updates()
+            self.playback_status_update.emit(
+                f"Sequence '{raw_name}' saved.", 2000)
+            # Refresh the list and select the newly saved item
+            self.refresh_sequences_list_and_select(filepath=filepath)
             return True
         else:
-            # QMessageBox.critical(self, "Save Error", f"Could not save to '{filepath}'.") # Needs MW parent
-            self.playback_status_update.emit(f"Error saving sequence.", 3000)
+            QMessageBox.critical(self, "Save Error",
+                                f"Could not save sequence to:\n{filepath}")
             return False
 
     def _on_delete_selected_sequence_button_clicked(self):
@@ -1380,7 +1350,27 @@ class AnimatorManagerWidget(QWidget):
         self._update_ui_for_current_sequence()
 
     def _on_model_properties_changed(self):
-        """Handles when model properties like name or delay change."""
+        """
+        Handles when model properties like name or modified status change.
+        Updates the dropdown text to include a '*' for unsaved changes.
+        """
+        if not self.active_sequence_model:
+            return
+        # Get the currently selected item's index and text
+        current_index = self.sequence_selection_combo.currentIndex()
+        if current_index == -1:
+            return
+        current_text = self.sequence_selection_combo.itemText(current_index)
+        # Determine the base name (without the asterisk)
+        base_name = current_text.lstrip('* ')
+        # Determine the new text based on modified status
+        new_text = base_name
+        if self.active_sequence_model.is_modified:
+            if not base_name.startswith('*'):
+                new_text = f"* {base_name}"
+        # Update the item text in the dropdown if it has changed
+        if current_text != new_text:
+            self.sequence_selection_combo.setItemText(current_index, new_text)
         self._update_ui_for_current_sequence()
 
     def _on_model_frames_changed(self):
@@ -1388,19 +1378,15 @@ class AnimatorManagerWidget(QWidget):
         self._update_ui_for_current_sequence()
 
     def _populate_sequence_dropdown(self):
-        """Scans sequence directories and populates the dropdown."""
-        self.sequence_selection_combo.blockSignals(True)
+        """Scans sequence directories and populates the dropdown with all found sequences."""
         self.sequence_selection_combo.clear()
         self.available_sequences.clear()
-        # Add a placeholder first
+        # Add a placeholder first that will be removed if sequences are found
         self.sequence_selection_combo.addItem(
             "--- Select Sequence ---", userData=None)
-        # Scan directories
         for category, path in [("[User]", self.user_sequences_base_path), ("[Sampler]", self.sampler_recordings_path), ("[Prefab]", self.prefab_sequences_base_path)]:
             if not os.path.isdir(path):
                 continue
-            # Add a non-selectable separator for categories
-            # self.sequence_selection_combo.insertSeparator(self.sequence_selection_combo.count())
             for file in sorted(os.listdir(path)):
                 if file.lower().endswith(".json"):
                     filepath = os.path.join(path, file)
@@ -1411,24 +1397,15 @@ class AnimatorManagerWidget(QWidget):
                         display_name = f"{category} {seq_name}"
                         item_data = {
                             'name': display_name, 'path': filepath, 'category': category.strip("[]")}
+                        # If this is the first real item, remove the placeholder
+                        if self.sequence_selection_combo.itemText(0) == "--- Select Sequence ---":
+                            self.sequence_selection_combo.removeItem(0)
                         self.available_sequences.append(item_data)
                         self.sequence_selection_combo.addItem(
                             display_name, userData=item_data)
                     except (json.JSONDecodeError, KeyError):
                         print(
                             f"Warning: Could not read sequence name from {file}")
-        self.sequence_selection_combo.blockSignals(False)
-
-    def _on_load_button_pressed(self):
-        """Handles the 'Load' button click, loading the selected sequence from the dropdown."""
-        current_data = self.sequence_selection_combo.currentData()
-        if current_data and 'path' in current_data:
-            filepath_to_load = current_data['path']
-            # Delegate to the method that handles the unsaved changes prompt
-            self._handle_load_sequence_request(filepath_to_load)
-        else:
-            self.playback_status_update.emit(
-                "Please select a sequence from the dropdown to load.", 2000)
 
     def _handle_save_prompt(self, on_confirm_or_discard=None):
         """
@@ -1498,13 +1475,13 @@ class AnimatorManagerWidget(QWidget):
         """
         Handles the currentIndexChanged signal from the sequence dropdown.
         Enables/disables the Load and Delete buttons based on the selection.
-        This is the single source of truth for this widget's state.
         """
-        is_loadable = index > 0  # Anything other than the "--- Select ---" placeholder
+        is_loadable = index > 0
         self.load_button.setEnabled(is_loadable)
         current_data = self.sequence_selection_combo.currentData()
-        # The 'category' key is added by our new _populate_sequence_dropdown method
-        is_deletable = is_loadable and current_data and current_data.get('category') in ["User", "Sampler"]
+        # --- Explicitly cast the result to a boolean to avoid passing None ---
+        is_deletable = bool(is_loadable and current_data and current_data.get('category') in ["User", "Sampler"])
+        
         self.delete_button.setEnabled(is_deletable)
 
     def export_current_sequence_as_gif(self, export_path: str, options: dict):

@@ -1301,6 +1301,9 @@ class MainWindow(QMainWindow):
         self._update_global_ui_interaction_states()  # Update all UI states
 
     def _open_gif_import_dialog(self):
+        """
+        Opens the GIF Import dialog, handles state management, and connects signals.
+        """
         if self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active():
             self.screen_sampler_manager.stop_sampling_thread()
         if self.animator_manager and self.animator_manager.active_sequence_model.get_is_playing():
@@ -1308,8 +1311,10 @@ class MainWindow(QMainWindow):
         dialog = GifImportDialog(parent=self)
         dialog.gif_import_requested.connect(self._handle_gif_import_request)
         dialog.preview_pads_updated.connect(self._on_gif_preview_pads_updated)
+        # --- Set the flag to block hardware knobs ---
+        self.is_modal_dialog_active = True
         dialog.exec()
-        # ---  Tell the animator to refresh itself, don't micromanage it ---
+        self.is_modal_dialog_active = False # Reset the flag after dialog closes
         if self.animator_manager:
             self.animator_manager.refresh_display()
         dialog.deleteLater()
@@ -2095,6 +2100,7 @@ class MainWindow(QMainWindow):
         self.is_eyedropper_mode_active: bool = False;
         self._current_source_colors_cache: list[str] = [
             QColor("black").name()] * 64
+        self.is_modal_dialog_active: bool = False
         self._has_played_initial_builtin_oled_animation: bool = False;
         self.is_animator_playing: bool = False;
         self.is_visualizer_active: bool = False;
@@ -2554,8 +2560,8 @@ class MainWindow(QMainWindow):
             # Tell StaticLayoutsManager to proceed with saving these colors
             # The StaticLayoutsManager will then handle the "Save As" dialog.
             self.static_layouts_manager.save_layout_with_colors(current_colors_hex)
-            # print(f"MW DEBUG: Provided grid colors to StaticLayoutsManager for saving.") # Optional
-        else: # Optional
+            # print(f"MW DEBUG: Provided grid colors to StaticLayoutsManager for saving.")
+        else: 
             if self.status_bar:
                 self.status_bar.showMessage("Cannot save layout: UI components missing or not ready.", 3000)
 
@@ -2608,7 +2614,7 @@ class MainWindow(QMainWindow):
 
     def _update_all_knob_visuals(self):
         """Helper to force-update all visual knobs to match their functional counterparts' values."""
-        # --- FIX: Ensure the list contains the correct, lowercase attribute name for Knob 5 ---
+        # --- Ensure the list contains the correct, lowercase attribute name for Knob 5 ---
         knob_attr_names = ["knob_volume_top_right", "knob_pan_top_right", "knob_filter_top_right", "knob_resonance_top_right", "knob_select_top_right"]
         for attr_name in knob_attr_names:
             qdial = getattr(self, attr_name, None)
@@ -3009,7 +3015,6 @@ class MainWindow(QMainWindow):
         cursor_shape = Qt.CursorShape.CrossCursor if active else Qt.CursorShape.ArrowCursor
         if self.pad_grid_frame:
             self.pad_grid_frame.setCursor(cursor_shape)
-        
         status_msg = "Eyedropper active: Click a pad to pick its color." if active else "Eyedropper deactivated."
         self.status_bar.showMessage(status_msg, 0 if active else 2000) # Keep message visible while active
         # Sync the ColorPickerManager's eyedropper button
@@ -3034,7 +3039,7 @@ class MainWindow(QMainWindow):
             hex_color_str = all_grid_colors[pad_1d_index]
             picked_qcolor = QColor(hex_color_str)
             if picked_qcolor.isValid():
-                # UPDATED: Call the new method on the manager
+                # Call the new method on the manager
                 self.color_picker_manager.set_active_color_from_eyedropper(
                     picked_qcolor)
                 self.status_bar.showMessage(
@@ -3102,7 +3107,7 @@ class MainWindow(QMainWindow):
     def apply_paint_to_pad(self, row: int, col: int, update_model: bool = True):
         if not self.akai_controller.is_connected():
             return
-        # MODIFIED: Use primary_qcolor instead of selected_qcolor
+        # Use primary_qcolor instead of selected_qcolor
         r, g, b, _ = self.primary_qcolor.getRgb()
         self.akai_controller.set_pad_color(row, col, r, g, b)
         if self.pad_grid_frame:
@@ -3636,38 +3641,31 @@ class MainWindow(QMainWindow):
         The single, master router for all physical knob rotation events. It determines
         the application context and calls the appropriate specific handler.
         """
+        # --- Add a gate to ignore knob turns if a modal dialog is active ---
+        if self.is_modal_dialog_active:
+            return
         if encoder_id == 5:
             if self.is_animator_playing:
                 self._handle_speed_knob_change(delta)
             else:
-                # --- Navigation logic AND its OLED feedback are now here ---
                 if self.current_oled_nav_target_widget and self.oled_display_manager:
                     item_count = self.current_oled_nav_target_widget.get_navigation_item_count()
                     if item_count > 0:
-                        self.current_oled_nav_item_logical_index = (
-                            self.current_oled_nav_item_logical_index + delta) % item_count
-                        item_text = self.current_oled_nav_target_widget.set_navigation_current_item_by_logical_index(
-                            self.current_oled_nav_item_logical_index)
+                        self.current_oled_nav_item_logical_index = (self.current_oled_nav_item_logical_index + delta) % item_count
+                        item_text = self.current_oled_nav_target_widget.set_navigation_current_item_by_logical_index(self.current_oled_nav_item_logical_index)
                         if item_text:
-                            # Clean the text for display
                             clean_item_text = item_text
                             for prefix in ["[Prefab] ", "[Sampler] ", "[User] "]:
                                 if clean_item_text.startswith(prefix):
-                                    clean_item_text = clean_item_text[len(
-                                        prefix):]
+                                    clean_item_text = clean_item_text[len(prefix):]
                                     break
-                            self.oled_display_manager.show_system_message(
-                                text=clean_item_text, duration_ms=1000, scroll_if_needed=True)
+                            self.oled_display_manager.show_system_message(text=clean_item_text, duration_ms=1000, scroll_if_needed=True)
             return
         target_handler = None
-        if encoder_id == 1:
-            target_handler = self._handle_knob1_change
-        elif encoder_id == 2:
-            target_handler = self._handle_knob2_change
-        elif encoder_id == 3:
-            target_handler = self._handle_knob3_change
-        elif encoder_id == 4:
-            target_handler = self._handle_knob4_change
+        if encoder_id == 1: target_handler = self._handle_knob1_change
+        elif encoder_id == 2: target_handler = self._handle_knob2_change
+        elif encoder_id == 3: target_handler = self._handle_knob3_change
+        elif encoder_id == 4: target_handler = self._handle_knob4_change
         if target_handler:
             target_handler(delta)
 

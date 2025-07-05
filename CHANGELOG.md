@@ -1,4 +1,43 @@
-# Changelog - Akai Fire PixelForge
+# Changelog - PixelForge for Akai Fire
+
+## [Version 2.0.0] - July 5, 2025
+
+This is a release that introduces a **GIF Importer for Pads**, allowing users to create complex animations from existing GIFs with ease. This version also includes a major overhaul of the Animator Studio's sequence management system, making it far more robust and intuitive. A cascade of critical bug fixes for application startup, state management, and UI logic have been resolved, resulting in the most stable and feature-rich version of PixelForge.
+
+### ✨ **NEW FEATURES & ENHANCEMENTS**
+
+*   **NEW: GIF Importer for Pad Animations:**
+    *   A new `GIF Import` button in the Animator Studio opens a powerful new dialog.
+    *   Load GIFs from a local file or directly from a URL.
+    *   Visually select a region of the GIF to sample using a draggable and resizable selection box.
+    *   Pre-process the GIF with real-time controls for Brightness, Saturation, Contrast, and Hue.
+    *   Override the GIF's native speed with a custom FPS slider.
+    *   A "Live Pad Preview" shows the final 16x4 output, including a live mirror on the physical hardware pads.
+    *   Includes a "Play Original GIF" button to open the source GIF in a separate player for easy reference.
+    *   Includes a "Download GIF" button to save a local copy of a GIF loaded from a URL.
+*   **NEW: Animator Sequence Management Overhaul:**
+    *   The Animator Studio now features a dropdown menu to browse and load all saved sequences.
+    *   The dropdown is automatically populated with `[User]`, `[Sampler]`, and `[Prefab]` sequences.
+    *   The dropdown now correctly displays the currently loaded sequence name.
+    *   An asterisk (`*`) now appears next to the sequence name in the dropdown to indicate unsaved changes, providing clear visual feedback.
+    *   A "Delete" button has been added to allow users to permanently remove sequences from their library.
+    *   The "Save As..." dialog has been restored to a more user-friendly name input prompt.
+
+### 🐛 **BUG FIXES & STABILITY**
+
+*   **CRITICAL: Fixed All `AttributeError` Crashes on Startup:**
+    *   Completely re-architected the initialization and state management logic within the `AnimatorManagerWidget`.
+    *   Resolved a cascade of `AttributeError` and `TypeError` crashes that occurred when loading the application or interacting with the animator UI for the first time.
+*   **CRITICAL: Fixed GIF Importer Logic:**
+    *   Fixed a `TypeError` in the GIF region selector caused by a `QSize`/`QSizeF` mismatch.
+    *   Fixed `IndexError` in the preview rendering logic, ensuring the pad preview now correctly displays the full 16x4 grid.
+    *   Fixed an image corruption bug where adjusting sliders would permanently alter the main GIF preview image. The source image is now protected.
+    *   Resolved layout bugs that caused the preview area to be sized incorrectly or misaligned on window resize.
+    *   Fixed a bug that prevented the "Play Preview" button from working.
+*   **Fixed Animator Dropdown State:**
+    *   Fixed the bug where loading a sequence would incorrectly reset the dropdown to show "Unsaved New Sequence". The dropdown now correctly selects the name of the loaded sequence.
+
+---
 
 ## [Version 1.8.0] - June 1, 2025
 
@@ -8,27 +47,22 @@ This is a major feature and performance release that introduces two new high-per
 
 *   **NEW: High-Performance Ambient Sampling Modes:**
     *   The Screen Sampler now features a "Sampling Mode" dropdown to choose between algorithms.
-    *   **"Thumbnail (Fast)" Mode:** A new, ultra-fast mode that captures the screen, resizes it to a `16x4` thumbnail, and maps it directly to the pads. This provides a beautiful, low-resolution mirror of the screen with minimal CPU impact, perfect for gaming.
-    *   **"Palette (Creative)" Mode:** A new, creative mode that uses the `colorthief` library to find the 5 most dominant colors on screen and then generates a smooth, aesthetically pleasing gradient across the 64 pads.
+    *   **"Thumbnail (Fast)" Mode:** A new, ultra-fast mode that captures the screen, resizes it to a `16x4` thumbnail, and maps it directly to the pads.
+    *   **"Palette (Creative)" Mode:** A new, creative mode that uses `colorthief` to find dominant colors and generate a smooth gradient.
 *   **NEW: Dedicated "Ambient Mode" Configuration Dialog:**
-    *   When a high-performance mode ("Thumbnail" or "Palette") is selected, the "Configure..." button now opens a new, streamlined dialog that contains *only* the color adjustment sliders.
-    *   This provides a clean, focused UI for tuning the look of ambient modes without the unnecessary complexity of the region selector.
-    *   Added a "Cycle Monitor" button to this new dialog for complete functionality.
+    *   A new, streamlined dialog for ambient modes containing only color adjustment sliders.
 *   **Major Sampler UI/UX Overhaul:**
-    *   The "Monitor" and "Mode" dropdown menus are now **always enabled** when the device is connected, allowing the user to pre-select their desired configuration *before* starting the sampler.
-    *   The monitor list now correctly populates immediately upon connecting the device, rather than waiting for the sampler to be enabled.
-    *   The dropdowns now correctly update the manager's state in real-time, even when the sampler is off.
+    *   Dropdowns are now always enabled, allowing pre-selection of monitor/mode.
 
 ### 🐛 **BUG FIXES & STABILITY**
 
 *   **CRITICAL: Fixed Sampler State Management:**
-    *   Completely refactored the interaction between the UI and the logic manager to use a "pull" strategy, eliminating all "stale state" bugs. The manager now always acts on the most current UI settings.
-    *   Fixed a critical `AttributeError` crash that occurred when starting the sampler or changing modes due to an incorrect initialization order.
-    *   Fixed the bug where changing the "Mode" dropdown had no effect until the sampler was restarted.
+    *   Completely refactored state management to eliminate stale state bugs.
+    *   Fixed `AttributeError` crash on sampler start.
 *   **CRITICAL: Fixed `ValueError` in Palette Sampling:**
-    *   Resolved a `numpy` broadcasting error that caused the "Palette (Creative)" mode to crash continuously. The gradient interpolation math is now correct and stable.
+    *   Resolved `numpy` broadcasting error in gradient math.
 *   **Fixed Sampler Dialog Resizing:**
-    *   Stabilized the `VisualSamplerConfiguration` (Grid Mode) dialog. It now correctly snaps to a compact, user-resizable window on open and on monitor cycle, fixing a long-standing bug that caused it to lock up or resize uncontrollably.
+    *   Stabilized the `VisualSamplerConfiguration` dialog resizing.
 
 ---
 
@@ -177,4 +211,4 @@ This landmark v1.0.0 release introduced the highly anticipated **"LazyDOOM" on O
 *   **Pre-v0.7.0:** Initial development phases, including the creation of the core Animator Studio, the first MVP of the Screen Sampler, and major refactoring efforts to establish the modular architecture.
 
 ---
-*Akai Fire PixelForge - Developed by Reg0lino with extensive AI assistance from Gemini models.*
+*Akai Fire PixelForge - Developed by Reg0lino with AI assistance from Gemini models.*

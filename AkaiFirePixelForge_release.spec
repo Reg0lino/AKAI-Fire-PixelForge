@@ -1,6 +1,6 @@
-# AkaiFirePixelForge_release.spec
+# PixelForge_for_Akai_Fire_release.spec
 # For final distribution - hides console window.
-# Creates a FOLDER bundle in dist/Akai Fire PixelForge/
+# Creates a FOLDER bundle in dist/PixelForge for Akai Fire/
 
 import os
 import sys
@@ -35,14 +35,13 @@ else:
 
 project_root = SPECPATH
 
-# --- MODIFIED: Added 'images' folder ---
 datas_to_bundle = [
     (os.path.join(project_root, 'resources'), 'resources'),
     (os.path.join(project_root, 'presets'), 'presets'),
     (os.path.join(project_root, 'images'), 'images'),
 ]
 
-# --- MODIFIED: Added 'resources_rc' ---
+# --- UPDATED for v2.0.0 ---
 hidden_imports_list = [
     # Core Dependencies
     'mido.backends.rtmidi',
@@ -57,7 +56,8 @@ hidden_imports_list = [
     'numpy.core._dtype_ctypes',
     'packaging',
     'colorsys',
-    'resources_rc', # ADDED: Crucial for the Qt Resource System
+    'requests',
+    'resources_rc',
     # PyQt6 Modules
     'PyQt6.sip',
     'PyQt6.QtNetwork',
@@ -73,6 +73,8 @@ hidden_imports_list = [
     'PIL.ImageEnhance',
     'PIL.ImageOps',
     'PIL.ImageSequence',
+    'PIL.ImageColor',
+    'PIL.ImageQt',
     # Our Project's Modules (made exhaustive for safety)
     'utils',
     'forge',
@@ -85,6 +87,7 @@ hidden_imports_list = [
     'oled_utils.image_processing',
     'features.screen_sampler_core',
     'features.screen_sampler_thread',
+    'features.gif_processing_engine',
     'animator.model',
     'animator.timeline_widget',
     'animator.controls_widget',
@@ -98,6 +101,10 @@ hidden_imports_list = [
     'gui.capture_preview_dialog',
     'gui.set_max_frames_dialog',
     'gui.gif_export_dialog',
+    'gui.gif_import_dialog',
+    'gui.gif_player_dialog',
+    'gui.gif_region_selector',
+    'gui.pad_preview_widget',
     'gui.oled_gif_export_dialog',
     'gui.monitor_view_widget',
     'gui.oled_customizer_dialog',
@@ -131,7 +138,7 @@ exe = EXE(
     a.scripts,
     [],  
     exclude_binaries=True, 
-    name='Akai Fire PixelForge', 
+    name='PixelForge for Akai Fire',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False, 
@@ -155,5 +162,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='Akai Fire PixelForge' 
+    name='PixelForge for Akai Fire'
 )
