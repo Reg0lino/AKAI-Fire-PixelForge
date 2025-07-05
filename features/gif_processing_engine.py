@@ -32,13 +32,14 @@ class GifProcessingEngine:
         self.original_gif_loop_count: int = 0
         self.original_gif_dimensions: tuple[int, int] = (0, 0)
         self.sequence_name: str = "Imported GIF"
+        self.gif_data_in_memory: bytes | None = None
 
     def load_gif_from_source(self, source_path_or_url: str):
         """
         Loads a GIF from a local path or URL, extracting all frames and metadata.
         Resets previous GIF data.
         """
-        print(f"GIF_ENGINE: Attempting to load GIF from: {source_path_or_url}")
+        # print(f"GIF_ENGINE: Attempting to load GIF from: {source_path_or_url}")
         self.original_frames_pil = []
         self.original_frame_delays_ms = []
         self.original_gif_loop_count = 0
@@ -52,11 +53,12 @@ class GifProcessingEngine:
                 print("GIF_ENGINE: Downloading from URL...")
                 response = requests.get(source_path_or_url)
                 response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+                self.gif_data_in_memory = response.content
                 gif_data = io.BytesIO(response.content)
                 self.sequence_name = os.path.basename(
                     source_path_or_url).split('.')[0] or "Web GIF"
             else:
-                print(f"GIF_ENGINE: Loading local file: {source_path_or_url}")
+                # print(f"GIF_ENGINE: Loading local file: {source_path_or_url}")
                 with open(source_path_or_url, 'rb') as f:
                     gif_data = io.BytesIO(f.read())
                 self.sequence_name = os.path.basename(
@@ -67,8 +69,8 @@ class GifProcessingEngine:
                 self.original_gif_dimensions = img.size
                 self.original_gif_loop_count = img.info.get(
                     'loop', 1)  # Default loop to 1 if not specified
-                print(
-                    f"GIF_ENGINE: Original GIF dimensions: {self.original_gif_dimensions}, Loop count: {self.original_gif_loop_count}")
+                # print(
+                #     f"GIF_ENGINE: Original GIF dimensions: {self.original_gif_dimensions}, Loop count: {self.original_gif_loop_count}")
                 # Use ImageSequence.Iterator to correctly extract all frames
                 for i, frame in enumerate(ImageSequence.Iterator(img)):
                     # Convert to RGB to handle palette GIFs and ensure consistency
@@ -79,13 +81,13 @@ class GifProcessingEngine:
                     # Default to 100ms if no duration found
                     delay = frame.info.get('duration', 100)
                     self.original_frame_delays_ms.append(delay)
-                    print(f"GIF_ENGINE: Extracted frame {i}, delay: {delay}ms")
+                    # print(f"GIF_ENGINE: Extracted frame {i}, delay: {delay}ms")
             # If no frames found (e.g., corrupted GIF), raise an error
             if not self.original_frames_pil:
                 raise ValueError(
                     "No frames could be extracted from the GIF. It might be corrupted or empty.")
-            print(
-                f"GIF_ENGINE: Successfully extracted {len(self.original_frames_pil)} frames.")
+            # print(
+            #     f"GIF_ENGINE: Successfully extracted {len(self.original_frames_pil)} frames.")
         except requests.exceptions.RequestException as e:
             raise IOError(f"Failed to download GIF from URL: {e}")
         except FileNotFoundError as e:
@@ -132,14 +134,16 @@ class GifProcessingEngine:
             return []
         processed_sequence_data = []
         for i, original_frame_pil in enumerate(frames_to_process):
-            orig_w, orig_h = original_frame_pil.size
+            # --- Create a copy to avoid modifying the original preview frame in memory ---
+            frame_to_process = original_frame_pil.copy()
+            orig_w, orig_h = frame_to_process.size
             crop_x = int(region_rect_percentage['x'] * orig_w)
             crop_y = int(region_rect_percentage['y'] * orig_h)
             crop_w = int(region_rect_percentage['width'] * orig_w)
             crop_h = int(region_rect_percentage['height'] * orig_h)
             crop_w = max(1, crop_w)
             crop_h = max(1, crop_h)
-            cropped_frame = original_frame_pil.crop(
+            cropped_frame = frame_to_process.crop(
                 (crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
             final_pad_image_pil = cropped_frame.resize(
                 (NUM_GRID_COLS, NUM_GRID_ROWS), resample=Image.Resampling.LANCZOS)

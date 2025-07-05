@@ -5,12 +5,13 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QGroupBox, QWidget,
     QFileDialog, QProgressBar, QDialogButtonBox, QSizePolicy, QSlider, QCheckBox, QComboBox, QSpacerItem, QMessageBox, QApplication
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer, QUrl
-from PyQt6.QtGui import QImage, QPixmap, QFont
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer, QUrl, QTemporaryFile
+from PyQt6.QtGui import QImage, QPixmap, QFont, QDesktopServices
 from PIL import Image, ImageSequence, ImageEnhance, ImageColor, ImageDraw
 from PIL.ImageQt import ImageQt
 from .gif_region_selector import GifRegionSelectorLabel
 from .pad_preview_widget import PadPreviewWidget
+from .gif_player_dialog import GifPlayerDialog
 import json
 import requests  
 # Import the new GIF Processing Engine
@@ -83,10 +84,16 @@ class GifImportDialog(QDialog):
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
+        # --- Inspiration Link ---
+        self.inspiration_label = QLabel(
+            "Find cool patterns on <a href='https://giphy.com/search/abstract-color'>GIPHY</a> or <a href='https://tenor.com/search/abstract-color-gifs?format=gifs'>Tenor</a>.")
+        self.inspiration_label.setOpenExternalLinks(True)
+        main_layout.addWidget(self.inspiration_label)
         source_group = QGroupBox("GIF Source")
         source_layout = QHBoxLayout(source_group)
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("Paste GIF URL here")
+        self.url_input.setPlaceholderText(
+            "Paste GIF URL or select a local file...")
         self.local_file_button = QPushButton("Browse Local GIF...")
         self.load_gif_button = QPushButton("Load GIF")
         source_layout.addWidget(self.url_input)
@@ -103,15 +110,25 @@ class GifImportDialog(QDialog):
         self.gif_display_label = GifRegionSelectorLabel(
             "Load a GIF to see its first frame here...")
         self.gif_display_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # --- FIX: Import QSizePolicy and use the correct reference ---
-        from PyQt6.QtWidgets import QSizePolicy
         self.gif_display_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.gif_display_label.setStyleSheet(
             "background-color: #282828; border: 1px solid #444;")
         left_panel_v_layout.addWidget(self.gif_display_label)
+        preview_buttons_layout = QHBoxLayout()
+        self.play_original_button = QPushButton("▶️ Play Original")
+        self.play_original_button.setToolTip(
+            "Play the original GIF in a new window for reference")
+        preview_buttons_layout.addWidget(self.play_original_button)
+        # --- NEW: Download GIF Button ---
+        self.download_gif_button = QPushButton("⬇️ Download GIF")
+        self.download_gif_button.setToolTip(
+            "Save a local copy of a GIF loaded from a URL")
+        preview_buttons_layout.addWidget(self.download_gif_button)
+        preview_buttons_layout.addStretch()
         self.full_gif_button = QPushButton("Select Full GIF")
-        left_panel_v_layout.addWidget(self.full_gif_button)
+        preview_buttons_layout.addWidget(self.full_gif_button)
+        left_panel_v_layout.addLayout(preview_buttons_layout)
         content_layout.addWidget(left_panel_widget)
         right_panel_widget = QWidget()
         controls_panel_layout = QVBoxLayout(right_panel_widget)
@@ -207,10 +224,10 @@ class GifImportDialog(QDialog):
     def _connect_signals(self):
         self.local_file_button.clicked.connect(self._browse_local_gif)
         self.load_gif_button.clicked.connect(self._load_gif_from_input)
-        # --- UPDATED REGION CONNECTIONS ---
         self.full_gif_button.clicked.connect(self.gif_display_label.set_full_region)
         self.gif_display_label.region_changed.connect(self._on_region_changed)
-        # Color Adjustment Sliders 
+        self.play_original_button.clicked.connect(self._on_play_original_clicked)
+        self.download_gif_button.clicked.connect(self._on_download_gif_clicked) # New connection
         self.brightness_slider.valueChanged.connect(self._on_adjustment_changed)
         self.saturation_slider.valueChanged.connect(self._on_adjustment_changed)
         self.contrast_slider.valueChanged.connect(self._on_adjustment_changed)
@@ -219,10 +236,8 @@ class GifImportDialog(QDialog):
         self.saturation_reset_button.clicked.connect(lambda: self.saturation_slider.setValue(self._factor_to_slider(DEFAULT_SATURATION_FACTOR)))
         self.contrast_reset_button.clicked.connect(lambda: self.contrast_slider.setValue(self._factor_to_slider(DEFAULT_CONTRAST_FACTOR)))
         self.hue_reset_button.clicked.connect(lambda: self.hue_slider.setValue(DEFAULT_HUE_SHIFT))
-        # Animation Options 
         self.override_fps_checkbox.toggled.connect(self._on_override_fps_toggled)
         self.playback_fps_slider.valueChanged.connect(self._on_playback_fps_changed)
-        # Preview Controls 
         self.play_preview_button.clicked.connect(self._play_preview)
         self.pause_preview_button.clicked.connect(self._pause_preview)
 
@@ -276,6 +291,7 @@ class GifImportDialog(QDialog):
         self.hue_value_label.setText(f"{self.hue_slider.value():+d}°")
 
     def set_ui_elements_enabled(self, enabled: bool):
+        is_url = self.url_input.text().strip().startswith('http')
         self.full_gif_button.setEnabled(enabled)
         self.brightness_slider.setEnabled(enabled)
         self.saturation_slider.setEnabled(enabled)
@@ -288,15 +304,12 @@ class GifImportDialog(QDialog):
         self.sequence_name_input.setEnabled(enabled)
         self.override_fps_checkbox.setEnabled(enabled)
         self.play_preview_button.setEnabled(enabled)
-        # Always starts paused or when playing
+        self.play_original_button.setEnabled(enabled)
+        self.download_gif_button.setEnabled(enabled and is_url) # Only enable for URLs
         self.pause_preview_button.setEnabled(False)
-        # Only enable FPS slider if override is checked AND dialog is enabled
-        self.playback_fps_slider.setEnabled(
-            enabled and self.override_fps_checkbox.isChecked())
-        self.playback_fps_label.setEnabled(
-            enabled and self.override_fps_checkbox.isChecked())
-        self.button_box.button(
-            QDialogButtonBox.StandardButton.Ok).setEnabled(enabled)
+        self.playback_fps_slider.setEnabled(enabled and self.override_fps_checkbox.isChecked())
+        self.playback_fps_label.setEnabled(enabled and self.override_fps_checkbox.isChecked())
+        self.button_box.button(QDialogButtonBox.StandardButton.Ok).setEnabled(enabled)
 
     def _browse_local_gif(self):
         """Opens a file dialog, starting in the last used directory."""
@@ -318,58 +331,97 @@ class GifImportDialog(QDialog):
     def _load_gif_from_input(self):
         source = self.url_input.text().strip()
         if not source:
-            self.gif_display_label.setText(
-                "Please enter a GIF URL or select a local file.")
+            self.gif_display_label.setText("Please enter a GIF URL or select a local file.")
             return
-        self.progress_bar.setValue(0)
-        self.progress_bar.setFormat("Loading GIF...")
+        self.progress_bar.setValue(0); self.progress_bar.setFormat("Loading GIF...")
         self.set_ui_elements_enabled(False)
-        self.info_width_height.setText("Dimensions: N/A")
-        self.info_frames_loop.setText("Frames: N/A, Loop: N/A")
-        self.info_avg_delay_fps.setText("Delay: N/A, FPS: N/A")
-        self.original_fps_label.setText("Original: N/A")
-        self.gif_display_label.setText("Loading...")
-        QApplication.processEvents()
+        self.info_width_height.setText("Dimensions: N/A"); self.info_frames_loop.setText("Frames: N/A, Loop: N/A")
+        self.info_avg_delay_fps.setText("Delay: N/A, FPS: N/A"); self.original_fps_label.setText("Original: N/A")
+        self.gif_display_label.setText("Loading..."); QApplication.processEvents()
         try:
             self.gif_engine.load_gif_from_source(source)
             info = self.gif_engine.get_original_gif_info()
-            self.info_width_height.setText(
-                f"Dimensions: {info['width']}x{info['height']}")
-            self.info_frames_loop.setText(
-                f"Frames: {info['frames']}, Loop: {info['loop']}")
-            self.info_avg_delay_fps.setText(
-                f"Delay: {info['avg_delay_ms']}ms, FPS: {info['fps']:.1f}")
-            self.original_fps_label.setText(
-                f"Original: {info['fps']:.1f} FPS ({info['avg_delay_ms']}ms)")
+            self.info_width_height.setText(f"Dimensions: {info['width']}x{info['height']}")
+            self.info_frames_loop.setText(f"Frames: {info['frames']}, Loop: {info['loop']}")
+            self.info_avg_delay_fps.setText(f"Delay: {info['avg_delay_ms']}ms, FPS: {info['fps']:.1f}")
+            self.original_fps_label.setText(f"Original: {info['fps']:.1f} FPS ({info['avg_delay_ms']}ms)")
             self.original_pil_frames = self.gif_engine.original_frames_pil
             self.current_gif_frame_delays_ms = self.gif_engine.original_frame_delays_ms
             self.preview_pil_frames = []
             max_preview_width = 480
             for frame in self.original_pil_frames:
                 if frame.width > max_preview_width:
-                    aspect_ratio = frame.height / frame.width
-                    new_height = int(max_preview_width * aspect_ratio)
-                    self.preview_pil_frames.append(frame.resize(
-                        (max_preview_width, new_height), Image.Resampling.LANCZOS))
+                    aspect_ratio = frame.height / frame.width; new_height = int(max_preview_width * aspect_ratio)
+                    self.preview_pil_frames.append(frame.resize((max_preview_width, new_height), Image.Resampling.LANCZOS))
                 else:
                     self.preview_pil_frames.append(frame)
             self.sequence_name_input.setText(self.gif_engine.sequence_name)
             if self.preview_pil_frames:
-                q_image = ImageQt(self.preview_pil_frames[0])
-                self.gif_display_label.setPixmap(QPixmap.fromImage(q_image))
-            # --- FIX: Call the new pre-processing method ---
+                # --- Use the new method to set the image for manual drawing ---
+                display_frame = self.preview_pil_frames[0].copy()
+                self.gif_display_label.set_image_to_display(display_frame)
             self._pre_process_all_preview_frames()
             self.set_ui_elements_enabled(True)
-            self.progress_bar.setValue(100)
-            self.progress_bar.setFormat("GIF Loaded!")
+            self.progress_bar.setValue(100); self.progress_bar.setFormat("GIF Loaded!")
             self._play_preview()
         except Exception as e:
             error_message = f"Error loading GIF: {e}"
+            self.gif_display_label.set_image_to_display(None) # Clear image on error
             self.gif_display_label.setText(error_message)
-            self.progress_bar.setValue(0)
-            self.progress_bar.setFormat("Error")
+            self.progress_bar.setValue(0); self.progress_bar.setFormat("Error")
             self.set_ui_elements_enabled(False)
             print(error_message)
+
+    def _on_play_original_clicked(self):
+        """
+        Opens a new simple dialog to play the original source GIF.
+        Handles both local files and web URLs (by using a temporary file).
+        """
+        if not self.original_pil_frames:
+            QMessageBox.warning(self, "No GIF Loaded", "Please load a GIF before trying to play it.")
+            return
+        source_path = self.url_input.text().strip()
+        is_url = source_path.startswith('http')
+        if is_url:
+            # For URLs, use the in-memory data and a temporary file
+            gif_data = self.gif_engine.gif_data_in_memory
+            if not gif_data:
+                QMessageBox.critical(self, "Error", "In-memory GIF data not found for URL source.")
+                return
+            self.temp_file = QTemporaryFile("temp_gif_XXXXXX.gif")
+            if self.temp_file.open():
+                self.temp_file.write(gif_data)
+                self.temp_file.close()
+                player = GifPlayerDialog(self.temp_file.fileName(), self)
+                player.exec()
+            # QTemporaryFile will be auto-deleted when self.temp_file is garbage collected
+        else:
+            # For local files, use the path directly
+            if not os.path.isfile(source_path):
+                QMessageBox.warning(self, "Invalid Path", "The source is not a valid local file path.")
+                return
+            player = GifPlayerDialog(source_path, self)
+            player.exec()
+
+    def _on_download_gif_clicked(self):
+        """Opens a 'Save As' dialog to save the web GIF locally."""
+        if not self.gif_engine.gif_data_in_memory:
+            QMessageBox.warning(self, "Download Error", "No GIF data from a URL is currently loaded.")
+            return
+        suggested_name = self.gif_engine.sequence_name + ".gif"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Download GIF As...",
+            os.path.join(self.last_used_browse_path, suggested_name),
+            "GIF Files (*.gif)"
+        )
+        if save_path:
+            try:
+                with open(save_path, 'wb') as f:
+                    f.write(self.gif_engine.gif_data_in_memory)
+                QMessageBox.information(self, "Download Complete", f"Successfully saved GIF to:\n{save_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Download Failed", f"Could not save file:\n{e}")
 
     def _pre_process_all_preview_frames(self):
         """

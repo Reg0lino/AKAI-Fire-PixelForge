@@ -1430,6 +1430,29 @@ class AnimatorManagerWidget(QWidget):
             self.playback_status_update.emit(
                 "Please select a sequence from the dropdown to load.", 2000)
 
+    def _handle_save_prompt(self, on_confirm_or_discard=None):
+        """
+        Shows the 'Save Changes?' dialog for the current sequence.
+        Executes the on_confirm_or_discard callback if the user chooses to proceed (Save/Discard).
+        """
+        if not self.active_sequence_model:
+            if on_confirm_or_discard:
+                on_confirm_or_discard()
+            return
+        reply = QMessageBox.question(self, "Unsaved Changes",
+                                    f"Sequence '{self.active_sequence_model.name}' has unsaved changes. Save now?",
+                                    QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                    QMessageBox.StandardButton.Cancel)
+        if reply == QMessageBox.StandardButton.Save:
+            # action_save_sequence_as returns True on success, False on cancel
+            if self.action_save_sequence_as():
+                if on_confirm_or_discard:
+                    on_confirm_or_discard()
+        elif reply == QMessageBox.StandardButton.Discard:
+            if on_confirm_or_discard:
+                on_confirm_or_discard()
+        # If user clicks Cancel, the on_confirm_or_discard callback is not executed.
+
     def refresh_display(self):
         """
         Forces a refresh of the main pad grid display based on the

@@ -22,7 +22,7 @@ def get_resource_path(relative_path):
 
 def register_application_fonts():
     """Scans the resources/fonts directory and registers .ttf/.otf files with QFontDatabase."""
-    print("APP INFO: Attempting to register application fonts...")
+    # print("APP INFO: Attempting to register application fonts...")
     fonts_dir = get_resource_path(os.path.join("resources", "fonts"))
     if os.path.isdir(fonts_dir):
         for filename in os.listdir(fonts_dir):
