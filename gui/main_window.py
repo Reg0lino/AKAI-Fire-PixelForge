@@ -3572,9 +3572,9 @@ class MainWindow(QMainWindow):
 
     def _show_about_dialog(self):
         """Displays the application's About box."""
-        QMessageBox.about(self, "About Akai Fire PixelForge",
-            "<h2>Akai Fire PixelForge v1.8.0</h2>"
-            "<p>Developed by <b>Reg0lino</b> with extensive AI assistance from Google's Gemini models.</p>"
+        QMessageBox.about(self, "About PixelForge for Akai Fire",
+            "<h2>PixelForge for Akai Fire v2.0.0</h2>"
+            "<p>Developed by <b>Reg0lino</b> with AI assistance from Google's Gemini models.</p>"
             "<p>This application transforms the Akai Fire controller into a versatile tool for pixel art, animation, and real-time visualizations.</p>"
             "<p>For more information, visit the project on GitHub.</p>"
         )

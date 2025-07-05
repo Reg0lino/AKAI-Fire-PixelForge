@@ -1,9 +1,13 @@
-#define MyAppName "Akai Fire PixelForge"
-#define MyAppVersion "1.7.0"
+// Inno Setup Script for PixelForge for Akai Fire v2.0.0
+
+#define MyAppName "PixelForge for Akai Fire"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "Reg0lino"
-#define MyAppURL "https://github.com/Reg0lino/Akai_Fire_PixelForge"
-#define MyAppExeName "Akai Fire PixelForge.exe" 
-#define MyBuildOutputDir "dist\" + MyAppName 
+#define MyAppURL "https://github.com/Reg0lino/AKAI-Fire-PixelForge"
+
+#define MyAppExeName "PixelForge for Akai Fire.exe"
+#define MyBuildOutputDir "dist\" + MyAppName
+
 #define MyStarterPackSourceDir "Installer_Content\StarterPack" 
 #define MyUserPresetsBaseFolderName "Akai Fire RGB Controller User Presets" 
 
@@ -38,10 +42,10 @@ Source: "{#MyBuildOutputDir}\*"; DestDir: "{app}"; Components: main; Flags: igno
 
 ; Documentation files
 Source: "README.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "CHANGELOG.txt"; DestDir: "{app}"; Flags: ignoreversion ;
+Source: "CHANGELOG.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
-; Starter Pack - ensure paths are correct relative to the .iss file location
+; Starter Pack - these paths are still correct
 Source: "{#MyStarterPackSourceDir}\sequences\user\*"; DestDir: "{userdocs}\{#MyUserPresetsBaseFolderName}\sequences\user"; Components: starterpack; Flags: recursesubdirs createallsubdirs uninsneveruninstall
 Source: "{#MyStarterPackSourceDir}\OLEDCustomPresets\TextItems\*"; DestDir: "{userdocs}\{#MyUserPresetsBaseFolderName}\OLEDCustomPresets\TextItems"; Components: starterpack; Flags: recursesubdirs createallsubdirs uninsneveruninstall
 Source: "{#MyStarterPackSourceDir}\OLEDCustomPresets\ImageAnimations\*"; DestDir: "{userdocs}\{#MyUserPresetsBaseFolderName}\OLEDCustomPresets\ImageAnimations"; Components: starterpack; Flags: recursesubdirs createallsubdirs uninsneveruninstall

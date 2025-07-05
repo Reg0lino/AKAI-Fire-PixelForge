@@ -5,7 +5,6 @@
 import os
 import sys
 
-# This helper function is fine as-is.
 def get_rtmidi_binary_info():
     try:
         import rtmidi
@@ -55,6 +54,7 @@ hidden_imports_list = [
     'mss.linux',
     'numpy',
     'numpy.core._dtype_ctypes',
+    'numpy._core._exceptions',
     'packaging',
     'colorsys',
     'requests',
@@ -125,7 +125,7 @@ a = Analysis(
     hiddenimports=hidden_imports_list,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['hooks\\rthook-numpy.py'],
     excludes=['PySide6'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
