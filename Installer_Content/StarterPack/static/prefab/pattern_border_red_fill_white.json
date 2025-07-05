@@ -1,5 +1,5 @@
 {
-    "name": "Pattern - Border Red, Fill White",
+    "name": "Pattern Border Red, Fill White",
     "description": "Outer 1-pad border of red, with an inner 2x14 area of white. (4x16)",
     "colors": [
         "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000",

@@ -65,8 +65,9 @@ identify_pad_lights.py
 #  essential project files and SHOULD be in Git:
 # *.spec
 # installer.iss
-# Installer_Content/
-# README.txt
+Installer_Content/StarterPack/Starter Gifs
+Installer_Content/StarterPack/GIF Exports
+README.txt
 run_forge_silent.bat
 run_forge.bat
 mockup 2.0

@@ -1,5 +1,5 @@
 {
-    "name": "Pattern - Vertical Split Red-Blue",
+    "name": "Pattern Vertical Split Red-Blue",
     "description": "Grid split vertically: left 8 columns red, right 8 columns blue. (4x16)",
     "colors": [
         "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#0000FF", "#0000FF", "#0000FF", "#0000FF", "#0000FF", "#0000FF", "#0000FF", "#0000FF",

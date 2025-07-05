@@ -1,0 +1,13 @@
+{
+    "item_name": "testing 1234",
+    "item_type": "text",
+    "text_content": "testing 1234",
+    "font_family": "Elephant",
+    "font_size_px": 21,
+    "animation_style": "scroll_left",
+    "animation_params": {
+        "speed_override_ms": 76,
+        "pause_at_ends_ms": 1000
+    },
+    "alignment": "left"
+}
