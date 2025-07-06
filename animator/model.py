@@ -425,7 +425,7 @@ class SequenceModel(QObject):
             self._mark_modified()
 
     def set_frame_delay_ms(self, delay_ms: int):
-        delay_ms = max(20, int(delay_ms)) # Ensure minimum delay (e.g., 20ms for 50 FPS max)
+        delay_ms = max(11, int(delay_ms)) # Ensure minimum delay (e.g., 11ms for 90 FPS)
         if self.frame_delay_ms != delay_ms:
             # self._push_undo_state() # Decide for properties
             self.frame_delay_ms = delay_ms
