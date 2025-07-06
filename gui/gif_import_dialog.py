@@ -53,17 +53,15 @@ class GifImportDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("📥 Import GIF Animation")
         self.setMinimumSize(950, 780)
-        # --- PATH MANAGEMENT ---
-        self.config_file_path = self._get_user_config_path('gif_import_settings.json')
+        # --- PATH MANAGEMENT (RELIABLE VERSION) ---
+        self.config_file_path = self._get_user_config_path(
+            'gif_import_settings.json')
         self.last_used_browse_path = self._load_last_path()
-        # --- Define and create a safe, local cache directory ---
-        # This reuses the same base path as your other user presets.
-        user_presets_base = os.path.dirname(self.config_file_path).replace("config", "documents", 1) # A bit of a hack to get the documents path
-        if "AkaiFirePixelForge" not in user_presets_base: # a more robust fallback
-            user_presets_base = os.path.join(os.path.expanduser('~/Documents'), 'Akai Fire RGB Controller User Presets')
+        # --- Use the new helper to get the correct base path ---
+        user_presets_base = self._get_user_documents_path()
         self.web_cache_dir = os.path.join(user_presets_base, "WebCache")
         os.makedirs(self.web_cache_dir, exist_ok=True)
-        self.temp_file_path = None # To hold the path of the temporary file for cleanup
+        self.temp_file_path = None
         self.gif_engine = GifProcessingEngine()
         self.original_pil_frames: list[Image.Image] = []
         self.preview_pil_frames: list[Image.Image] = []
@@ -74,8 +72,10 @@ class GifImportDialog(QDialog):
         self.current_preview_timer.timeout.connect(self._update_preview_frame)
         self._is_preview_playing = False
         self.initial_sequence_name = "Imported GIF"
-        self.region_rect_percentage = {'x': 0.0, 'y': 0.0, 'width': 1.0, 'height': 1.0}
-        self.adjustments = {'brightness': DEFAULT_BRIGHTNESS_FACTOR, 'saturation': DEFAULT_SATURATION_FACTOR, 'contrast': DEFAULT_CONTRAST_FACTOR, 'hue_shift': DEFAULT_HUE_SHIFT}
+        self.region_rect_percentage = {
+            'x': 0.0, 'y': 0.0, 'width': 1.0, 'height': 1.0}
+        self.adjustments = {'brightness': DEFAULT_BRIGHTNESS_FACTOR, 'saturation': DEFAULT_SATURATION_FACTOR,
+                            'contrast': DEFAULT_CONTRAST_FACTOR, 'hue_shift': DEFAULT_HUE_SHIFT}
         self._init_ui()
         self._connect_signals()
         self._update_adjustment_value_labels()
@@ -239,6 +239,36 @@ class GifImportDialog(QDialog):
         self.playback_fps_slider.valueChanged.connect(self._on_playback_fps_changed)
         self.play_preview_button.clicked.connect(self._play_preview)
         self.pause_preview_button.clicked.connect(self._pause_preview)
+
+    def _get_user_documents_path(self) -> str:
+        """Reliably finds the user's 'Documents' folder and the app-specific presets folder within it."""
+        app_specific_folder_name = "Akai Fire RGB Controller User Presets"
+        try:
+            if sys.platform == "win32":
+                import ctypes.wintypes
+                CSIDL_PERSONAL = 5
+                SHGFP_TYPE_CURRENT = 0
+                buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+                ctypes.windll.shell32.SHGetFolderPathW(
+                    None, CSIDL_PERSONAL, None, SHGFP_TYPE_CURRENT, buf)
+                documents_path = buf.value
+            else:  # For macOS and Linux
+                documents_path = os.path.join(
+                    os.path.expanduser("~"), "Documents")
+            # Final fallback if the above fails for any reason
+            if not os.path.isdir(documents_path):
+                documents_path = os.path.expanduser("~")
+            app_presets_dir = os.path.join(
+                documents_path, app_specific_folder_name)
+            os.makedirs(app_presets_dir, exist_ok=True)
+            return app_presets_dir
+        except Exception as e:
+            print(
+                f"GifImportDialog WARNING: User documents path error, falling back to current directory: {e}")
+            fallback_dir = os.path.join(
+                os.getcwd(), "user_presets_fallback_gid")
+            os.makedirs(fallback_dir, exist_ok=True)
+            return fallback_dir
 
     def _get_user_config_path(self, filename: str) -> str:
         """Helper to get a consistent user config path."""
