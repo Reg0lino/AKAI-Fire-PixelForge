@@ -53,30 +53,29 @@ class GifImportDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("📥 Import GIF Animation")
         self.setMinimumSize(950, 780)
-        self.config_file_path = self._get_user_config_path(
-            'gif_import_settings.json')
+        # --- PATH MANAGEMENT ---
+        self.config_file_path = self._get_user_config_path('gif_import_settings.json')
         self.last_used_browse_path = self._load_last_path()
+        # --- Define and create a safe, local cache directory ---
+        # This reuses the same base path as your other user presets.
+        user_presets_base = os.path.dirname(self.config_file_path).replace("config", "documents", 1) # A bit of a hack to get the documents path
+        if "AkaiFirePixelForge" not in user_presets_base: # a more robust fallback
+            user_presets_base = os.path.join(os.path.expanduser('~/Documents'), 'Akai Fire RGB Controller User Presets')
+        self.web_cache_dir = os.path.join(user_presets_base, "WebCache")
+        os.makedirs(self.web_cache_dir, exist_ok=True)
+        self.temp_file_path = None # To hold the path of the temporary file for cleanup
         self.gif_engine = GifProcessingEngine()
-        # --- ATTRIBUTES FOR TWO-PASS SYSTEM ---
-        # Full-res original frames
         self.original_pil_frames: list[Image.Image] = []
-        # New: Small, downscaled frames for UI
         self.preview_pil_frames: list[Image.Image] = []
-        self.current_gif_frames_pil: list[Image.Image] = []
+        self.processed_preview_frames: list[list[str]] = []
         self.current_gif_frame_delays_ms: list[int] = []
         self.current_preview_frame_index = 0
         self.current_preview_timer = QTimer(self)
         self.current_preview_timer.timeout.connect(self._update_preview_frame)
         self._is_preview_playing = False
         self.initial_sequence_name = "Imported GIF"
-        self.region_rect_percentage = {
-            'x': 0.0, 'y': 0.0, 'width': 1.0, 'height': 1.0}
-        self.adjustments = {
-            'brightness': DEFAULT_BRIGHTNESS_FACTOR,
-            'saturation': DEFAULT_SATURATION_FACTOR,
-            'contrast': DEFAULT_CONTRAST_FACTOR,
-            'hue_shift': DEFAULT_HUE_SHIFT
-        }
+        self.region_rect_percentage = {'x': 0.0, 'y': 0.0, 'width': 1.0, 'height': 1.0}
+        self.adjustments = {'brightness': DEFAULT_BRIGHTNESS_FACTOR, 'saturation': DEFAULT_SATURATION_FACTOR, 'contrast': DEFAULT_CONTRAST_FACTOR, 'hue_shift': DEFAULT_HUE_SHIFT}
         self._init_ui()
         self._connect_signals()
         self._update_adjustment_value_labels()
@@ -375,7 +374,7 @@ class GifImportDialog(QDialog):
     def _on_play_original_clicked(self):
         """
         Opens a new simple dialog to play the original source GIF.
-        Handles both local files and web URLs (by using a temporary file).
+        Handles web URLs by saving to a predictable, permission-safe cache folder.
         """
         if not self.original_pil_frames:
             QMessageBox.warning(self, "No GIF Loaded",
@@ -389,19 +388,22 @@ class GifImportDialog(QDialog):
                 QMessageBox.critical(
                     self, "Error", "In-memory GIF data not found for URL source.")
                 return
-            # --- Assign the temp file to 'self' to keep it alive ---
-            # The QTemporaryFile object's lifetime is now tied to the GifImportDialog instance.
-            self.temp_file = QTemporaryFile("temp_gif_XXXXXX.gif")
-            if self.temp_file.open():
-                self.temp_file.write(gif_data)
-                # We must close the file to ensure all data is flushed to disk before QMovie reads it.
-                self.temp_file.close()
-                player = GifPlayerDialog(self.temp_file.fileName(), self)
+            try:
+                # --- Use our new safe cache directory ---
+                # Create a predictable filename based on the sequence name
+                filename = self.gif_engine.sequence_name + ".gif"
+                self.temp_file_path = os.path.join(
+                    self.web_cache_dir, filename)
+                # Write the in-memory data to this new file path
+                with open(self.temp_file_path, 'wb') as f:
+                    f.write(gif_data)
+                # Now play from this safe, newly created file
+                player = GifPlayerDialog(self.temp_file_path, self)
                 player.exec()
-            # The physical temp file will be deleted automatically when the GifImportDialog
-            # is closed and self.temp_file is garbage collected.
-        else:
-            # For local files, use the path directly
+            except Exception as e:
+                QMessageBox.critical(
+                    self, "Playback Error", f"Could not write or play temporary GIF:\n{e}")
+        else:  # For local files, the logic is unchanged
             if not os.path.isfile(source_path):
                 QMessageBox.warning(
                     self, "Invalid Path", "The source is not a valid local file path.")
@@ -566,6 +568,24 @@ class GifImportDialog(QDialog):
         self.gif_import_requested.emit(
             processed_gif_sequence, final_delay_ms, sequence_name)
         self.accept()
+
+    def closeEvent(self, event):
+        """
+        Overrides the close event to clean up any temporary files created in the WebCache.
+        """
+        print("GIF Import Dialog closing, cleaning up cache...")
+        if self.temp_file_path and os.path.exists(self.temp_file_path):
+            try:
+                os.remove(self.temp_file_path)
+                print(
+                    f"Successfully removed temporary file: {self.temp_file_path}")
+            except OSError as e:
+                print(
+                    f"Error removing temporary file '{self.temp_file_path}': {e}")
+        # We must also stop the preview timer to prevent it from running after the dialog is gone
+        if self.current_preview_timer.isActive():
+            self.current_preview_timer.stop()
+        super().closeEvent(event)  # IMPORTANT: Continue with the normal close procedure
 
 # For standalone testing
 if __name__ == '__main__':

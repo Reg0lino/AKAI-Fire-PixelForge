@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-
 class GifExportDialog(QDialog):
     """
     A dialog for gathering user options before exporting a pad animation to GIF.
@@ -14,12 +13,10 @@ class GifExportDialog(QDialog):
 
     def __init__(self, initial_frame_delay_ms: int, parent: QWidget | None = None):
         super().__init__(parent)
-
         self.setWindowTitle("Export Pad Animation to GIF")
         self.setWindowFlags(self.windowFlags() & ~
                             Qt.WindowType.WindowContextHelpButtonHint)
         self.setMinimumWidth(350)
-
         # --- UI Widget Declarations ---
         self.pixel_size_spinbox = QSpinBox()
         self.spacing_spinbox = QSpinBox()
@@ -27,7 +24,6 @@ class GifExportDialog(QDialog):
         self.loop_checkbox = QCheckBox("Loop Animation Infinitely")
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-
         self._init_ui(initial_frame_delay_ms)
         self._connect_signals()
 
@@ -37,7 +33,6 @@ class GifExportDialog(QDialog):
         form_layout = QFormLayout()
         form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
         # Pixel Size
         self.pixel_size_spinbox.setRange(5, 100)
         self.pixel_size_spinbox.setValue(20)
@@ -45,7 +40,6 @@ class GifExportDialog(QDialog):
         self.pixel_size_spinbox.setToolTip(
             "The width and height of each individual pad pixel in the final GIF.")
         form_layout.addRow(QLabel("Pixel Size:"), self.pixel_size_spinbox)
-
         # Spacing
         self.spacing_spinbox.setRange(0, 20)
         self.spacing_spinbox.setValue(2)
@@ -53,7 +47,6 @@ class GifExportDialog(QDialog):
         self.spacing_spinbox.setToolTip(
             "The size of the gap between each pad pixel.")
         form_layout.addRow(QLabel("Pixel Spacing:"), self.spacing_spinbox)
-
         # Frame Delay
         self.delay_spinbox.setRange(10, 5000)  # 100 FPS to 0.2 FPS
         self.delay_spinbox.setValue(initial_frame_delay_ms)
@@ -61,13 +54,11 @@ class GifExportDialog(QDialog):
         self.delay_spinbox.setToolTip(
             "The time each frame is displayed in the GIF (in milliseconds).")
         form_layout.addRow(QLabel("Frame Delay:"), self.delay_spinbox)
-
         # Looping
         self.loop_checkbox.setChecked(True)
         self.loop_checkbox.setToolTip(
             "If checked, the generated GIF will loop forever.")
         form_layout.addRow(self.loop_checkbox)
-
         main_layout.addLayout(form_layout)
         main_layout.addWidget(self.button_box)
 
@@ -110,11 +101,9 @@ class GifExportDialog(QDialog):
             return dialog.get_export_options(), True
         return None, False
 
-
 if __name__ == '__main__':
     # A simple test to check the dialog's appearance and functionality
     app = QApplication(sys.argv)
-
     # --- Attempt to load the main application stylesheet for a consistent look ---
     try:
         import os
@@ -128,11 +117,8 @@ if __name__ == '__main__':
     except Exception as e:
         print(
             f"Test: Could not load stylesheet. Using default style. Error: {e}")
-
     print("Showing GIF Export Dialog with initial delay of 50ms (20 FPS)...")
-
     options, ok = GifExportDialog.get_options(None, 50)
-
     if ok:
         print("\nUser clicked OK. Export options:")
         print(f"  - Pixel Size: {options['pixel_size']}")
@@ -142,5 +128,4 @@ if __name__ == '__main__':
             f"  - Loop:       {'Infinite' if options['loop'] == 0 else 'Play Once'}")
     else:
         print("\nUser clicked Cancel.")
-
     sys.exit()
