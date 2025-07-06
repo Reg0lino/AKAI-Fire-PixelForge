@@ -378,27 +378,33 @@ class GifImportDialog(QDialog):
         Handles both local files and web URLs (by using a temporary file).
         """
         if not self.original_pil_frames:
-            QMessageBox.warning(self, "No GIF Loaded", "Please load a GIF before trying to play it.")
+            QMessageBox.warning(self, "No GIF Loaded",
+                                "Please load a GIF before trying to play it.")
             return
         source_path = self.url_input.text().strip()
         is_url = source_path.startswith('http')
         if is_url:
-            # For URLs, use the in-memory data and a temporary file
             gif_data = self.gif_engine.gif_data_in_memory
             if not gif_data:
-                QMessageBox.critical(self, "Error", "In-memory GIF data not found for URL source.")
+                QMessageBox.critical(
+                    self, "Error", "In-memory GIF data not found for URL source.")
                 return
+            # --- Assign the temp file to 'self' to keep it alive ---
+            # The QTemporaryFile object's lifetime is now tied to the GifImportDialog instance.
             self.temp_file = QTemporaryFile("temp_gif_XXXXXX.gif")
             if self.temp_file.open():
                 self.temp_file.write(gif_data)
+                # We must close the file to ensure all data is flushed to disk before QMovie reads it.
                 self.temp_file.close()
                 player = GifPlayerDialog(self.temp_file.fileName(), self)
                 player.exec()
-            # QTemporaryFile will be auto-deleted when self.temp_file is garbage collected
+            # The physical temp file will be deleted automatically when the GifImportDialog
+            # is closed and self.temp_file is garbage collected.
         else:
             # For local files, use the path directly
             if not os.path.isfile(source_path):
-                QMessageBox.warning(self, "Invalid Path", "The source is not a valid local file path.")
+                QMessageBox.warning(
+                    self, "Invalid Path", "The source is not a valid local file path.")
                 return
             player = GifPlayerDialog(source_path, self)
             player.exec()
