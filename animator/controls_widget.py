@@ -140,15 +140,19 @@ class SequenceControlsWidget(QWidget):
         bar1_layout.addSpacerItem(QSpacerItem(
             20, 10, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         self.first_frame_button = QPushButton(ICON_NAV_FIRST)
+        self.first_frame_button.setToolTip("Go to First Frame")
         self.first_frame_button.clicked.connect(self.navigate_first_requested)
         bar1_layout.addWidget(self.first_frame_button)
         self.prev_frame_button = QPushButton(ICON_NAV_PREV)
+        self.prev_frame_button.setToolTip("Go to Previous Frame")
         self.prev_frame_button.clicked.connect(self.navigate_prev_requested)
         bar1_layout.addWidget(self.prev_frame_button)
         self.next_frame_button = QPushButton(ICON_NAV_NEXT)
+        self.next_frame_button.setToolTip("Go to Next Frame")
         self.next_frame_button.clicked.connect(self.navigate_next_requested)
         bar1_layout.addWidget(self.next_frame_button)
         self.last_frame_button = QPushButton(ICON_NAV_LAST)
+        self.last_frame_button.setToolTip("Go to Last Frame")
         self.last_frame_button.clicked.connect(self.navigate_last_requested)
         bar1_layout.addWidget(self.last_frame_button)
         self_main_layout.addLayout(bar1_layout)
@@ -210,9 +214,9 @@ class SequenceControlsWidget(QWidget):
         self.prev_frame_button.setEnabled(enabled and has_frames)
         self.next_frame_button.setEnabled(enabled and has_frames)
         self.last_frame_button.setEnabled(enabled and has_frames)
-        self.play_stop_button.setEnabled(enabled and has_frames)
-        self.speed_slider.setEnabled(enabled and has_frames)
-        self.current_speed_display_label.setEnabled(enabled and has_frames)
+        # --- FIX: The lines below that controlled the play button and speed slider have been REMOVED. ---
+        # Their state is now exclusively controlled by the set_interactive_state_for_playback
+        # method in the parent AnimatorManagerWidget, which correctly handles the playback state.
 
     def _on_speed_slider_changed(self, slider_raw_value: int):
         current_fps = self._slider_raw_value_to_fps(slider_raw_value)

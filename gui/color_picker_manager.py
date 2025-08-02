@@ -679,31 +679,3 @@ class ColorSwatchButton(QPushButton):
             self.rightClicked.emit(event.globalPosition().toPoint())
         else:
             super().mousePressEvent(event)
-
-# --- Standalone Test Execution ---
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-
-    # Simple test window
-    window = QWidget()
-    layout = QVBoxLayout(window)
-
-    def _get_dev_config_path(filename):
-        test_dir = os.path.join(os.path.dirname(
-            __file__), "user_settings_test")
-        os.makedirs(test_dir, exist_ok=True)
-        return os.path.join(test_dir, filename)
-
-    picker = ColorPickerManager(config_save_path_func=_get_dev_config_path)
-    picker.primary_color_changed.connect(
-        lambda c: print(f"Primary Color Changed: {c.name()}"))
-    picker.secondary_color_changed.connect(
-        lambda c: print(f"Secondary Color Changed: {c.name()}"))
-    picker.status_message_requested.connect(
-        lambda msg, time: print(f"Status: {msg} ({time}ms)"))
-
-    layout.addWidget(picker)
-    window.setWindowTitle("Color Picker Manager - Test")
-    window.show()
-
-    sys.exit(app.exec())

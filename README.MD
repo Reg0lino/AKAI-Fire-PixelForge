@@ -1,6 +1,6 @@
 # PixelForge for Akai Fire
 
-## 🚀 Download Latest Release v2.0.0!
+## 🚀 Download Latest Release v2.1.0!
 
 **Get the latest version for Windows from the [GitHub Releases Page](https://github.com/Reg0lino/AKAI-Fire-PixelForge/releases/latest)!**
 
@@ -8,28 +8,26 @@
 
 ## 🎛️ Overview
 
-**PixelForge for Akai Fire v2.0.0** (developed by Reg0lino & Gemini AI) is a powerful desktop application that transforms the Akai Fire controller from a dedicated FL Studio accessory into a versatile, standalone instrument for visual and creative expression.
+**PixelForge for Akai Fire v2.1.0** (developed by Reg0lino & Gemini AI) is a powerful desktop application that transforms the Akai Fire controller from a dedicated FL Studio accessory into a versatile, standalone instrument for visual and creative expression.
 
-This project allows users to paint on the 4x16 RGB pads, create complex frame-by-frame animations, mirror desktop colors for ambient lighting, and drive a powerful real-time audio visualizer. This version introduces a powerful **GIF Importer**, allowing you to create stunning animations from existing files on your computer or the web. A cornerstone of the project is the enhanced customization of the 128x64 OLED display, featuring a rich library system, advanced image processing, and the ability to **play the "LazyDOOM" retro FPS directly on the OLED!**
+This project allows users to paint on the 4x16 RGB pads, create complex frame-by-frame animations, mirror desktop colors for ambient lighting, and drive a powerful real-time audio visualizer. This version perfects the workflow with a powerful **GIF Importer**, allowing you to create stunning animations from existing files on your computer or the web. A cornerstone of the project is the enhanced customization of the 128x64 OLED display, featuring a rich library system, advanced image processing, and the ability to **play the "LazyDOOM" retro FPS directly on the OLED!**
 
 This application turns the Akai Fire into a dynamic lighting instrument, a rich visual feedback tool, and a mini retro gaming console, all driven by a stable, professional-grade user interface.
 
-## ✨ Features (v2.0.0)
+## ✨ Features (v2.1.0)
 
-*   **📥 NEW: GIF Importer for Pad Animations!**
-    *   **Create Complex Animations Instantly:** A new dialog allows you to import GIFs from a local file or directly from a URL.
+*   **🎨 Animator Workflow & Real-time Control:**
+    *   **Interactive Speed Control:** The on-screen `Speed` slider in the Animator Studio is now fully unlocked and interactive during animation playback.
+    *   **Smart Knob Context:** The physical `SELECT` knob's on-screen label and function correctly switch to "Speed" mode the moment playback begins.
+    *   A new dropdown menu lets you browse, load, and manage all your saved animation sequences with visual feedback (`*`) for unsaved changes.
+
+*   **📥 GIF Importer for Pad Animations!**
+    *   **Create Complex Animations Instantly:** A powerful dialog allows you to import GIFs from a local file or directly from a URL.
     *   **Visual Region Selection:** Click and drag on the GIF preview to sample only the area you want.
     *   **Live Previews:** See a real-time preview of the final 16x4 animation on-screen and on the physical hardware pads as you adjust settings.
     *   **Full Customization:** Tweak brightness, saturation, contrast, hue, and playback speed before importing.
 
     ![New Gif-To-Pad Importer](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/gif_importer.png)
-
-*   **🎨 Redesigned Animator Studio & Workflow**
-    *   A new dropdown menu lets you browse, load, and manage all your saved animation sequences.
-    *   The dropdown provides instant visual feedback (`*`) for unsaved changes.
-    *   A "Delete" button has been added for easy sequence management.
-
-    ![Animator UI](https://raw.githubusercontent.com/Reg0lino/AKAI-Fire-PixelForge/refs/heads/main/images/animator_v2.png)
 
 *   **🖥️ High-Performance Screen Sampler ("Ambient Mode")**
     *   **Multiple Modes:** Choose between "Region" (classic visual selection), "Thumbnail" (a beautiful, low-CPU mirror of your screen), or "Palette" (a creative gradient of dominant colors).
@@ -80,7 +78,7 @@ This application turns the Akai Fire into a dynamic lighting instrument, a rich 
 ## 🚀 Getting Started (Standalone Executable - Windows)
 
 1.  Go to the [**GitHub Releases Page**](https://github.com/Reg0lino/AKAI-Fire-PixelForge/releases/latest).
-2.  Download `Setup_PixelForge_for_Akai_Fire_v2.0.0.exe`.
+2.  Download `Setup_PixelForge_for_Akai_Fire_v2.1.0.exe`.
 3.  Run the installer.
 4.  **IMPORTANT (Windows Users - Antivirus/SmartScreen):**
     *   As an independently developed application, Windows SmartScreen or your antivirus might show a warning.

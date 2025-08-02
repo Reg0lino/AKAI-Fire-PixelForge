@@ -901,101 +901,160 @@ class MainWindow(QMainWindow):
     def _connect_signals(self):
         # AkaiFireController raw pad/button events
         if self.akai_controller and hasattr(self.akai_controller, 'fire_button_event'):
-            self.akai_controller.fire_button_event.connect(self._handle_fire_pad_event_INTERNAL)
+            self.akai_controller.fire_button_event.connect(
+                self._handle_fire_pad_event_INTERNAL)
         # InteractivePadGridFrame signals
         if self.pad_grid_frame:
-            self.pad_grid_frame.pad_action_requested.connect(self._handle_grid_pad_action)
-            self.pad_grid_frame.pad_context_menu_requested_from_button.connect(self.show_pad_context_menu)
-            self.pad_grid_frame.pad_single_left_click_action_requested.connect(self._handle_grid_pad_single_left_click)
+            self.pad_grid_frame.pad_action_requested.connect(
+                self._handle_grid_pad_action)
+            self.pad_grid_frame.pad_context_menu_requested_from_button.connect(
+                self.show_pad_context_menu)
+            self.pad_grid_frame.pad_single_left_click_action_requested.connect(
+                self._handle_grid_pad_single_left_click)
             if self.animator_manager:
-                self.pad_grid_frame.paint_stroke_started.connect(self.animator_manager.on_paint_stroke_started)
-                self.pad_grid_frame.paint_stroke_ended.connect(self.animator_manager.on_paint_stroke_ended)
+                self.pad_grid_frame.paint_stroke_started.connect(
+                    self.animator_manager.on_paint_stroke_started)
+                self.pad_grid_frame.paint_stroke_ended.connect(
+                    self.animator_manager.on_paint_stroke_ended)
         # Color Picker Manager signals
         if self.color_picker_manager:
-            self.color_picker_manager.primary_color_changed.connect(self._handle_primary_color_changed)
-            self.color_picker_manager.secondary_color_changed.connect(self._handle_secondary_color_changed)
-            self.color_picker_manager.status_message_requested.connect(self.status_bar.showMessage)
+            self.color_picker_manager.primary_color_changed.connect(
+                self._handle_primary_color_changed)
+            self.color_picker_manager.secondary_color_changed.connect(
+                self._handle_secondary_color_changed)
+            self.color_picker_manager.status_message_requested.connect(
+                self.status_bar.showMessage)
             if hasattr(self.color_picker_manager, 'request_clear_all_pads'):
-                self.color_picker_manager.request_clear_all_pads.connect(self.clear_all_hardware_and_gui_pads)
+                self.color_picker_manager.request_clear_all_pads.connect(
+                    self.clear_all_hardware_and_gui_pads)
             if hasattr(self.color_picker_manager, 'eyedropper_button_toggled'):
-                self.color_picker_manager.eyedropper_button_toggled.connect(self._on_picker_eyedropper_button_toggled)
+                self.color_picker_manager.eyedropper_button_toggled.connect(
+                    self._on_picker_eyedropper_button_toggled)
         # Static Layouts Manager signals
         if self.static_layouts_manager:
-            self.static_layouts_manager.apply_layout_data_requested.connect(self._handle_apply_static_layout_data)
-            self.static_layouts_manager.request_current_grid_colors.connect(self._provide_grid_colors_for_static_save)
-            self.static_layouts_manager.status_message_requested.connect(self.status_bar.showMessage)
+            self.static_layouts_manager.apply_layout_data_requested.connect(
+                self._handle_apply_static_layout_data)
+            self.static_layouts_manager.request_current_grid_colors.connect(
+                self._provide_grid_colors_for_static_save)
+            self.static_layouts_manager.status_message_requested.connect(
+                self.status_bar.showMessage)
         # Screen Sampler Manager signals
         if self.screen_sampler_manager:
-            self.screen_sampler_manager.sampled_colors_for_display.connect(lambda colors: self.apply_colors_to_main_pad_grid([QColor(r, g, b).name() for r, g, b in colors], update_hw=True))
-            self.screen_sampler_manager.sampler_status_update.connect(self.status_bar.showMessage)
-            self.screen_sampler_manager.sampling_activity_changed.connect(self._on_sampler_activity_changed)
-            self.screen_sampler_manager.sampling_activity_changed.connect(self._on_sampler_activity_changed_for_knobs)
-            self.screen_sampler_manager.new_sequence_from_recording_ready.connect(self._handle_load_sequence_request)
-            # self.screen_sampler_manager.sampler_monitor_changed.connect(self._on_sampler_monitor_cycled_for_oled) # <<< REMOVED
-            self.screen_sampler_manager.sampler_monitor_display_name_changed.connect(self.screen_sampler_manager.ui_manager.set_monitor_display_name) # <<< NEW
-            self.screen_sampler_manager.sampler_adjustments_changed.connect(self._on_sampler_adjustments_updated_for_knobs)
+            self.screen_sampler_manager.sampled_colors_for_display.connect(lambda colors: self.apply_colors_to_main_pad_grid([
+                                                                            QColor(r, g, b).name() for r, g, b in colors], update_hw=True))
+            self.screen_sampler_manager.sampler_status_update.connect(
+                self.status_bar.showMessage)
+            self.screen_sampler_manager.sampling_activity_changed.connect(
+                self._on_sampler_activity_changed)
+            self.screen_sampler_manager.sampling_activity_changed.connect(
+                self._on_sampler_activity_changed_for_knobs)
+            self.screen_sampler_manager.new_sequence_from_recording_ready.connect(
+                self._handle_load_sequence_request)
+            self.screen_sampler_manager.sampler_monitor_display_name_changed.connect(
+                self.screen_sampler_manager.ui_manager.set_monitor_display_name)
+            self.screen_sampler_manager.sampler_adjustments_changed.connect(
+                self._on_sampler_adjustments_updated_for_knobs)
         # AnimatorManagerWidget Signals
         if self.animator_manager:
             if self.animator_manager.sequence_controls_widget and self.animator_manager.sequence_controls_widget.speed_slider:
-                self.animator_manager.sequence_controls_widget.speed_slider.valueChanged.connect(self._on_speed_slider_changed)
-            self.animator_manager.selection_changed.connect(self._on_animator_selection_changed)
-            self.animator_manager.active_frame_data_for_display.connect(self._handle_animator_frame_for_display_with_fx)
-            self.animator_manager.playback_status_update.connect(self.status_bar.showMessage)
-            self.animator_manager.sequence_modified_status_changed.connect(self._update_oled_and_title_on_sequence_change)
-            self.animator_manager.animator_playback_active_status_changed.connect(self._update_fire_transport_leds)
-            self.animator_manager.animator_playback_active_status_changed.connect(self._on_animator_playback_status_changed_for_knobs)
-            self.animator_manager.undo_redo_state_changed.connect(self._on_animator_undo_redo_state_changed)
-            self.animator_manager.clipboard_state_changed.connect(self._on_animator_clipboard_state_changed)
-            self.animator_manager.request_sampler_disable.connect(self._handle_request_sampler_disable)
-            self.animator_manager.request_load_sequence_with_prompt.connect(self._handle_animator_request_load_prompt)
+                self.animator_manager.sequence_controls_widget.speed_slider.valueChanged.connect(
+                    self._on_speed_slider_changed)
+            self.animator_manager.selection_changed.connect(
+                self._on_animator_selection_changed)
+            self.animator_manager.active_frame_data_for_display.connect(
+                self._handle_animator_frame_for_display_with_fx)
+            self.animator_manager.playback_status_update.connect(
+                self.status_bar.showMessage)
+            self.animator_manager.sequence_modified_status_changed.connect(
+                self._update_oled_and_title_on_sequence_change)
+            # --- FIX #1: RESTORE THE AUTOMATIC UPDATE CONNECTION ---
+            self.animator_manager.animator_playback_active_status_changed.connect(
+                self._on_animator_playback_status_changed_for_knobs)
+            # --- FIX #2: ADD THE OLED FEEDBACK CONNECTION FOR THE KNOB ---
+            self.animator_manager.oled_feedback_requested.connect(
+                self._show_knob_feedback_on_oled)
+            self.animator_manager.undo_redo_state_changed.connect(
+                self._on_animator_undo_redo_state_changed)
+            self.animator_manager.clipboard_state_changed.connect(
+                self._on_animator_clipboard_state_changed)
+            self.animator_manager.request_sampler_disable.connect(
+                self._handle_request_sampler_disable)
+            self.animator_manager.request_load_sequence_with_prompt.connect(
+                self._handle_animator_request_load_prompt)
             if hasattr(self.animator_manager, 'gif_import_button'):
-                self.animator_manager.gif_import_button.clicked.connect(self._open_gif_import_dialog)
-        # HardwareInputManager Signals
+                self.animator_manager.gif_import_button.clicked.connect(
+                    self._open_gif_import_dialog)
+        # (The rest of the method is unchanged but included for completeness)
         if self.hardware_input_manager:
-            self.hardware_input_manager.physical_encoder_rotated.connect(self._on_physical_encoder_rotated)
+            self.hardware_input_manager.physical_encoder_rotated.connect(
+                self._on_physical_encoder_rotated)
             if self.animator_manager:
-                self.hardware_input_manager.request_animator_play_pause.connect(self.animator_manager.action_play_pause_toggle)
-                self.hardware_input_manager.request_animator_stop.connect(self._handle_hardware_animator_stop_request)
-            self.hardware_input_manager.grid_left_pressed.connect(self._handle_grid_left_pressed)
-            self.hardware_input_manager.grid_right_pressed.connect(self._handle_grid_right_pressed)
-            self.hardware_input_manager.select_encoder_turned.connect(self._handle_select_encoder_turned)
-            self.hardware_input_manager.select_encoder_pressed.connect(self._handle_select_encoder_pressed)
-            # --- Hardware button remapping connections ---
-            self.hardware_input_manager.request_cycle_sampler_mode.connect(self._on_request_cycle_sampler_mode) # <<< NEW
-            self.hardware_input_manager.request_toggle_screen_sampler.connect(self._on_request_toggle_screen_sampler)
-            self.hardware_input_manager.request_cycle_sampler_monitor.connect(self._on_request_cycle_sampler_monitor)
-            self.hardware_input_manager.visualizer_toggle_requested.connect(lambda: self._handle_visualizer_toggle_request(not self.is_visualizer_active)) # <<< NEW: STEP button triggers this now
-            self.hardware_input_manager.fx_toggle_requested.connect(self._handle_fx_toggle_request) # <<< NEW: ALT button triggers this now
+                self.hardware_input_manager.request_animator_play_pause.connect(
+                    self.animator_manager.action_play_pause_toggle)
+                self.hardware_input_manager.request_animator_stop.connect(
+                    self._handle_hardware_animator_stop_request)
+            self.hardware_input_manager.grid_left_pressed.connect(
+                self._handle_grid_left_pressed)
+            self.hardware_input_manager.grid_right_pressed.connect(
+                self._handle_grid_right_pressed)
+            self.hardware_input_manager.select_encoder_turned.connect(
+                self._handle_select_encoder_turned)
+            self.hardware_input_manager.select_encoder_pressed.connect(
+                self._handle_select_encoder_pressed)
+            self.hardware_input_manager.request_cycle_sampler_mode.connect(
+                self._on_request_cycle_sampler_mode)
+            self.hardware_input_manager.request_toggle_screen_sampler.connect(
+                self._on_request_toggle_screen_sampler)
+            self.hardware_input_manager.request_cycle_sampler_monitor.connect(
+                self._on_request_cycle_sampler_monitor)
+            self.hardware_input_manager.visualizer_toggle_requested.connect(
+                lambda: self._handle_visualizer_toggle_request(not self.is_visualizer_active))
+            self.hardware_input_manager.fx_toggle_requested.connect(
+                self._handle_fx_toggle_request)
             if hasattr(self.hardware_input_manager, 'oled_browser_activate_pressed'):
-                self.hardware_input_manager.oled_browser_activate_pressed.connect(self._open_oled_customizer_dialog)
+                self.hardware_input_manager.oled_browser_activate_pressed.connect(
+                    self._open_oled_customizer_dialog)
             if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_next'):
-                self.hardware_input_manager.request_cycle_active_oled_graphic_next.connect(self._handle_cycle_active_oled_next_request)
+                self.hardware_input_manager.request_cycle_active_oled_graphic_next.connect(
+                    self._handle_cycle_active_oled_next_request)
             if hasattr(self.hardware_input_manager, 'request_cycle_active_oled_graphic_prev'):
-                self.hardware_input_manager.request_cycle_active_oled_graphic_prev.connect(self._handle_cycle_active_oled_prev_request)
-        # OLEDDisplayManager Signals
+                self.hardware_input_manager.request_cycle_active_oled_graphic_prev.connect(
+                    self._handle_cycle_active_oled_prev_request)
         if self.oled_display_manager:
             if self.akai_controller:
-                self.oled_display_manager.request_send_bitmap_to_fire.connect(self.akai_controller.oled_send_full_bitmap)
+                self.oled_display_manager.request_send_bitmap_to_fire.connect(
+                    self.akai_controller.oled_send_full_bitmap)
             if self.oled_display_mirror_widget:
-                self.oled_display_manager.request_send_bitmap_to_fire.connect(self._update_oled_mirror)
+                self.oled_display_manager.request_send_bitmap_to_fire.connect(
+                    self._update_oled_mirror)
             if hasattr(self.oled_display_manager, 'active_graphic_pause_state_changed'):
-                self.oled_display_manager.active_graphic_pause_state_changed.connect(self._update_oled_play_pause_button_ui)
-        # Audio Visualizer Manager/UI Manager Signals
+                self.oled_display_manager.active_graphic_pause_state_changed.connect(
+                    self._update_oled_play_pause_button_ui)
         if self.audio_visualizer_manager:
-            self.audio_visualizer_manager.pad_data_ready.connect(self._handle_visualizer_pad_data)
-            self.audio_visualizer_manager.pad_data_ready.connect(self._update_gui_pads_from_visualizer)
-            self.audio_visualizer_manager.available_devices_updated.connect(self._on_visualizer_available_devices_updated)
-            self.audio_visualizer_manager.capture_error.connect(self._handle_visualizer_capture_error)
+            self.audio_visualizer_manager.pad_data_ready.connect(
+                self._handle_visualizer_pad_data)
+            self.audio_visualizer_manager.pad_data_ready.connect(
+                self._update_gui_pads_from_visualizer)
+            self.audio_visualizer_manager.available_devices_updated.connect(
+                self._on_visualizer_available_devices_updated)
+            self.audio_visualizer_manager.capture_error.connect(
+                self._handle_visualizer_capture_error)
             if hasattr(self.audio_visualizer_manager, 'capture_started_signal'):
-                self.audio_visualizer_manager.capture_started_signal.connect(self._on_avm_capture_started)
+                self.audio_visualizer_manager.capture_started_signal.connect(
+                    self._on_avm_capture_started)
             if hasattr(self.audio_visualizer_manager, 'capture_stopped_signal'):
-                self.audio_visualizer_manager.capture_stopped_signal.connect(self._on_avm_capture_stopped)
+                self.audio_visualizer_manager.capture_stopped_signal.connect(
+                    self._on_avm_capture_stopped)
         if self.audio_visualizer_ui_manager:
-            self.audio_visualizer_ui_manager.enable_visualizer_toggled.connect(self._handle_visualizer_toggle_request)
+            self.audio_visualizer_ui_manager.enable_visualizer_toggled.connect(
+                self._handle_visualizer_toggle_request)
             if self.audio_visualizer_manager:
-                self.audio_visualizer_ui_manager.device_selection_changed.connect(self.audio_visualizer_manager.set_selected_device_index)
-                self.audio_visualizer_ui_manager.mode_selection_changed.connect(self.audio_visualizer_manager.update_visualization_mode)
-            self.audio_visualizer_ui_manager.configure_button_clicked.connect(self._open_visualizer_settings_dialog)
+                self.audio_visualizer_ui_manager.device_selection_changed.connect(
+                    self.audio_visualizer_manager.set_selected_device_index)
+                self.audio_visualizer_ui_manager.mode_selection_changed.connect(
+                    self.audio_visualizer_manager.update_visualization_mode)
+            self.audio_visualizer_ui_manager.configure_button_clicked.connect(
+                self._open_visualizer_settings_dialog)
 
     def _handle_primary_color_changed(self, color: QColor):
         """Handles updates to the primary color from the ColorPickerManager."""
@@ -1757,20 +1816,17 @@ class MainWindow(QMainWindow):
         self.connect_button_direct_ref.setStyleSheet(dynamic_style)
 
     def _update_contextual_knob_configs(self):
-        """
-        Updates knob ranges, values, and labels based on the current application context.
-        This is the master state synchronizer for the top-strip knobs.
-        """
+        # <<< DIAGNOSTIC PRINT ADDED
+        animator_is_playing_check = self.animator_manager.is_playback_active() if self.animator_manager else False
+        # print(f"DIAGNOSTIC: _update_contextual_knob_configs called. It sees animator_is_playing = {animator_is_playing_check}")
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        animator_is_playing = self.is_animator_playing
-        # ---  List now has 6 labels ---
+        animator_is_playing = self.animator_manager.is_playback_active() if self.animator_manager else False
         labels = ["Brightness", "Saturation", "Contrast", "Hue", "Customize", ""]
         dials = [self.knob_volume_top_right, self.knob_pan_top_right,
                 self.knob_filter_top_right, self.knob_resonance_top_right, self.knob_select_top_right]
         for dial in dials:
             if dial: dial.blockSignals(True)
         if sampler_is_active:
-            # CONFIGURE KNOBS 1-4 FOR SAMPLER MODE
             self.knob_volume_top_right.setRange(self.SAMPLER_BRIGHTNESS_KNOB_MIN, self.SAMPLER_BRIGHTNESS_KNOB_MAX)
             self.knob_pan_top_right.setRange(self.SAMPLER_SATURATION_KNOB_MIN, self.SAMPLER_SATURATION_KNOB_MAX)
             self.knob_filter_top_right.setRange(self.SAMPLER_CONTRAST_KNOB_MIN, self.SAMPLER_CONTRAST_KNOB_MAX)
@@ -1781,7 +1837,6 @@ class MainWindow(QMainWindow):
             self.knob_filter_top_right.setValue(int(sampler_adjustments.get('contrast', 1.0) * 100))
             self.knob_resonance_top_right.setValue(int(sampler_adjustments.get('hue_shift', 0)))
         else:
-            # CONFIGURE KNOBS 1-4 FOR FX PANEL MODE
             if self.fx_brightness_slider: self.knob_volume_top_right.setRange(self.fx_brightness_slider.minimum(), self.fx_brightness_slider.maximum())
             if self.fx_saturation_slider: self.knob_pan_top_right.setRange(self.fx_saturation_slider.minimum(), self.fx_saturation_slider.maximum())
             if self.fx_contrast_slider: self.knob_filter_top_right.setRange(self.fx_contrast_slider.minimum(), self.fx_contrast_slider.maximum())
@@ -1790,22 +1845,24 @@ class MainWindow(QMainWindow):
             if self.fx_saturation_slider: self.knob_pan_top_right.setValue(self.fx_saturation_slider.value())
             if self.fx_contrast_slider: self.knob_filter_top_right.setValue(self.fx_contrast_slider.value())
             if self.fx_hue_slider: self.knob_resonance_top_right.setValue(self.fx_hue_slider.value())
-        # ---  Update label for the 6th position (Select knob) ---
         if animator_is_playing:
-            labels[5] = "Speed" # The 6th label is for the Select knob
-            if self.knob_select_top_right:
+            # <<< DIAGNOSTIC PRINT ADDED
+            # print("DIAGNOSTIC: Logic has decided to set label to 'Speed'.")
+            labels[5] = "Speed"
+            if self.knob_select_top_right and self.animator_manager.sequence_controls_widget:
                 speed_slider = self.animator_manager.sequence_controls_widget.speed_slider
                 self.knob_select_top_right.setRange(speed_slider.minimum(), speed_slider.maximum())
                 self.knob_select_top_right.setValue(speed_slider.value())
         else:
-            labels[5] = "Select" # The 6th label is for the Select knob
+            # <<< DIAGNOSTIC PRINT ADDED
+            # print("DIAGNOSTIC: Logic has decided to set label to 'Select'.")
+            labels[5] = "Select"
             if self.knob_select_top_right:
                 nav_count = 0
                 if self.current_oled_nav_target_widget:
                     nav_count = self.current_oled_nav_target_widget.get_navigation_item_count()
                 self.knob_select_top_right.setRange(0, max(0, nav_count - 1))
-                center_value = (self.knob_select_top_right.minimum() + self.knob_select_top_right.maximum()) // 2
-                self.knob_select_top_right.setValue(center_value)
+                self.knob_select_top_right.setValue(self.current_oled_nav_item_logical_index)
         if hasattr(self, 'knob_label_overlay') and self.knob_label_overlay:
             self.knob_label_overlay.set_labels(labels)
         self._update_all_knob_tooltips()
@@ -1816,7 +1873,8 @@ class MainWindow(QMainWindow):
     def _update_all_knob_tooltips(self):
         """Sets the tooltip for all 5 knobs based on the current context."""
         sampler_is_active = self.screen_sampler_manager and self.screen_sampler_manager.is_sampling_active()
-        animator_is_playing = self.is_animator_playing
+        # --- Ask the manager directly for the playback state ---
+        animator_is_playing = self.animator_manager.is_playback_active() if self.animator_manager else False
         knob_stacks = [
             getattr(self, "knob_volume_top_right_stack", None),
             getattr(self, "knob_pan_top_right_stack", None),
@@ -1825,17 +1883,14 @@ class MainWindow(QMainWindow):
             getattr(self, "SelectKnobTopRight_stack", None),
         ]
         if sampler_is_active:
-            # Tooltips for Sampler Mode
             adj = self.screen_sampler_manager.get_current_adjustments()
             if knob_stacks[0]: knob_stacks[0].setToolTip(f"Sampler Brightness ({adj.get('brightness', 1.0):.2f}x)")
             if knob_stacks[1]: knob_stacks[1].setToolTip(f"Sampler Saturation ({adj.get('saturation', 1.0):.2f}x)")
             if knob_stacks[2]: knob_stacks[2].setToolTip(f"Sampler Contrast ({adj.get('contrast', 1.0):.2f}x)")
-            # --- FIX: Cast the hue_shift float to an int before formatting ---
             if knob_stacks[3]:
                 hue_val = int(adj.get('hue_shift', 0))
                 knob_stacks[3].setToolTip(f"Sampler Hue Shift ({hue_val:+d}°)")
         else:
-            # Tooltips for FX Panel Mode
             if knob_stacks[0] and self.fx_brightness_slider:
                 knob_stacks[0].setToolTip(f"FX Brightness ({(1 + self.fx_brightness_slider.value()/100.0):.2f}x)")
             if knob_stacks[1] and self.fx_saturation_slider:
@@ -1844,9 +1899,9 @@ class MainWindow(QMainWindow):
                 knob_stacks[2].setToolTip(f"FX Contrast ({(1 + self.fx_contrast_slider.value()/100.0):.2f}x)")
             if knob_stacks[3] and self.fx_hue_slider:
                 knob_stacks[3].setToolTip(f"FX Hue ({self.fx_hue_slider.value():+d}°)")
-        # Tooltip for Knob 5 (Select/Speed)
         if knob_stacks[4]:
             if animator_is_playing:
+                # Use the functional dial to get the current value for the tooltip
                 fps = self._slider_raw_value_to_fps_for_knob(self.knob_select_top_right.value())
                 knob_stacks[4].setToolTip(f"Anim Speed: {fps:.1f} FPS")
             else:
@@ -2026,68 +2081,54 @@ class MainWindow(QMainWindow):
             self.animator_manager.apply_fx_to_selected_frames(fx_params)
 
     def _update_global_ui_interaction_states(self):
-        """
-        This is the master state controller for the entire application.
-        It enables/disables all major UI components and menu actions based on
-        which "master mode" is currently active, ensuring mutual exclusivity.
-        """
-        # 1. Get the current state of all master modes.
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
-        is_playing = self.is_animator_playing
+        
+        # --- Get state from the authoritative source for each mode ---
+        is_playing = self.animator_manager.is_playback_active() if self.animator_manager else False
         is_sampling = self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False
-        is_visualizing = self.audio_visualizer_manager.is_capturing if self.audio_visualizer_manager else False
+        is_visualizing = self.is_visualizer_active
         is_dooming = self.is_doom_mode_active
-        # Determine which master mode is active, in order of priority
-        # Default to True, then disable based on active mode
-        can_start_any_master_mode = is_connected and not is_playing and not is_sampling and not is_visualizing and not is_dooming
+        # --- Define UI states based on the authoritative sources ---
+        # The Animator panel should be enabled unless a conflicting master mode is active. Playback does NOT disable it.
+        animator_panel_is_enabled = is_connected and not is_sampling and not is_visualizing and not is_dooming
+        # Other creative tools (like painting on the grid) ARE disabled during playback.
         can_use_creative_tools = is_connected and not is_playing and not is_sampling and not is_visualizing and not is_dooming
-        # --- DOOM Mode has highest priority ---
-        if is_dooming:
-            can_use_creative_tools = False
-            can_start_any_master_mode = False
-        # --- Enable/Disable Creative Tools ---
+        # A new master mode can only be started if nothing else is running.
+        can_start_any_master_mode = is_connected and not is_playing and not is_sampling and not is_visualizing and not is_dooming
+        # --- Apply the states ---
+        # The animator manager's enabled state now correctly depends ONLY on animator_panel_is_enabled.
+        # It no longer gets micromanaged based on the `is_playing` flag.
         if self.animator_manager:
-            # Animator is special: parts of it are disabled during its own playback
-            if is_playing:
-                self.animator_manager.set_interactive_state_for_playback(True)
-            else:
-                self.animator_manager.set_overall_enabled_state(can_use_creative_tools)
+            self.animator_manager.set_overall_enabled_state(animator_panel_is_enabled)
         if self.pad_grid_frame: self.pad_grid_frame.setEnabled(can_use_creative_tools)
         if self.color_picker_manager: self.color_picker_manager.setEnabled(can_use_creative_tools)
         if self.static_layouts_manager: self.static_layouts_manager.setEnabled(can_use_creative_tools)
         if self.live_fx_group_box: self.live_fx_group_box.setEnabled(is_connected and not is_sampling and not is_dooming)
-        # --- Enable/Disable Master Mode UI Buttons and Menu Actions ---
-        # Sampler
         if self.screen_sampler_manager:
-            self.screen_sampler_manager.get_ui_widget().setEnabled(is_connected)
-            self.screen_sampler_manager.update_start_button_state(is_sampling or can_start_any_master_mode)
+            sampler_ui = self.screen_sampler_manager.get_ui_widget()
+            if sampler_ui:
+                sampler_ui.setEnabled(is_connected)
+                self.screen_sampler_manager.update_start_button_state(is_sampling or can_start_any_master_mode)
         if hasattr(self, 'toggle_sampler_action'):
             self.toggle_sampler_action.setEnabled(is_sampling or can_start_any_master_mode)
         if hasattr(self, 'configure_sampler_action'):
-            # Configuration is allowed while sampling is active.
             self.configure_sampler_action.setEnabled(is_connected and not is_dooming)
-        # Visualizer
         if self.audio_visualizer_ui_manager:
             self.audio_visualizer_ui_manager.setEnabled(is_connected)
             self.audio_visualizer_ui_manager.start_stop_button.setEnabled(is_visualizing or can_start_any_master_mode)
         if hasattr(self, 'toggle_viz_action'):
             self.toggle_viz_action.setEnabled(is_visualizing or can_start_any_master_mode)
         if hasattr(self, 'configure_viz_action'):
-            # Configuration is allowed while visualizing is active.
             self.configure_viz_action.setEnabled(is_connected and not is_dooming)
-        # DOOM
         if self.button_lazy_doom: self.button_lazy_doom.setEnabled(is_dooming or can_start_any_master_mode)
         if hasattr(self, 'launch_doom_action'):
             self.launch_doom_action.setEnabled(is_dooming or can_start_any_master_mode)
             self.launch_doom_action.setText("⏪ Exit LazyDOOM" if is_dooming else "👹 Launch LazyDOOM")
-        # Animator Play
         if hasattr(self, 'play_pause_action'):
-            # Can only play if no other master mode is running
-            self.play_pause_action.setEnabled(is_playing or can_start_any_master_mode)
-        # Explicitly control the enabled state of the OLED Play/Pause icon.
-        # It should be enabled ONLY when the controller is connected.
+            self.play_pause_action.setEnabled(animator_panel_is_enabled)
         if hasattr(self, 'oled_play_pause_icon_label') and self.oled_play_pause_icon_label:
             self.oled_play_pause_icon_label.setEnabled(is_connected)
+
 
 # q main window init here
     def __init__(self):
@@ -2102,7 +2143,6 @@ class MainWindow(QMainWindow):
             QColor("black").name()] * 64
         self.is_modal_dialog_active: bool = False
         self._has_played_initial_builtin_oled_animation: bool = False;
-        self.is_animator_playing: bool = False;
         self.is_visualizer_active: bool = False;
         self._visualizer_is_being_toggled: bool = False;
         self.is_doom_mode_active: bool = False;
@@ -2604,7 +2644,8 @@ class MainWindow(QMainWindow):
         This slot is connected to the real speed slider's valueChanged signal.
         Its job is to keep the top-strip visual knob synchronized.
         """
-        if self.knob_select_top_right and self.is_animator_playing:
+        # --- THE FIX: Ask the manager directly for its playback state ---
+        if self.knob_select_top_right and self.animator_manager and self.animator_manager.is_playback_active():
             # Block signals on the QDial to prevent any potential loops
             self.knob_select_top_right.blockSignals(True)
             self.knob_select_top_right.setValue(value)
@@ -2664,6 +2705,23 @@ class MainWindow(QMainWindow):
             self.knob_resonance_top_right.blockSignals(False)
         self._update_all_knob_visuals()
 
+    def _on_animator_playback_status_changed_for_knobs(self, is_playing: bool):
+        """
+        Handles the animator's playback signal. This is a critical point of control.
+        Its ONLY job is to update UI elements EXTERNAL to the animator panel itself.
+        """
+        # print(
+        #     f"\n--- EVENT: Playback Signal Received. is_playing = {is_playing} ---")
+        # 1. Update the contextual knobs ("Select" <-> "Speed"). This is its primary job.
+        self._update_contextual_knob_configs()
+        # 2. Directly enable/disable other panels that depend on playback state.
+        #    This prevents the need for a full, disruptive global UI update.
+        can_use_painting_tools = self.akai_controller.is_connected() and not is_playing
+        if self.pad_grid_frame:
+            self.pad_grid_frame.setEnabled(can_use_painting_tools)
+        if self.color_picker_manager:
+            self.color_picker_manager.setEnabled(can_use_painting_tools)
+
     def _on_animator_speed_knob_changed(self, knob_raw_slider_value: int):
         if self.is_animator_playing and self.animator_manager:
             new_fps = self._slider_raw_value_to_fps_for_knob(knob_raw_slider_value)
@@ -2672,12 +2730,6 @@ class MainWindow(QMainWindow):
                 self.knob_resonance_top_right.setToolTip(f"Anim Speed: {new_fps:.1f} FPS")
             oled_feedback_text = f"Spd: {new_fps:.1f}"
             self._show_knob_feedback_on_oled(oled_feedback_text)
-
-    def _on_animator_playback_status_changed_for_knobs(self, is_playing: bool):
-        self.is_animator_playing = is_playing
-        if is_playing:
-            self.status_bar.showMessage("Knob 4 now controls Animation Speed (FPS).", 4000)
-        self._update_contextual_knob_configs()
 
     def _some_method_that_triggers_animator_stop(self):
         if self.animator_manager:
@@ -3278,30 +3330,6 @@ class MainWindow(QMainWindow):
                 feedback_text = f"Hue: {self.fx_hue_slider.value():+d}"
                 self.oled_display_manager.show_system_message(text=feedback_text, duration_ms=1200)
 
-    def _handle_speed_knob_change(self, delta: int):
-        """
-        Handles turns of the Speed knob. It changes the real speed slider and
-        provides immediate OLED feedback.
-        """
-        if not (self.animator_manager and self.animator_manager.sequence_controls_widget):
-            return
-        speed_slider = self.animator_manager.sequence_controls_widget.speed_slider
-        if not speed_slider:
-            return
-            
-        current_val = speed_slider.value()
-        new_val = current_val + (delta * self.ANIMATOR_SPEED_KNOB_STEP)
-        clamped_val = max(speed_slider.minimum(), min(new_val, speed_slider.maximum()))
-        # Set the slider value. This will trigger the on_speed_slider_changed slot,
-        # which syncs the visual knob and tells the animator model about the new speed.
-        speed_slider.setValue(clamped_val)
-        # We must also provide direct feedback here, as the signal-slot mechanism
-        # for on_speed_slider_changed might not have the final FPS value immediately.
-        if self.oled_display_manager:
-            final_fps = self._slider_raw_value_to_fps_for_knob(clamped_val)
-            feedback_text = f"Spd: {final_fps:.1f} FPS"
-            self.oled_display_manager.show_system_message(text=feedback_text, duration_ms=1200)
-
     def _create_edit_actions(self):
         """Creates global QActions for menu items and keyboard shortcuts."""
         # Undo/Redo (Connected to AnimatorManagerWidget)
@@ -3616,8 +3644,8 @@ class MainWindow(QMainWindow):
         Handles SELECT knob press. If the animator is playing, do nothing.
         Otherwise, trigger the currently focused navigation target's action.
         """
-        # --- FIX: Add a guard clause to ignore presses during playback ---
-        if self.is_animator_playing:
+        # --- Query the manager directly instead of using the deleted flag ---
+        if self.animator_manager and self.animator_manager.is_playback_active():
             return # Do nothing if animation is active
         if not self.current_oled_nav_target_widget or \
             not (self.akai_controller and self.akai_controller.is_connected()) or \
@@ -3627,7 +3655,6 @@ class MainWindow(QMainWindow):
             if self.oled_display_manager:
                 self.oled_display_manager.show_system_message("(No item)", 1500, scroll_if_needed=False)
             return
-        # The rest of the original logic for triggering the action remains correct.
         self._is_hardware_nav_action_in_progress = True
         try:
             self.current_oled_nav_target_widget.trigger_navigation_current_item_action()
@@ -3639,15 +3666,18 @@ class MainWindow(QMainWindow):
     def _on_physical_encoder_rotated(self, encoder_id: int, delta: int):
         """
         The single, master router for all physical knob rotation events. It determines
-        the application context and calls the appropriate specific handler.
+        the application context and calls the appropriate specific handler or manager.
         """
-        # --- Add a gate to ignore knob turns if a modal dialog is active ---
         if self.is_modal_dialog_active:
             return
-        if encoder_id == 5:
-            if self.is_animator_playing:
-                self._handle_speed_knob_change(delta)
+        if encoder_id == 5: # The SELECT knob
+            if self.animator_manager and self.animator_manager.is_playback_active():
+                # This now correctly tells the manager to adjust the speed.
+                # The manager will then emit the `oled_feedback_requested` signal
+                # which we connected in Step 1.
+                self.animator_manager.adjust_playback_speed_by_delta(delta)
             else:
+                # Handle sequence/layout navigation when not playing
                 if self.current_oled_nav_target_widget and self.oled_display_manager:
                     item_count = self.current_oled_nav_target_widget.get_navigation_item_count()
                     if item_count > 0:
@@ -3830,10 +3860,12 @@ class MainWindow(QMainWindow):
 
     def _on_port_combo_changed(self, index: int):
         """Enables connect button if a valid port is selected and not already connected."""
-        if not self.connect_button_direct_ref or not self.port_combo_direct_ref: return
-        if not self.akai_controller.is_connected(): # Only change if not connected
+        if not self.connect_button_direct_ref or not self.port_combo_direct_ref:
+            return
+        if not self.akai_controller.is_connected():  # Only change if not connected
             current_text = self.port_combo_direct_ref.itemText(index)
-            can_connect = bool(current_text and current_text != "No MIDI output ports found")
+            can_connect = bool(current_text and current_text !=
+                                "No MIDI output ports found")
             self.connect_button_direct_ref.setEnabled(can_connect)
         # else: self.connect_button_direct_ref.setEnabled(True) # If connected, button is "Disconnect"
 

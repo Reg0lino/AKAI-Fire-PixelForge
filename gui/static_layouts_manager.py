@@ -36,19 +36,28 @@ class StaticLayoutsManager(QGroupBox):
         layout = QVBoxLayout(self)
         self.layouts_combo = QComboBox()
         self.layouts_combo.setPlaceholderText("--- Select Static Layout ---")
+        self.layouts_combo.setToolTip(
+            "Select a saved pad layout from the list")
         layout.addWidget(self.layouts_combo)
         buttons_layout = QHBoxLayout()
         self.apply_button = QPushButton("Apply Layout")
+        self.apply_button.setToolTip(
+            "Apply the selected layout to the pads and the current animator frame")
         self.apply_button.clicked.connect(self._handle_apply_layout)
         self.save_button = QPushButton("Save Current As...")
+        self.save_button.setToolTip(
+            "Save the current state of the pads as a new static layout")
         self.save_button.clicked.connect(self.request_current_grid_colors)
         self.delete_button = QPushButton("Delete Layout")
+        self.delete_button.setToolTip(
+            "Delete the selected user-saved layout from disk")
         self.delete_button.clicked.connect(self._handle_delete_layout)
         buttons_layout.addWidget(self.apply_button)
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.delete_button)
         layout.addLayout(buttons_layout)
-        self.layouts_combo.currentIndexChanged.connect(self._on_combo_selection_changed)
+        self.layouts_combo.currentIndexChanged.connect(
+            self._on_combo_selection_changed)
 
     def set_enabled_state(self, enabled: bool):
         """

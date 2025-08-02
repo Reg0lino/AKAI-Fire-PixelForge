@@ -1,5 +1,28 @@
 # Changelog - PixelForge for Akai Fire
 
+## [Version 2.1.0] - August 2, 2025
+
+This is a critical quality-of-life and stability release that resolves a long-standing bug preventing real-time animation speed control. The core logic for how the animator panel interacts with the main window and hardware has been refactored to be more robust, responsive, and intuitive, perfecting the workflow introduced in v2.0.0.
+
+### ✨ **NEW FEATURES & ENHANCEMENTS**
+
+*   **Animator Workflow & Usability Enhancements:**
+    *   The on-screen **`Speed` slider** in the Animator Studio is now **fully interactive and unlocked** during animation playback, allowing for real-time speed adjustments with the mouse.
+    *   The physical `SELECT` knob's on-screen label now correctly and instantly changes from `Select` to **`Speed`** the moment playback begins.
+    *   The knob's visual indicator now correctly initializes to the current animation speed, preventing the "snapping" effect on the first turn.
+    *   The physical knob now provides correct, real-time FPS feedback on the OLED display during playback.
+
+### 🐛 **BUG FIXES & STABILITY**
+
+*   **CRITICAL: Fixed Animator Speed Control Regression:**
+    *   Resolved a deep-seated architectural flaw where the main window's global UI update would incorrectly override the animator's local UI state during playback.
+    *   Fixed a broken signal connection between the `SequenceModel` and the `AnimatorManagerWidget`, which was the root cause of the UI failing to update automatically on playback state changes.
+    *   Refactored the animator's UI update logic into a direct, brute-force call chain, bypassing the failing signal/slot system and ensuring the UI state is always correct and responsive.
+*   **Fixed Conflicting Hardware Feedback:**
+    *   Resolved an issue where turning the `SELECT` knob during playback would incorrectly display "idle" navigation feedback (the sequence name) on the OLED screen. It now correctly displays the current animation FPS.
+
+---
+
 ## [Version 2.0.0] - July 5, 2025
 
 This is a release that introduces a **GIF Importer for Pads**, allowing users to create complex animations from existing GIFs with ease. This version also includes a major overhaul of the Animator Studio's sequence management system, making it far more robust and intuitive. A cascade of critical bug fixes for application startup, state management, and UI logic have been resolved, resulting in the most stable and feature-rich version of PixelForge.

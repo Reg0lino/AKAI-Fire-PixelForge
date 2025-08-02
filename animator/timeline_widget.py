@@ -144,9 +144,9 @@ class FrameThumbnailDelegate(QStyledItemDelegate):
         return QSize(THUMBNAIL_ITEM_WIDTH, THUMBNAIL_ITEM_HEIGHT)
 
 class SequenceTimelineWidget(QWidget):
-    # NEW: Simplified signal emits the full list of selected indices.
-    selection_changed = pyqtSignal(list)
 
+    frame_clicked = pyqtSignal(int)
+    selection_changed = pyqtSignal(list)
     # Context Menu / Action Signals (these are correct)
     add_frame_action_triggered = pyqtSignal(str)
     copy_frames_action_triggered = pyqtSignal()
@@ -178,15 +178,24 @@ class SequenceTimelineWidget(QWidget):
         self.frame_list_widget.setStyleSheet("""
             QListWidget { border: 1px solid #444; background-color: #282828; }
         """)
-        # --- FIX: Disconnected currentItemChanged and now only use itemSelectionChanged ---
+        # ---Disconnected currentItemChanged and now only use itemSelectionChanged ---
         self.frame_list_widget.itemSelectionChanged.connect(
             self._on_item_selection_changed)
+        self.frame_list_widget.itemClicked.connect(self._on_item_clicked)
+        self.frame_list_widget.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu)
         self.frame_list_widget.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu)
         self.frame_list_widget.customContextMenuRequested.connect(
             self.show_timeline_context_menu)
         layout.addWidget(self.frame_list_widget)
         self.setMinimumHeight(THUMBNAIL_ITEM_HEIGHT + 10)
+
+    def _on_item_clicked(self, item: QListWidgetItem):
+        """ This fires on any click, even on an already-selected item. """
+        index = self.frame_list_widget.row(item)
+        if index != -1:
+            self.frame_clicked.emit(index)
 
     def _on_item_selection_changed(self):
         """ This is now the single source of truth for selection changes. """

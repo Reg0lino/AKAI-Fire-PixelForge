@@ -487,9 +487,10 @@ class SequenceModel(QObject):
 
     def stop_playback(self):
         # Stop playback and reset playback index to 0
-        if self._is_playing or self._playback_frame_index != 0: # Check if change is needed
+        if self._is_playing or self._playback_frame_index != 0:  # Check if a change is needed
             self._is_playing = False
-            self._playback_frame_index = 0 
+            self._playback_frame_index = 0
+            # --- Emit the signal to notify the app that playback has stopped ---
             self.playback_state_changed.emit(False)
 
     def get_is_playing(self) -> bool:

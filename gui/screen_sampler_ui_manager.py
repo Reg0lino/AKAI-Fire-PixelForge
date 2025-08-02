@@ -109,7 +109,7 @@ class ScreenSamplerUIManager(QGroupBox):
         self.sampling_mode_combo.setToolTip(
             "Select the algorithm for sampling screen colors.")
         self.sampling_mode_combo.addItems(
-            ["Region Sampling", "Thumbnail (Fast)", "Palette (Creative)"])
+            ["Region Sampling", "Thumbnail (WIP)", "Palette (WIP)"])
         monitor_layout_row.addWidget(self.sampling_mode_combo, 1)
         settings_layout.addLayout(monitor_layout_row)
         # Sampling Speed/Frequency
