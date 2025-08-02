@@ -1,6 +1,6 @@
 # PixelForge for Akai Fire
 
-## 🚀 Download Latest Release v2.1.0!
+## 🚀 Download Latest Release v2.1.0! (NEW EXE & INSTALLER PACKAGE COMING SOON)
 
 **Get the latest version for Windows from the [GitHub Releases Page](https://github.com/Reg0lino/AKAI-Fire-PixelForge/releases/latest)!**
 
