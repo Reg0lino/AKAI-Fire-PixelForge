@@ -108,6 +108,7 @@ class ScreenSamplerManager(QObject):
     sampled_colors_for_display = pyqtSignal(list)
     processed_image_for_preview = pyqtSignal(
         Image.Image if GUI_IMPORTS_OK and 'Image' in globals() else object)
+    oled_frame_for_display = pyqtSignal(bytearray)
     sampler_status_update = pyqtSignal(str, int)
     sampling_activity_changed = pyqtSignal(bool)
     new_sequence_from_recording_ready = pyqtSignal(str)
@@ -131,7 +132,8 @@ class ScreenSamplerManager(QObject):
             'region_rect_percentage': {'x': 0.4, 'y': 0.4, 'width': 0.2, 'height': 0.2},
             'adjustments': ScreenSamplerCore.DEFAULT_ADJUSTMENTS.copy(),
             'frequency_ms': self._fps_to_ms(DEFAULT_SAMPLING_FPS),
-            'sampling_mode': 'grid'  # Add this new key
+            'sampling_mode': 'grid',
+            'oled_dither_settings': {'method': 'threshold', 'threshold_value': 128}
         }
         self.sampler_monitor_prefs = {}
         self._emit_status_on_next_stop: bool = True
@@ -203,20 +205,20 @@ class ScreenSamplerManager(QObject):
         if not GUI_IMPORTS_OK or not FEATURES_IMPORTS_OK: return
         # UI Manager Signals
         self.ui_manager.sampling_control_changed.connect(self._handle_ui_sampling_control_changed)
-        # self.ui_manager.request_monitor_list_population.connect(self.populate_monitor_list_for_ui) # <<< REMOVED: This is now called explicitly on connect
         self.ui_manager.show_capture_preview_requested.connect(self._show_configuration_dialog)
         self.ui_manager.record_button_clicked.connect(self._on_ui_record_button_clicked)
         self.ui_manager.set_max_frames_button_clicked.connect(self._on_ui_set_max_frames_button_clicked)
         self.ui_manager.status_message_requested.connect(self.sampler_status_update)
-        # Connect the new UI Cycle Monitor button
-        self.ui_manager.request_cycle_monitor.connect(self.cycle_target_monitor) # <<< NEW
+        self.ui_manager.request_cycle_monitor.connect(self.cycle_target_monitor)
         # Sampling Thread Signals
         self.sampling_thread.pad_colors_sampled.connect(self._handle_thread_pad_colors_sampled)
         self.sampling_thread.processed_image_ready.connect(self._handle_thread_processed_image_ready)
+        # --- ADD THIS NEW CONNECTION ---
+        self.sampling_thread.oled_frame_ready.connect(self._handle_thread_oled_frame_ready)
         self.sampling_thread.error_occurred.connect(self._handle_thread_error_occurred)
         if hasattr(self.sampling_thread, 'finished'):
             self.sampling_thread.finished.connect(self._on_thread_finished)
-        # Connect the sampler_adjustments_changed signal to update dialog sliders if visible
+            
         self.sampler_adjustments_changed.connect(self._update_preview_dialog_sliders_if_visible)
 
     def get_current_adjustments(self) -> dict:
@@ -793,6 +795,19 @@ class ScreenSamplerManager(QObject):
             self.visual_sampler_dialog.update_preview_image(pil_image)
         # This signal is for other potential listeners, like a main window preview.
         self.processed_image_for_preview.emit(pil_image)
+
+    def _handle_thread_oled_frame_ready(self, packed_data: bytearray, preview_image: Image.Image):
+        """
+        Receives the final packed data and preview image for the OLED Mirror mode.
+        Emits the packed data for MainWindow to send to the hardware.
+        """
+        if self.is_sampling_thread_active:
+            # Pass the packed data up to MainWindow/Controller
+            self.oled_frame_for_display.emit(packed_data)
+            
+            # Update the preview dialog if it's open
+            if self.visual_sampler_dialog and self.visual_sampler_dialog.isVisible():
+                self.visual_sampler_dialog.update_preview_image(preview_image)
 
     def _handle_thread_error_occurred(self, error_message: str):
         self.sampler_status_update.emit(

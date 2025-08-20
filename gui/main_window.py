@@ -942,6 +942,9 @@ class MainWindow(QMainWindow):
         if self.screen_sampler_manager:
             self.screen_sampler_manager.sampled_colors_for_display.connect(lambda colors: self.apply_colors_to_main_pad_grid([
                                                                             QColor(r, g, b).name() for r, g, b in colors], update_hw=True))
+            # --- ADD THIS NEW CONNECTION FOR THE OLED MIRROR ---
+            if hasattr(self.screen_sampler_manager, 'oled_frame_for_display'):
+                self.screen_sampler_manager.oled_frame_for_display.connect(self.akai_controller.oled_send_full_bitmap)
             self.screen_sampler_manager.sampler_status_update.connect(
                 self.status_bar.showMessage)
             self.screen_sampler_manager.sampling_activity_changed.connect(
@@ -967,10 +970,8 @@ class MainWindow(QMainWindow):
                 self.status_bar.showMessage)
             self.animator_manager.sequence_modified_status_changed.connect(
                 self._update_oled_and_title_on_sequence_change)
-            # --- FIX #1: RESTORE THE AUTOMATIC UPDATE CONNECTION ---
             self.animator_manager.animator_playback_active_status_changed.connect(
                 self._on_animator_playback_status_changed_for_knobs)
-            # --- FIX #2: ADD THE OLED FEEDBACK CONNECTION FOR THE KNOB ---
             self.animator_manager.oled_feedback_requested.connect(
                 self._show_knob_feedback_on_oled)
             self.animator_manager.undo_redo_state_changed.connect(
@@ -2082,35 +2083,41 @@ class MainWindow(QMainWindow):
 
     def _update_global_ui_interaction_states(self):
         is_connected = self.akai_controller.is_connected() if self.akai_controller else False
-        
         # --- Get state from the authoritative source for each mode ---
         is_playing = self.animator_manager.is_playback_active() if self.animator_manager else False
-        is_sampling = self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False
+        # For is_sampling, we now check for non-OLED modes specifically where pads are used
+        is_pad_sampling = self.screen_sampler_manager.is_sampling_active() and not self.is_oled_mirror_active if self.screen_sampler_manager else False
         is_visualizing = self.is_visualizer_active
         is_dooming = self.is_doom_mode_active
+        # is_oled_mirror_active is now a master state flag
         # --- Define UI states based on the authoritative sources ---
-        # The Animator panel should be enabled unless a conflicting master mode is active. Playback does NOT disable it.
-        animator_panel_is_enabled = is_connected and not is_sampling and not is_visualizing and not is_dooming
-        # Other creative tools (like painting on the grid) ARE disabled during playback.
-        can_use_creative_tools = is_connected and not is_playing and not is_sampling and not is_visualizing and not is_dooming
+        # The Animator panel should be enabled unless a conflicting master mode is active.
+        animator_panel_is_enabled = is_connected and not is_pad_sampling and not is_visualizing and not is_dooming and not self.is_oled_mirror_active
+        # Other creative tools (like painting on the grid) ARE disabled during playback or any master mode.
+        can_use_creative_tools = is_connected and not is_playing and not is_pad_sampling and not is_visualizing and not is_dooming and not self.is_oled_mirror_active
         # A new master mode can only be started if nothing else is running.
-        can_start_any_master_mode = is_connected and not is_playing and not is_sampling and not is_visualizing and not is_dooming
+        can_start_any_master_mode = is_connected and not is_playing and not is_pad_sampling and not is_visualizing and not is_dooming and not self.is_oled_mirror_active
         # --- Apply the states ---
-        # The animator manager's enabled state now correctly depends ONLY on animator_panel_is_enabled.
-        # It no longer gets micromanaged based on the `is_playing` flag.
         if self.animator_manager:
             self.animator_manager.set_overall_enabled_state(animator_panel_is_enabled)
         if self.pad_grid_frame: self.pad_grid_frame.setEnabled(can_use_creative_tools)
         if self.color_picker_manager: self.color_picker_manager.setEnabled(can_use_creative_tools)
         if self.static_layouts_manager: self.static_layouts_manager.setEnabled(can_use_creative_tools)
-        if self.live_fx_group_box: self.live_fx_group_box.setEnabled(is_connected and not is_sampling and not is_dooming)
+        # FX panel is disabled during pad sampling, oled mirror, and doom
+        if self.live_fx_group_box:
+            self.live_fx_group_box.setEnabled(is_connected and not is_pad_sampling and not is_dooming and not self.is_oled_mirror_active)
+        # Screen Sampler UI is always enabled if connected, but the start button's logic is more complex.
         if self.screen_sampler_manager:
             sampler_ui = self.screen_sampler_manager.get_ui_widget()
             if sampler_ui:
                 sampler_ui.setEnabled(is_connected)
-                self.screen_sampler_manager.update_start_button_state(is_sampling or can_start_any_master_mode)
+                # You can start sampling (any mode) if no other master mode is active.
+                # Or, if sampling is already active (any mode), the button (now "Stop") should be enabled.
+                is_any_sampling_active = self.screen_sampler_manager.is_sampling_active()
+                self.screen_sampler_manager.update_start_button_state(is_any_sampling_active or can_start_any_master_mode)
         if hasattr(self, 'toggle_sampler_action'):
-            self.toggle_sampler_action.setEnabled(is_sampling or can_start_any_master_mode)
+            is_any_sampling_active = self.screen_sampler_manager.is_sampling_active() if self.screen_sampler_manager else False
+            self.toggle_sampler_action.setEnabled(is_any_sampling_active or can_start_any_master_mode)
         if hasattr(self, 'configure_sampler_action'):
             self.configure_sampler_action.setEnabled(is_connected and not is_dooming)
         if self.audio_visualizer_ui_manager:
@@ -2129,7 +2136,6 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'oled_play_pause_icon_label') and self.oled_play_pause_icon_label:
             self.oled_play_pause_icon_label.setEnabled(is_connected)
 
-
 # q main window init here
     def __init__(self):
         super().__init__();
@@ -2146,6 +2152,7 @@ class MainWindow(QMainWindow):
         self.is_visualizer_active: bool = False;
         self._visualizer_is_being_toggled: bool = False;
         self.is_doom_mode_active: bool = False;
+        self.is_oled_mirror_active: bool = False
         self._stop_action_issued_for_oled: bool = False;
         self._KNOB_FEEDBACK_OLED_DURATION_MS = 1500;
         self.current_oled_nav_target_name: str = self.OLED_NAVIGATION_FOCUS_OPTIONS[0];
@@ -2788,14 +2795,29 @@ class MainWindow(QMainWindow):
 
     def _on_sampler_activity_changed(self, is_active: bool):
         """
-        Handles sampler start/stop to show OLED cues, update animator, and set button style.
+        Handles sampler start/stop to show OLED cues, update animator, set button style,
+        and manage the new OLED Mirror override state.
         """
-        # --- Call to set the active style on the button ---
+        # --- NEW: Check the current sampling mode ---
+        current_mode = self.screen_sampler_manager.current_sampler_params.get('sampling_mode', 'grid')
+        self.is_oled_mirror_active = (is_active and current_mode == "oled_mirror")
+        # --- NEW: Manage OLED External Override ---
+        if self.oled_display_manager:
+            if self.is_oled_mirror_active:
+                # Sampler is starting in OLED Mirror mode, take control of the OLED.
+                self.oled_display_manager.begin_external_oled_override()
+            elif not is_active:
+                # Sampler is stopping, regardless of mode. If we previously took control, end the override.
+                # This ensures the OLED reverts correctly even if the mode was changed while active.
+                if self.oled_display_manager._is_external_override_active:
+                    self.oled_display_manager.end_external_oled_override()
+        # --- Existing Logic (with minor adjustments for clarity) ---
         if self.screen_sampler_manager:
             sampler_ui = self.screen_sampler_manager.get_ui_widget()
             if hasattr(sampler_ui, 'set_sampling_active_state'):
                 sampler_ui.set_sampling_active_state(is_active)
-        if self.oled_display_manager:
+        # Show status messages on the OLED, but NOT if we are in mirror mode
+        if self.oled_display_manager and not self.is_oled_mirror_active:
             if is_active:
                 monitor_name_part = "Mon: ?"
                 if self.screen_sampler_manager and self.screen_sampler_manager.screen_sampler_monitor_list_cache:
@@ -2816,12 +2838,14 @@ class MainWindow(QMainWindow):
         if is_active and self.animator_manager:
             self.animator_manager.action_stop()
         elif not is_active:
+            # When sampler stops, restore the animator's current frame to the pads
             if self.animator_manager and self.animator_manager.active_sequence_model and not self.animator_manager.active_sequence_model.get_is_playing():
                 edit_idx = self.animator_manager.active_sequence_model.get_current_edit_frame_index()
                 colors = self.animator_manager.active_sequence_model.get_frame_colors(edit_idx)
-                self._on_animator_frame_data_for_display(colors)
+                # Use the method that applies FX correctly
+                self._handle_animator_frame_for_display_with_fx(colors)
             elif not self.animator_manager or not self.animator_manager.active_sequence_model:
-                self._on_animator_frame_data_for_display(None)
+                self._handle_animator_frame_for_display_with_fx(None)
         self._update_global_ui_interaction_states()
         self._update_contextual_knob_configs()
 

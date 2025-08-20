@@ -4,8 +4,8 @@ import numpy as np
 from PIL import Image, ImageEnhance
 import colorsys 
 import os 
+from oled_utils import oled_renderer
 
-# Near other imports at the top
 try:
     from colorthief import ColorThief
     COLORTHIEF_AVAILABLE = True
@@ -142,7 +142,7 @@ class ScreenSamplerCore:
             cropped_width = cell_width * ScreenSamplerCore.NUM_GRID_COLS
             img_cropped = img_np[:cropped_height, :cropped_width]
             reshaped = img_cropped.reshape(ScreenSamplerCore.NUM_GRID_ROWS, cell_height,
-                                           ScreenSamplerCore.NUM_GRID_COLS, cell_width, 3)
+                                            ScreenSamplerCore.NUM_GRID_COLS, cell_width, 3)
             grid_cells = reshaped.swapaxes(
                 1, 2).reshape(-1, cell_height * cell_width, 3)
             avg_colors_np = np.mean(grid_cells, axis=1).astype(int)
@@ -285,6 +285,63 @@ class ScreenSamplerCore:
             import traceback
             traceback.print_exc()
             return None, None
+        
+
+    @staticmethod
+    def capture_and_process_for_oled(
+        sct_instance, monitor_capture_id: int, overall_region_percentage: dict,
+        dither_settings: dict
+    ) -> tuple[bytearray | None, Image.Image | None]:
+        """
+        Captures a screen region, resizes to 128x64, applies dithering based
+        on settings, packs it into the 7-bit SysEx format for the OLED, and
+        returns the packed data along with a preview image.
+        """
+        if not sct_instance:
+            return None, None
+        try:
+            # 1. Calculate the capture region
+            all_monitors_info = sct_instance.monitors
+            if not (0 <= monitor_capture_id < len(all_monitors_info)):
+                return None, None
+            selected_monitor_info = all_monitors_info[monitor_capture_id]
+            pixel_bbox = ScreenSamplerCore._calculate_pixel_bounding_box_from_percentage(
+                selected_monitor_info, overall_region_percentage
+            )
+            if not pixel_bbox:
+                return None, None
+            # 2. Capture and convert to PIL
+            sct_img = sct_instance.grab(pixel_bbox)
+            pil_img_raw = Image.frombytes(
+                "RGB", sct_img.size, sct_img.rgb, "raw", "BGR")
+            b, g, r = pil_img_raw.split()
+            pil_img_color = Image.merge("RGB", (r, g, b))
+            # 3. Resize and convert to grayscale
+            pil_img_resized = pil_img_color.resize(
+                (oled_renderer.OLED_WIDTH, oled_renderer.OLED_HEIGHT),
+                resample=Image.Resampling.LANCZOS
+            )
+            pil_img_grayscale = pil_img_resized.convert("L")
+            # 4. Apply dithering based on settings
+            method = dither_settings.get('method', 'threshold')
+            threshold = dither_settings.get('threshold_value', 128)
+            if method == 'floyd_steinberg':
+                # (Placeholder for future implementation)
+                pil_img_dithered = pil_img_grayscale.convert(
+                    '1', dither=Image.Dither.FLOYDSTEINBERG)
+            else:  # Default to simple threshold
+                pil_img_dithered = pil_img_grayscale.point(
+                    lambda p: 255 if p > threshold else 0, '1')
+            # 5. Pack the final 1-bit image for the hardware
+            packed_data = oled_renderer.pack_pil_image_to_7bit_stream(
+                pil_img_dithered)
+            # Return both the packed data for the hardware and the dithered image for a potential preview
+            return packed_data, pil_img_dithered
+        except mss.exception.ScreenShotError:
+            pass  # Ignore errors if the screen is locked, etc.
+        except Exception as e:
+            print(f"ScreenSamplerCore: Error in OLED processing: {e}")
+        return None, None
 
 if __name__ == '__main__':
     print("ScreenSamplerCore: Main example for GR 그리드 샘플링 started.")

@@ -5,12 +5,13 @@ import mss
 from PyQt6.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker, QObject, QTimer
 from PyQt6.QtWidgets import QApplication
 from PIL import Image
-
+from oled_utils import oled_renderer
 from .screen_sampler_core import ScreenSamplerCore
 
 class ScreenSamplerThread(QThread):
     pad_colors_sampled = pyqtSignal(list)
     processed_image_ready = pyqtSignal(Image.Image)
+    oled_frame_ready = pyqtSignal(bytearray, Image.Image)
     error_occurred = pyqtSignal(str)
 
     def __init__(self, parent: QObject | None = None):
@@ -41,25 +42,40 @@ class ScreenSamplerThread(QThread):
                         current_mode = self.sampling_mode
                     start_time = time.perf_counter()
                     try:
-                        pad_colors = None
-                        preview_image = None
-                        # --- NEW: Call the correct core function based on mode ---
-                        if current_mode == "grid":
+                        # --- MODIFIED BLOCK ---
+                        # Route to the correct core function based on the current mode.
+                        if current_mode == "oled_mirror":
+                            # For OLED mode, we get packed data directly.
+                            # For now, we'll use a default dither setting.
+                            # The manager will be updated to handle this properly later.
+                            dither_settings = {
+                                'method': 'threshold', 'threshold_value': 128}
+                            packed_oled_data, oled_preview_image = ScreenSamplerCore.capture_and_process_for_oled(
+                                sct_instance, current_monitor_id, current_region_rect_perc, dither_settings
+                            )
+                            if packed_oled_data:
+                                self.oled_frame_ready.emit(
+                                    packed_oled_data, oled_preview_image)
+                        elif current_mode == "grid":
                             pad_colors, preview_image = ScreenSamplerCore.capture_and_grid_sample_colors(
                                 sct_instance, current_monitor_id, current_region_rect_perc, current_adjustments
                             )
+                            if pad_colors:
+                                self.pad_colors_sampled.emit(pad_colors)
+                            if preview_image:
+                                self.processed_image_ready.emit(preview_image)
                         elif current_mode == "thumbnail":
-                            pad_colors, preview_image = ScreenSamplerCore.capture_and_thumbnail_sample(
+                            pad_colors, _ = ScreenSamplerCore.capture_and_thumbnail_sample(
                                 sct_instance, current_monitor_id, current_adjustments
                             )
+                            if pad_colors:
+                                self.pad_colors_sampled.emit(pad_colors)
                         elif current_mode == "palette":
-                            pad_colors, preview_image = ScreenSamplerCore.capture_and_palette_sample(
+                            pad_colors, _ = ScreenSamplerCore.capture_and_palette_sample(
                                 sct_instance, current_monitor_id, current_adjustments
                             )
-                        if pad_colors:
-                            self.pad_colors_sampled.emit(pad_colors)
-                        if preview_image:  # Only grid mode returns a useful preview
-                            self.processed_image_ready.emit(preview_image)
+                            if pad_colors:
+                                self.pad_colors_sampled.emit(pad_colors)
                     except Exception as e_capture:
                         error_msg = f"Capture Core Error: {str(e_capture)[:200]}"
                         self.error_occurred.emit(error_msg)

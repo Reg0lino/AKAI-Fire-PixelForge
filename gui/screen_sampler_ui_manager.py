@@ -67,6 +67,7 @@ class ScreenSamplerUIManager(QGroupBox):
             self.recording_status_label.setText("Idle.")
         self.update_record_button_ui(is_recording=False, can_record=False)
 
+
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
         top_controls_layout = QHBoxLayout()
@@ -108,8 +109,9 @@ class ScreenSamplerUIManager(QGroupBox):
         self.sampling_mode_combo = QComboBox()
         self.sampling_mode_combo.setToolTip(
             "Select the algorithm for sampling screen colors.")
+        # --- MODIFIED LINE ---
         self.sampling_mode_combo.addItems(
-            ["Region Sampling", "Thumbnail (WIP)", "Palette (WIP)"])
+            ["Region Sampling", "Thumbnail (Fast)", "Palette (Creative)", "OLED Mirror"])
         monitor_layout_row.addWidget(self.sampling_mode_combo, 1)
         settings_layout.addLayout(monitor_layout_row)
         # Sampling Speed/Frequency
@@ -361,14 +363,15 @@ class ScreenSamplerUIManager(QGroupBox):
         # The monitor_capture_id will be managed by the ScreenSamplerManager's
         # internal state, as it's updated via the "Cycle" button.
         # We'll provide a dummy value here, as the manager will use its own source of truth.
-        monitor_capture_id = 1 
+        monitor_capture_id = 1
         mode_text = self.sampling_mode_combo.currentText()
         mode_key = "grid" # Default
         if "Thumbnail" in mode_text:
             mode_key = "thumbnail"
         elif "Palette" in mode_text:
             mode_key = "palette"
-            
+        elif "OLED Mirror" in mode_text: # --- ADDED THIS CONDITION ---
+            mode_key = "oled_mirror"
         params = {
             "monitor_capture_id": monitor_capture_id, # Manager will ignore this if it knows better
             "frequency_ms": self._fps_to_ms(self.frequency_slider.value()),
@@ -384,9 +387,9 @@ if __name__ == '__main__':
     # Mock data and connections for testing
     mock_monitors = [
         {"id": 1, "name": "Mock Monitor 1 (1920x1080)",
-         "top": 0, "left": 0, "width": 1920, "height": 1080},
+        "top": 0, "left": 0, "width": 1920, "height": 1080},
         {"id": 2, "name": "Mock Monitor 2 (2560x1440)", "top": 0,
-         "left": 1920, "width": 2560, "height": 1440},
+        "left": 1920, "width": 2560, "height": 1440},
     ]
 # --- Populate sampled monitors ---
 
